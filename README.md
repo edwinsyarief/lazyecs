@@ -70,8 +70,8 @@ if ok1 && ok2 {
 }
 
 // or we can do this
-ok1 := SetComponent(world, e, Position{X:1, Y:2})
-ok2 := SetComponent(world, e, Velocity{VX:1, VY:0})
+ok1 := lazyecs.SetComponent(world, e, Position{X:1, Y:2})
+ok2 := lazyecs.SetComponent(world, e, Velocity{VX:1, VY:0})
 
 if !ok1 || !ok2 {
     // do something
