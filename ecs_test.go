@@ -150,7 +150,7 @@ func TestRemoveComponent(t *testing.T) {
 
 // go test -run ^TestEntityRemoval$ . -count 1
 func TestEntityRemoval(t *testing.T) {
-	world, posID, _, _ := setupWorld(t)
+	world, _, _, _ := setupWorld(t)
 	e1 := world.CreateEntity()
 	lazyecs.AddComponent[Position](world, e1)
 	e2 := world.CreateEntity()
@@ -176,10 +176,10 @@ func TestEntityRemoval(t *testing.T) {
 	}
 
 	// Check if query is correct
-	query := world.Query(posID)
+	query := lazyecs.Filter[Position](world)
 	count := 0
 	for query.Next() {
-		count += query.Count()
+		count++
 	}
 	if count != 1 {
 		t.Errorf("Query returned %d entities, expected 1", count)
@@ -188,7 +188,7 @@ func TestEntityRemoval(t *testing.T) {
 
 // go test -run ^TestQuery$ . -count 1
 func TestQuery(t *testing.T) {
-	world, posID, velID, _ := setupWorld(t)
+	world, _, _, _ := setupWorld(t)
 
 	// Entity with Position and Velocity
 	e1 := world.CreateEntity()
@@ -202,22 +202,17 @@ func TestQuery(t *testing.T) {
 	p2.X = 20
 
 	// Query for entities with both Position and Velocity
-	queryBoth := world.Query(posID, velID)
+	queryBoth := lazyecs.Filter2[Position, Velocity](world)
 	countBoth := 0
 	foundE1 := false
 	for queryBoth.Next() {
-		entities := queryBoth.Entities()
-		positions, ok := lazyecs.GetComponentSlice[Position](queryBoth)
-		if !ok {
-			t.Errorf("Failed to get component slice")
-		}
-		countBoth += len(entities)
-		for i, e := range entities {
-			if e.ID == e1.ID {
-				foundE1 = true
-				if positions[i].X != 10 {
-					t.Errorf("Incorrect component data in query slice for e1")
-				}
+		pos, _ := queryBoth.Get()
+		e := queryBoth.Entity()
+		countBoth++
+		if e.ID == e1.ID {
+			foundE1 = true
+			if pos.X != 10 {
+				t.Errorf("Incorrect component data in query slice for e1")
 			}
 		}
 	}
@@ -229,10 +224,10 @@ func TestQuery(t *testing.T) {
 	}
 
 	// Query for entities with at least Position
-	queryPos := world.Query(posID)
+	queryPos := lazyecs.Filter[Position](world)
 	countPos := 0
 	for queryPos.Next() {
-		countPos += queryPos.Count()
+		countPos++
 	}
 	if countPos != 2 {
 		t.Errorf("Expected query for Pos to find 2 entities, found %d", countPos)
@@ -241,7 +236,7 @@ func TestQuery(t *testing.T) {
 
 // go test -run ^TestComponentDataIntegrityAfterSwapAndPop$ . -count 1
 func TestComponentDataIntegrityAfterSwapAndPop(t *testing.T) {
-	world, posID, _, _ := setupWorld(t)
+	world, _, _, _ := setupWorld(t)
 
 	entities := make([]lazyecs.Entity, 11)
 	for i := 0; i < 10; i++ {
@@ -284,10 +279,10 @@ func TestComponentDataIntegrityAfterSwapAndPop(t *testing.T) {
 	}
 
 	// Check query count
-	query := world.Query(posID)
+	query := lazyecs.Filter[Position](world)
 	count := 0
 	for query.Next() {
-		count += query.Count()
+		count++
 	}
 	if count != 10 {
 		t.Errorf("Query returned %d entities after removal, expected 10", count)

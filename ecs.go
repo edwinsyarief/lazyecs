@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"unsafe"
 )
 
 // ComponentID represents a unique identifier for a component type.
@@ -94,28 +95,24 @@ func intersects(m, exclude maskType) bool {
 }
 
 var (
-	registryMutex   sync.RWMutex                         // Protects the component registry from concurrent access.
 	nextComponentID ComponentID                          // Next available component ID, starts at 0.
 	typeToID        = make(map[reflect.Type]ComponentID) // Maps component types to their IDs.
 	idToType        = make(map[ComponentID]reflect.Type) // Maps IDs back to component types.
+	componentSizes  [maxComponentTypes]uintptr
 )
 
 // ResetGlobalRegistry resets the component registry for testing purposes.
 // This clears all mappings and resets the next ID counter.
 func ResetGlobalRegistry() {
-	registryMutex.Lock()
-	defer registryMutex.Unlock()
 	nextComponentID = 0
 	typeToID = make(map[reflect.Type]ComponentID)
 	idToType = make(map[ComponentID]reflect.Type)
+	componentSizes = [maxComponentTypes]uintptr{}
 }
 
 // RegisterComponent registers a component type and returns its unique ID.
 // It panics if the type is already registered or if we've hit the max component limit.
 func RegisterComponent[T any]() ComponentID {
-	registryMutex.Lock()
-	defer registryMutex.Unlock()
-
 	var t T
 	compType := reflect.TypeOf(t)
 
@@ -130,8 +127,29 @@ func RegisterComponent[T any]() ComponentID {
 	id := nextComponentID
 	typeToID[compType] = id
 	idToType[id] = compType
+	componentSizes[id] = unsafe.Sizeof(t)
 	nextComponentID++
 	return id
+}
+
+// GetID returns the ComponentID for a given type T.
+// Panics if the type is not registered.
+func GetID[T any]() ComponentID {
+	var zero T
+	typ := reflect.TypeOf(zero)
+	id, ok := typeToID[typ]
+	if !ok {
+		panic(fmt.Sprintf("component type %s not registered", typ))
+	}
+	return id
+}
+
+// TryGetID returns the ComponentID for a given type T and whether it was found.
+func TryGetID[T any]() (ComponentID, bool) {
+	var zero T
+	typ := reflect.TypeOf(zero)
+	id, ok := typeToID[typ]
+	return id, ok
 }
 
 // Entity is a unique identifier for an entity, including a version for safety.
@@ -158,8 +176,6 @@ type WorldOptions struct {
 // World manages all entities, components, and systems.
 // It uses archetypes for efficient storage and querying.
 type World struct {
-	mu              sync.RWMutex            // Main lock for world operations.
-	archetypesMu    sync.RWMutex            // Separate lock for archetype map to reduce contention.
 	nextEntityID    uint32                  // Next available entity ID.
 	freeEntityIDs   []uint32                // Recycled entity IDs for reuse.
 	entities        map[uint32]entityMeta   // Maps entity IDs to their metadata.
@@ -195,31 +211,15 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 }
 
 // getOrCreateArchetype finds or creates an archetype for a given mask.
-// It uses double-checked locking to minimize contention.
 func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
-	self.archetypesMu.RLock()
-	if arch, ok := self.archetypes[mask]; ok {
-		self.archetypesMu.RUnlock()
-		return arch
-	}
-	self.archetypesMu.RUnlock()
-
-	self.archetypesMu.Lock()
-	defer self.archetypesMu.Unlock()
-
-	// Double-check after lock.
 	if arch, ok := self.archetypes[mask]; ok {
 		return arch
 	}
 
 	newArch := &Archetype{
-		mask:         mask,
-		componentMap: make(map[ComponentID]int),
-		entities:     make([]Entity, 0, self.initialCapacity),
+		mask:     mask,
+		entities: make([]Entity, 0, self.initialCapacity),
 	}
-
-	registryMutex.RLock()
-	defer registryMutex.RUnlock()
 
 	compIDs := make([]ComponentID, 0, len(idToType))
 	for id := range idToType {
@@ -230,16 +230,11 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 
 	sort.Slice(compIDs, func(i, j int) bool { return compIDs[i] < compIDs[j] })
 	newArch.componentIDs = compIDs
-	newArch.componentData = make([]any, len(compIDs))
-	newArch.componentTypes = make([]reflect.Type, len(compIDs))
+	newArch.componentData = make([][]byte, len(compIDs))
 
 	for i, id := range compIDs {
-		compType := idToType[id]
-		newArch.componentMap[id] = i
-		newArch.componentTypes[i] = compType
-		sliceType := reflect.SliceOf(compType)
-		slice := reflect.MakeSlice(sliceType, 0, self.initialCapacity)
-		newArch.componentData[i] = slice.Interface()
+		size := int(componentSizes[id])
+		newArch.componentData[i] = make([]byte, 0, self.initialCapacity*size)
 	}
 
 	self.archetypes[mask] = newArch
@@ -249,9 +244,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 // CreateEntity creates a new entity with no components.
 // It reuses free IDs if available to avoid fragmentation.
 func (self *World) CreateEntity() Entity {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
 	var id uint32
 	if len(self.freeEntityIDs) > 0 {
 		id = self.freeEntityIDs[len(self.freeEntityIDs)-1]
@@ -289,8 +281,6 @@ func (self *World) CreateEntities(count int) []Entity {
 	if count <= 0 {
 		return nil
 	}
-	self.mu.Lock()
-	defer self.mu.Unlock()
 
 	entities := make([]Entity, count)
 	arch := self.archetypes[maskType{}]
@@ -331,17 +321,12 @@ func (self *World) CreateEntities(count int) []Entity {
 // RemoveEntity marks an entity for removal at the end of the frame.
 // Actual removal is deferred to ProcessRemovals for batch processing.
 func (self *World) RemoveEntity(e Entity) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
 	self.toRemove = append(self.toRemove, e)
 }
 
 // ProcessRemovals cleans up entities marked for removal.
 // It processes them in batch to improve efficiency.
 func (self *World) ProcessRemovals() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
 	if len(self.toRemove) == 0 {
 		return
 	}
@@ -384,47 +369,11 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 	}
 
 	for i := range arch.componentData {
-		sliceVal := reflect.ValueOf(arch.componentData[i])
-		if sliceVal.Len() <= lastIndex {
-			continue
-		}
-		sliceVal.Index(index).Set(sliceVal.Index(lastIndex))
-		newSlice := sliceVal.Slice(0, lastIndex)
-		arch.componentData[i] = newSlice.Interface()
-	}
-}
-
-// Query creates a new query iterator for systems.
-// It matches archetypes that have all the included components.
-func (self *World) Query(includes ...ComponentID) *Query {
-	return self.queryInternal(includes, nil)
-}
-
-// QueryWithExclusions creates a query with includes and excludes.
-// Archetypes must have all includes and none of the excludes.
-func (self *World) QueryWithExclusions(includes, excludes []ComponentID) *Query {
-	return self.queryInternal(includes, excludes)
-}
-
-func (self *World) queryInternal(includes, excludes []ComponentID) *Query {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	self.archetypesMu.RLock()
-	defer self.archetypesMu.RUnlock()
-
-	includeMask := makeMask(includes)
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(self.archetypes)/2) // Pre-allocate estimate.
-	for mask, arch := range self.archetypes {
-		if len(arch.entities) > 0 && includesAll(mask, includeMask) && !intersects(mask, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
-	return &Query{
-		archetypes:          matchingArchetypes,
-		currentArchetypeIdx: -1,
+		id := arch.componentIDs[i]
+		size := int(componentSizes[id])
+		bytes := arch.componentData[i]
+		copy(bytes[index*size:(index+1)*size], bytes[lastIndex*size:(lastIndex+1)*size])
+		arch.componentData[i] = bytes[:lastIndex*size]
 	}
 }
 
@@ -432,28 +381,29 @@ func (self *World) queryInternal(includes, excludes []ComponentID) *Query {
 // Returns pointer to the component and success flag.
 // If the component already exists, it returns the existing one.
 func AddComponent[T any](w *World, e Entity) (*T, bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
 		return nil, false
 	}
 
-	var t T
-	compType := reflect.TypeOf(t)
-	registryMutex.RLock()
-	compID, ok := typeToID[compType]
-	registryMutex.RUnlock()
+	compID, ok := TryGetID[T]()
 	if !ok {
 		return nil, false
 	}
 
+	size := int(componentSizes[compID])
+
 	oldArch := meta.Archetype
 	if oldArch.mask.has(compID) {
-		idx := oldArch.componentMap[compID]
-		slice := oldArch.componentData[idx].([]T)
-		return &slice[meta.Index], true
+		idx := oldArch.getSlot(compID)
+		if idx == -1 {
+			return nil, false
+		}
+		bytes := oldArch.componentData[idx]
+		if meta.Index*size >= len(bytes) {
+			return nil, false
+		}
+		return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
 	}
 
 	newMask := setMask(oldArch.mask, compID)
@@ -462,10 +412,13 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	oldIndex := meta.Index
 	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch)
 
-	newIdx := newArch.componentMap[compID]
-	newSliceVal := reflect.ValueOf(newArch.componentData[newIdx])
-	newSliceVal = reflect.Append(newSliceVal, reflect.Zero(compType))
-	newArch.componentData[newIdx] = newSliceVal.Interface()
+	newIdx := newArch.getSlot(compID)
+	if newIdx == -1 {
+		return nil, false
+	}
+	newBytes := newArch.componentData[newIdx]
+	newBytes = append(newBytes, make([]byte, size)...)
+	newArch.componentData[newIdx] = newBytes
 
 	meta.Archetype = newArch
 	meta.Index = newIndex
@@ -473,17 +426,14 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 
 	w.removeEntityFromArchetype(e, oldArch, oldIndex)
 
-	finalIdx := newArch.componentMap[compID]
-	finalSlice := newArch.componentData[finalIdx].([]T)
-	return &finalSlice[newIndex], true
+	finalIdx := newArch.getSlot(compID)
+	finalBytes := newArch.componentData[finalIdx]
+	return (*T)(unsafe.Pointer(&finalBytes[newIndex*size])), true
 }
 
 // SetComponent adds a component with specific data to an entity, or updates it if it already exists.
 // This is more convenient than AddComponent + manual set for initialization.
 func SetComponent[T any](w *World, e Entity, comp T) bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	// 1. Validate the entity and get its metadata.
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
@@ -491,28 +441,30 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	}
 
 	// 2. Get the Component ID for type T.
-	compType := reflect.TypeOf(comp)
-	registryMutex.RLock()
-	compID, ok := typeToID[compType]
-	registryMutex.RUnlock()
+	compID, ok := TryGetID[T]()
 	if !ok {
-		// Component type not registered.
 		return false
 	}
+
+	size := int(componentSizes[compID])
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
 
 	oldArch := meta.Archetype
 	// 3. Check if the entity already has this component.
 	if oldArch.mask.has(compID) {
 		// --- SCENARIO A: UPDATE EXISTING COMPONENT ---
-		// The entity is already in the correct archetype. We just need to update the data.
-		componentIndexInArchetype := oldArch.componentMap[compID]
-		// Directly access the typed slice and update the value at the entity's index.
-		componentSlice := oldArch.componentData[componentIndexInArchetype].([]T)
-		componentSlice[meta.Index] = comp
+		componentIndexInArchetype := oldArch.getSlot(compID)
+		if componentIndexInArchetype == -1 {
+			return false
+		}
+		bytes := oldArch.componentData[componentIndexInArchetype]
+		if meta.Index*size >= len(bytes) {
+			return false
+		}
+		copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
 		return true
 	} else {
 		// --- SCENARIO B: ADD NEW COMPONENT ---
-		// The entity must move to a new archetype.
 		// a. Determine the new archetype's mask and get/create it.
 		newMask := setMask(oldArch.mask, compID)
 		newArch := w.getOrCreateArchetype(newMask)
@@ -522,9 +474,13 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch)
 
 		// c. Append the new component data (passed in as `comp`) to the correct slice in the new archetype.
-		newCompSliceVal := reflect.ValueOf(newArch.componentData[newArch.componentMap[compID]])
-		newCompSliceVal = reflect.Append(newCompSliceVal, reflect.ValueOf(comp))
-		newArch.componentData[newArch.componentMap[compID]] = newCompSliceVal.Interface()
+		newCompIdx := newArch.getSlot(compID)
+		if newCompIdx == -1 {
+			return false
+		}
+		newBytes := newArch.componentData[newCompIdx]
+		newBytes = append(newBytes, src...)
+		newArch.componentData[newCompIdx] = newBytes
 
 		// d. Update the entity's metadata to point to its new location.
 		meta.Archetype = newArch
@@ -540,19 +496,12 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 // RemoveComponent removes a component of type T from an entity.
 // If the component doesn't exist, it returns true anyway.
 func RemoveComponent[T any](w *World, e Entity) bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
 		return false
 	}
 
-	var t T
-	compType := reflect.TypeOf(t)
-	registryMutex.RLock()
-	compID, ok := typeToID[compType]
-	registryMutex.RUnlock()
+	compID, ok := TryGetID[T]()
 	if !ok {
 		return false
 	}
@@ -580,31 +529,28 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 // GetComponent retrieves a pointer to a component of type T for an entity.
 // Returns nil and false if not found or entity invalid.
 func GetComponent[T any](w *World, e Entity) (*T, bool) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
 		return nil, false
 	}
 
-	var t T
-	registryMutex.RLock()
-	compID, ok := typeToID[reflect.TypeOf(t)]
-	registryMutex.RUnlock()
+	compID, ok := TryGetID[T]()
 	if !ok {
 		return nil, false
 	}
 
+	size := int(componentSizes[compID])
+
 	arch := meta.Archetype
-	if idx, ok := arch.componentMap[compID]; ok {
-		slice := arch.componentData[idx].([]T)
-		if meta.Index >= len(slice) {
-			return nil, false // Edge case: index out of bounds.
-		}
-		return &slice[meta.Index], true
+	idx := arch.getSlot(compID)
+	if idx == -1 {
+		return nil, false
 	}
-	return nil, false
+	bytes := arch.componentData[idx]
+	if meta.Index*size >= len(bytes) {
+		return nil, false
+	}
+	return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
 }
 
 // moveEntityBetweenArchetypes copies an entity's data from one archetype to another, optionally excluding IDs.
@@ -618,20 +564,21 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 		excludeSet[id] = struct{}{}
 	}
 
-	for _, id := range oldArch.componentIDs {
+	for i := range oldArch.componentIDs {
+		id := oldArch.componentIDs[i]
 		if _, excluded := excludeSet[id]; excluded {
 			continue
 		}
-		oldIdx := oldArch.componentMap[id]
-		oldSliceVal := reflect.ValueOf(oldArch.componentData[oldIdx])
-		newIdx := newArch.componentMap[id]
-		newSliceVal := reflect.ValueOf(newArch.componentData[newIdx])
-		if oldIndex >= oldSliceVal.Len() {
-			continue // Edge case: invalid index.
+		oldBytes := oldArch.componentData[i]
+		size := int(componentSizes[id])
+		src := oldBytes[oldIndex*size : (oldIndex+1)*size]
+		newIdx := newArch.getSlot(id)
+		if newIdx == -1 {
+			continue
 		}
-		componentToMove := oldSliceVal.Index(oldIndex)
-		newSliceVal = reflect.Append(newSliceVal, componentToMove)
-		newArch.componentData[newIdx] = newSliceVal.Interface()
+		newBytes := newArch.componentData[newIdx]
+		newBytes = append(newBytes, src...)
+		newArch.componentData[newIdx] = newBytes
 	}
 	return newIndex
 }
@@ -639,64 +586,525 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 // Archetype represents a unique combination of components.
 // It stores entities and their component data in parallel slices for cache efficiency.
 type Archetype struct {
-	mask           maskType            // Bitmask of components in this archetype.
-	componentData  []any               // Slices of component data.
-	componentTypes []reflect.Type      // Types of the components.
-	componentIDs   []ComponentID       // Sorted list of component IDs.
-	componentMap   map[ComponentID]int // Map from ID to index in data slices.
-	entities       []Entity            // List of entities in this archetype.
+	mask          maskType      // Bitmask of components in this archetype.
+	componentData [][]byte      // Byte slices of component data.
+	componentIDs  []ComponentID // Sorted list of component IDs.
+	entities      []Entity      // List of entities in this archetype.
 }
 
-// Query is an iterator for efficiently accessing entities and components in matching archetypes.
-// It iterates over archetypes, not individual entities, for batch processing.
-type Query struct {
-	archetypes          []*Archetype // Matching archetypes.
-	currentArchetypeIdx int          // Index of the current archetype.
-}
-
-// Next advances the iterator to the next archetype. Returns false if no more archetypes.
-func (self *Query) Next() bool {
-	self.currentArchetypeIdx++
-	return self.currentArchetypeIdx < len(self.archetypes)
-}
-
-// Count returns the number of entities in the current archetype.
-func (self *Query) Count() int {
-	if self.currentArchetypeIdx < 0 || self.currentArchetypeIdx >= len(self.archetypes) {
-		return 0 // Edge case: invalid index.
+// getSlot returns the index of the component data slice for the given ID.
+// Returns -1 if not found.
+func (a *Archetype) getSlot(id ComponentID) int {
+	i := sort.Search(len(a.componentIDs), func(j int) bool {
+		return a.componentIDs[j] >= id
+	})
+	if i < len(a.componentIDs) && a.componentIDs[i] == id {
+		return i
 	}
-	return len(self.archetypes[self.currentArchetypeIdx].entities)
+	return -1
 }
 
-// Entities returns the slice of entities for the current archetype.
-func (self *Query) Entities() []Entity {
-	if self.currentArchetypeIdx < 0 || self.currentArchetypeIdx >= len(self.archetypes) {
-		return nil // Edge case.
-	}
-	return self.archetypes[self.currentArchetypeIdx].entities
+// Query is an iterator over entities matching 1 component type.
+type Query[T1 any] struct {
+	archetypes    []*Archetype
+	archIdx       int
+	index         int
+	currentArch   *Archetype
+	base1         unsafe.Pointer
+	stride1       uintptr
+	currentEntity Entity
 }
 
-// GetComponentSlice provides direct, typed access to the component slice for the current archetype.
-// This allows systems to process components in batches efficiently.
-func GetComponentSlice[T any](q *Query) ([]T, bool) {
-	if q.currentArchetypeIdx < 0 || q.currentArchetypeIdx >= len(q.archetypes) {
-		return nil, false // Edge case.
-	}
-	var t T
-	registryMutex.RLock()
-	compID, ok := typeToID[reflect.TypeOf(t)]
-	registryMutex.RUnlock()
-	if !ok {
-		return nil, false
-	}
-
-	arch := q.archetypes[q.currentArchetypeIdx]
-	if idx, ok := arch.componentMap[compID]; ok {
-		slice, ok := arch.componentData[idx].([]T)
-		if !ok {
-			return nil, false // Type assertion fail.
+// Next advances to the next entity. Returns false if no more entities.
+func (q *Query[T1]) Next() bool {
+	q.index++
+	for q.archIdx < len(q.archetypes) {
+		arch := q.archetypes[q.archIdx]
+		if q.index < len(arch.entities) {
+			if q.currentArch != arch {
+				q.currentArch = arch
+				id1 := GetID[T1]()
+				slot1 := arch.getSlot(id1)
+				if slot1 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot1]) > 0 {
+					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+				} else {
+					q.base1 = nil
+				}
+				q.stride1 = componentSizes[id1]
+			}
+			q.currentEntity = arch.entities[q.index]
+			return true
 		}
-		return slice, true
+		q.archIdx++
+		q.index = 0
 	}
-	return nil, false
+	return false
+}
+
+// Get returns a pointer to the component for the current entity.
+func (q *Query[T1]) Get() *T1 {
+	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+	return (*T1)(p1)
+}
+
+// Entity returns the current entity.
+func (q *Query[T1]) Entity() Entity {
+	return q.currentEntity
+}
+
+// Query2 is an iterator over entities matching 2 component types.
+type Query2[T1 any, T2 any] struct {
+	archetypes    []*Archetype
+	archIdx       int
+	index         int
+	currentArch   *Archetype
+	base1         unsafe.Pointer
+	stride1       uintptr
+	base2         unsafe.Pointer
+	stride2       uintptr
+	currentEntity Entity
+}
+
+// Next advances to the next entity. Returns false if no more entities.
+func (q *Query2[T1, T2]) Next() bool {
+	q.index++
+	for q.archIdx < len(q.archetypes) {
+		arch := q.archetypes[q.archIdx]
+		if q.index < len(arch.entities) {
+			if q.currentArch != arch {
+				q.currentArch = arch
+				id1 := GetID[T1]()
+				slot1 := arch.getSlot(id1)
+				if slot1 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot1]) > 0 {
+					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+				} else {
+					q.base1 = nil
+				}
+				q.stride1 = componentSizes[id1]
+				id2 := GetID[T2]()
+				slot2 := arch.getSlot(id2)
+				if slot2 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot2]) > 0 {
+					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+				} else {
+					q.base2 = nil
+				}
+				q.stride2 = componentSizes[id2]
+			}
+			q.currentEntity = arch.entities[q.index]
+			return true
+		}
+		q.archIdx++
+		q.index = 0
+	}
+	return false
+}
+
+// Get returns pointers to the components for the current entity.
+func (q *Query2[T1, T2]) Get() (*T1, *T2) {
+	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
+	return (*T1)(p1), (*T2)(p2)
+}
+
+// Entity returns the current entity.
+func (q *Query2[T1, T2]) Entity() Entity {
+	return q.currentEntity
+}
+
+// Query3 is an iterator over entities matching 3 component types.
+type Query3[T1 any, T2 any, T3 any] struct {
+	archetypes    []*Archetype
+	archIdx       int
+	index         int
+	currentArch   *Archetype
+	base1         unsafe.Pointer
+	stride1       uintptr
+	base2         unsafe.Pointer
+	stride2       uintptr
+	base3         unsafe.Pointer
+	stride3       uintptr
+	currentEntity Entity
+}
+
+// Next advances to the next entity. Returns false if no more entities.
+func (q *Query3[T1, T2, T3]) Next() bool {
+	q.index++
+	for q.archIdx < len(q.archetypes) {
+		arch := q.archetypes[q.archIdx]
+		if q.index < len(arch.entities) {
+			if q.currentArch != arch {
+				q.currentArch = arch
+				id1 := GetID[T1]()
+				slot1 := arch.getSlot(id1)
+				if slot1 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot1]) > 0 {
+					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+				} else {
+					q.base1 = nil
+				}
+				q.stride1 = componentSizes[id1]
+				id2 := GetID[T2]()
+				slot2 := arch.getSlot(id2)
+				if slot2 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot2]) > 0 {
+					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+				} else {
+					q.base2 = nil
+				}
+				q.stride2 = componentSizes[id2]
+				id3 := GetID[T3]()
+				slot3 := arch.getSlot(id3)
+				if slot3 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot3]) > 0 {
+					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+				} else {
+					q.base3 = nil
+				}
+				q.stride3 = componentSizes[id3]
+			}
+			q.currentEntity = arch.entities[q.index]
+			return true
+		}
+		q.archIdx++
+		q.index = 0
+	}
+	return false
+}
+
+// Get returns pointers to the components for the current entity.
+func (q *Query3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
+	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
+	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
+}
+
+// Entity returns the current entity.
+func (q *Query3[T1, T2, T3]) Entity() Entity {
+	return q.currentEntity
+}
+
+// Query4 is an iterator over entities matching 4 component types.
+type Query4[T1 any, T2 any, T3 any, T4 any] struct {
+	archetypes    []*Archetype
+	archIdx       int
+	index         int
+	currentArch   *Archetype
+	base1         unsafe.Pointer
+	stride1       uintptr
+	base2         unsafe.Pointer
+	stride2       uintptr
+	base3         unsafe.Pointer
+	stride3       uintptr
+	base4         unsafe.Pointer
+	stride4       uintptr
+	currentEntity Entity
+}
+
+// Next advances to the next entity. Returns false if no more entities.
+func (q *Query4[T1, T2, T3, T4]) Next() bool {
+	q.index++
+	for q.archIdx < len(q.archetypes) {
+		arch := q.archetypes[q.archIdx]
+		if q.index < len(arch.entities) {
+			if q.currentArch != arch {
+				q.currentArch = arch
+				id1 := GetID[T1]()
+				slot1 := arch.getSlot(id1)
+				if slot1 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot1]) > 0 {
+					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+				} else {
+					q.base1 = nil
+				}
+				q.stride1 = componentSizes[id1]
+				id2 := GetID[T2]()
+				slot2 := arch.getSlot(id2)
+				if slot2 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot2]) > 0 {
+					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+				} else {
+					q.base2 = nil
+				}
+				q.stride2 = componentSizes[id2]
+				id3 := GetID[T3]()
+				slot3 := arch.getSlot(id3)
+				if slot3 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot3]) > 0 {
+					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+				} else {
+					q.base3 = nil
+				}
+				q.stride3 = componentSizes[id3]
+				id4 := GetID[T4]()
+				slot4 := arch.getSlot(id4)
+				if slot4 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot4]) > 0 {
+					q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+				} else {
+					q.base4 = nil
+				}
+				q.stride4 = componentSizes[id4]
+			}
+			q.currentEntity = arch.entities[q.index]
+			return true
+		}
+		q.archIdx++
+		q.index = 0
+	}
+	return false
+}
+
+// Get returns pointers to the components for the current entity.
+func (q *Query4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
+	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
+	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
+	p4 := unsafe.Pointer(uintptr(q.base4) + uintptr(q.index)*q.stride4)
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
+}
+
+// Entity returns the current entity.
+func (q *Query4[T1, T2, T3, T4]) Entity() Entity {
+	return q.currentEntity
+}
+
+// Query5 is an iterator over entities matching 5 component types.
+type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
+	archetypes    []*Archetype
+	archIdx       int
+	index         int
+	currentArch   *Archetype
+	base1         unsafe.Pointer
+	stride1       uintptr
+	base2         unsafe.Pointer
+	stride2       uintptr
+	base3         unsafe.Pointer
+	stride3       uintptr
+	base4         unsafe.Pointer
+	stride4       uintptr
+	base5         unsafe.Pointer
+	stride5       uintptr
+	currentEntity Entity
+}
+
+// Next advances to the next entity. Returns false if no more entities.
+func (q *Query5[T1, T2, T3, T4, T5]) Next() bool {
+	q.index++
+	for q.archIdx < len(q.archetypes) {
+		arch := q.archetypes[q.archIdx]
+		if q.index < len(arch.entities) {
+			if q.currentArch != arch {
+				q.currentArch = arch
+				id1 := GetID[T1]()
+				slot1 := arch.getSlot(id1)
+				if slot1 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot1]) > 0 {
+					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+				} else {
+					q.base1 = nil
+				}
+				q.stride1 = componentSizes[id1]
+				id2 := GetID[T2]()
+				slot2 := arch.getSlot(id2)
+				if slot2 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot2]) > 0 {
+					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+				} else {
+					q.base2 = nil
+				}
+				q.stride2 = componentSizes[id2]
+				id3 := GetID[T3]()
+				slot3 := arch.getSlot(id3)
+				if slot3 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot3]) > 0 {
+					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+				} else {
+					q.base3 = nil
+				}
+				q.stride3 = componentSizes[id3]
+				id4 := GetID[T4]()
+				slot4 := arch.getSlot(id4)
+				if slot4 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot4]) > 0 {
+					q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+				} else {
+					q.base4 = nil
+				}
+				q.stride4 = componentSizes[id4]
+				id5 := GetID[T5]()
+				slot5 := arch.getSlot(id5)
+				if slot5 < 0 {
+					panic("missing component in matching archetype")
+				}
+				if len(arch.componentData[slot5]) > 0 {
+					q.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
+				} else {
+					q.base5 = nil
+				}
+				q.stride5 = componentSizes[id5]
+			}
+			q.currentEntity = arch.entities[q.index]
+			return true
+		}
+		q.archIdx++
+		q.index = 0
+	}
+	return false
+}
+
+// Get returns pointers to the components for the current entity.
+func (q *Query5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
+	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
+	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
+	p4 := unsafe.Pointer(uintptr(q.base4) + uintptr(q.index)*q.stride4)
+	p5 := unsafe.Pointer(uintptr(q.base5) + uintptr(q.index)*q.stride5)
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
+}
+
+// Entity returns the current entity.
+func (q *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
+	return q.currentEntity
+}
+
+// Filter creates a query for entities with the specified component.
+func Filter[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
+	id1 := GetID[T1]()
+	includeMask := makeMask([]ComponentID{id1})
+	excludeMask := makeMask(excludes)
+
+	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
+	for m, arch := range w.archetypes {
+		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
+			matchingArchetypes = append(matchingArchetypes, arch)
+		}
+	}
+
+	return &Query[T1]{
+		archetypes: matchingArchetypes,
+		archIdx:    0,
+		index:      -1,
+	}
+}
+
+// Filter2 creates a query for entities with the specified components.
+func Filter2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1, T2] {
+	id1 := GetID[T1]()
+	id2 := GetID[T2]()
+	includeMask := makeMask([]ComponentID{id1, id2})
+	excludeMask := makeMask(excludes)
+
+	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
+	for m, arch := range w.archetypes {
+		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
+			matchingArchetypes = append(matchingArchetypes, arch)
+		}
+	}
+
+	return &Query2[T1, T2]{
+		archetypes: matchingArchetypes,
+		archIdx:    0,
+		index:      -1,
+	}
+}
+
+// Filter3 creates a query for entities with the specified components.
+func Filter3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
+	id1 := GetID[T1]()
+	id2 := GetID[T2]()
+	id3 := GetID[T3]()
+	includeMask := makeMask([]ComponentID{id1, id2, id3})
+	excludeMask := makeMask(excludes)
+
+	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
+	for m, arch := range w.archetypes {
+		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
+			matchingArchetypes = append(matchingArchetypes, arch)
+		}
+	}
+
+	return &Query3[T1, T2, T3]{
+		archetypes: matchingArchetypes,
+		archIdx:    0,
+		index:      -1,
+	}
+}
+
+// Filter4 creates a query for entities with the specified components.
+func Filter4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
+	id1 := GetID[T1]()
+	id2 := GetID[T2]()
+	id3 := GetID[T3]()
+	id4 := GetID[T4]()
+	includeMask := makeMask([]ComponentID{id1, id2, id3, id4})
+	excludeMask := makeMask(excludes)
+
+	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
+	for m, arch := range w.archetypes {
+		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
+			matchingArchetypes = append(matchingArchetypes, arch)
+		}
+	}
+
+	return &Query4[T1, T2, T3, T4]{
+		archetypes: matchingArchetypes,
+		archIdx:    0,
+		index:      -1,
+	}
+}
+
+// Filter5 creates a query for entities with the specified components.
+func Filter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
+	id1 := GetID[T1]()
+	id2 := GetID[T2]()
+	id3 := GetID[T3]()
+	id4 := GetID[T4]()
+	id5 := GetID[T5]()
+	includeMask := makeMask([]ComponentID{id1, id2, id3, id4, id5})
+	excludeMask := makeMask(excludes)
+
+	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
+	for m, arch := range w.archetypes {
+		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
+			matchingArchetypes = append(matchingArchetypes, arch)
+		}
+	}
+
+	return &Query5[T1, T2, T3, T4, T5]{
+		archetypes: matchingArchetypes,
+		archIdx:    0,
+		index:      -1,
+	}
 }

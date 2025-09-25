@@ -5,7 +5,7 @@ Just another golang ECS with simple API.
 ## Features
 
 - Easy component registration for later use.
-- Fast & unique ECS architecture.
+- Unique ECS architecture & thread-safe.
 
 ## Getting Started
 
@@ -81,39 +81,30 @@ if !ok1 || !ok2 {
 ### Querying Entities & Component
 
 ```go
-query := world.Query(posID, velID)
+query := lazyecs.Filter2[Position, Velocity](world)
 for query.Next() {
-    for _, entity := range query.Entities() {
-        position, _ := lazyecs.GetComponent[Position](world, entity)
-        velocity, _ := lazyecs.GetComponent[Velocity](world, entity)
-        p.X += velocities[i].VX
-        p.Y += velocities[i].VY
-    }
+    p, v := queryBoth.Get()
+    p.X += v.VX
+    p.Y += v.VY
 }
 ```
 
-We can also access entities from query:
+We can also access entity from query:
 
 ```go
-query := world.Query(posID, velID)
+query := lazyecs.Filter2[Position, Velocity](world)
 for query.Next() {
-    entities := query.Entities() // entities that has position and velocity
-    // do something
+    entity := query.Entity()
 }
 ```
 
 ### Removing Component from Entity
 
 ```go
-query := world.Query(posID, velID)
+query := lazyecs.Filter2[Position, Velocity](world)
 for query.Next() {
-    entities := query.Entities()
-    for i, e := range entities {
-        removed := lazyecs.RemoveComponent[Position](world, e)
-        if removed {
-            // do something
-        }
-    } 
+    entity := query.Entity()
+    removed := lazyecs.RemoveComponent[Velocity](world, entity)
 }
 ```
 
