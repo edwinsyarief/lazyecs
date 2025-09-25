@@ -8,23 +8,17 @@ import (
 	"unsafe"
 )
 
-// ComponentID represents a unique identifier for a component type.
-// We use uint32 to allow for a reasonable number of component types without wasting space.
 type ComponentID uint32
 
 const (
-	bitsPerWord            = 64                      // Number of bits in a uint64 word.
-	maskWords              = 4                       // Number of words in the bitmask; supports up to 256 components.
-	maxComponentTypes      = maskWords * bitsPerWord // Maximum supported component types.
-	defaultInitialCapacity = 4096                    // Default initial capacity for slices; can be overridden.
+	bitsPerWord            = 64
+	maskWords              = 4
+	maxComponentTypes      = maskWords * bitsPerWord
+	defaultInitialCapacity = 4096
 )
 
-// maskType is a bitmask for component sets.
-// This fixed-size array allows fast bit operations for checking component presence.
 type maskType [maskWords]uint64
 
-// has checks if the mask has the bit set for the given ID.
-// It returns false if the ID is out of range to prevent panics.
 func (m maskType) has(id ComponentID) bool {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -34,8 +28,6 @@ func (m maskType) has(id ComponentID) bool {
 	return (m[word] & (1 << bit)) != 0
 }
 
-// set returns a new mask with the bit set for the given ID.
-// Panics if the ID exceeds the maximum allowed.
 func setMask(m maskType, id ComponentID) maskType {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -47,8 +39,6 @@ func setMask(m maskType, id ComponentID) maskType {
 	return nm
 }
 
-// unset returns a new mask with the bit unset for the given ID.
-// If ID is out of range, it returns the original mask unchanged.
 func unsetMask(m maskType, id ComponentID) maskType {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -60,8 +50,6 @@ func unsetMask(m maskType, id ComponentID) maskType {
 	return nm
 }
 
-// makeMask creates a mask from a list of IDs.
-// It iterates over the IDs and sets the corresponding bits.
 func makeMask(ids []ComponentID) maskType {
 	var m maskType
 	for _, id := range ids {
@@ -72,7 +60,6 @@ func makeMask(ids []ComponentID) maskType {
 	return m
 }
 
-// makeMask1 creates a mask for 1 ID.
 func makeMask1(id1 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -81,7 +68,6 @@ func makeMask1(id1 ComponentID) maskType {
 	return m
 }
 
-// makeMask2 creates a mask for 2 IDs.
 func makeMask2(id1, id2 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -93,7 +79,6 @@ func makeMask2(id1, id2 ComponentID) maskType {
 	return m
 }
 
-// makeMask3 creates a mask for 3 IDs.
 func makeMask3(id1, id2, id3 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -108,7 +93,6 @@ func makeMask3(id1, id2, id3 ComponentID) maskType {
 	return m
 }
 
-// makeMask4 creates a mask for 4 IDs.
 func makeMask4(id1, id2, id3, id4 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -126,7 +110,6 @@ func makeMask4(id1, id2, id3, id4 ComponentID) maskType {
 	return m
 }
 
-// makeMask5 creates a mask for 5 IDs.
 func makeMask5(id1, id2, id3, id4, id5 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -147,8 +130,6 @@ func makeMask5(id1, id2, id3, id4, id5 ComponentID) maskType {
 	return m
 }
 
-// includesAll checks if m includes all bits set in include.
-// This is used to verify if an archetype matches a query's required components.
 func includesAll(m, include maskType) bool {
 	for i := 0; i < maskWords; i++ {
 		if (m[i] & include[i]) != include[i] {
@@ -158,8 +139,6 @@ func includesAll(m, include maskType) bool {
 	return true
 }
 
-// intersects checks if m and exclude have any overlapping bits.
-// Used for exclusion filters in queries.
 func intersects(m, exclude maskType) bool {
 	for i := 0; i < maskWords; i++ {
 		if (m[i] & exclude[i]) != 0 {
@@ -170,14 +149,12 @@ func intersects(m, exclude maskType) bool {
 }
 
 var (
-	nextComponentID ComponentID                          // Next available component ID, starts at 0.
-	typeToID        = make(map[reflect.Type]ComponentID) // Maps component types to their IDs.
-	idToType        = make(map[ComponentID]reflect.Type) // Maps IDs back to component types.
+	nextComponentID ComponentID
+	typeToID        = make(map[reflect.Type]ComponentID)
+	idToType        = make(map[ComponentID]reflect.Type)
 	componentSizes  [maxComponentTypes]uintptr
 )
 
-// ResetGlobalRegistry resets the component registry for testing purposes.
-// This clears all mappings and resets the next ID counter.
 func ResetGlobalRegistry() {
 	nextComponentID = 0
 	typeToID = make(map[reflect.Type]ComponentID)
@@ -185,8 +162,6 @@ func ResetGlobalRegistry() {
 	componentSizes = [maxComponentTypes]uintptr{}
 }
 
-// RegisterComponent registers a component type and returns its unique ID.
-// It panics if the type is already registered or if we've hit the max component limit.
 func RegisterComponent[T any]() ComponentID {
 	var t T
 	compType := reflect.TypeOf(t)
@@ -207,8 +182,6 @@ func RegisterComponent[T any]() ComponentID {
 	return id
 }
 
-// GetID returns the ComponentID for a given type T.
-// Panics if the type is not registered.
 func GetID[T any]() ComponentID {
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -219,7 +192,6 @@ func GetID[T any]() ComponentID {
 	return id
 }
 
-// TryGetID returns the ComponentID for a given type T and whether it was found.
 func TryGetID[T any]() (ComponentID, bool) {
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -227,48 +199,36 @@ func TryGetID[T any]() (ComponentID, bool) {
 	return id, ok
 }
 
-// Entity is a unique identifier for an entity, including a version for safety.
-// The version helps detect use-after-free errors.
 type Entity struct {
 	ID      uint32
 	Version uint32
 }
 
-// entityMeta stores internal metadata for each entity.
-// This includes its current archetype, index within it, and version.
 type entityMeta struct {
 	Archetype *Archetype
 	Index     int
 	Version   uint32
 }
 
-// WorldOptions allows configuring the World.
-// Currently, it supports setting the initial capacity for archetypes.
 type WorldOptions struct {
-	InitialCapacity int // Initial capacity for slices; defaults to 4096 if <=0.
+	InitialCapacity int
 }
 
-// World manages all entities, components, and systems.
-// It uses archetypes for efficient storage and querying.
 type World struct {
-	nextEntityID    uint32                  // Next available entity ID.
-	freeEntityIDs   []uint32                // Recycled entity IDs for reuse.
-	entities        map[uint32]entityMeta   // Maps entity IDs to their metadata.
-	archetypes      map[maskType]*Archetype // Maps component masks to archetypes.
-	archetypesList  []*Archetype            // List of all archetypes for iteration.
-	toRemove        []Entity                // Entities queued for removal.
-	Resources       sync.Map                // General-purpose resource storage.
-	initialCapacity int                     // Configurable initial capacity.
+	nextEntityID    uint32
+	freeEntityIDs   []uint32
+	entities        map[uint32]entityMeta
+	archetypes      map[maskType]*Archetype
+	archetypesList  []*Archetype
+	toRemove        []Entity
+	Resources       sync.Map
+	initialCapacity int
 }
 
-// NewWorld creates a new ECS world with default options.
-// It initializes with an empty archetype.
 func NewWorld() *World {
 	return NewWorldWithOptions(WorldOptions{})
 }
 
-// NewWorldWithOptions creates a new ECS world with custom options.
-// This allows setting initial capacities without changing the API.
 func NewWorldWithOptions(opts WorldOptions) *World {
 	cap := defaultInitialCapacity
 	if opts.InitialCapacity > 0 {
@@ -281,12 +241,10 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 		freeEntityIDs:   make([]uint32, 0, cap),
 		initialCapacity: cap,
 	}
-	// Create the initial empty archetype with configurable capacity.
 	w.getOrCreateArchetype(maskType{})
 	return w
 }
 
-// getOrCreateArchetype finds or creates an archetype for a given mask.
 func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	if arch, ok := self.archetypes[mask]; ok {
 		return arch
@@ -303,7 +261,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 			compIDs = append(compIDs, id)
 		}
 	}
-
 	sort.Slice(compIDs, func(i, j int) bool { return compIDs[i] < compIDs[j] })
 	newArch.componentIDs = compIDs
 	newArch.componentData = make([][]byte, len(compIDs))
@@ -318,8 +275,22 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	return newArch
 }
 
-// CreateEntity creates a new entity with no components.
-// It reuses free IDs if available to avoid fragmentation.
+func extendSlice[T any](s []T, n int) []T {
+	newLen := len(s) + n
+	if cap(s) < newLen {
+		panic("slice capacity exceeded, increase initialCapacity")
+	}
+	return s[:newLen]
+}
+
+func extendByteSlice(s []byte, n int) []byte {
+	newLen := len(s) + n
+	if cap(s) < newLen {
+		panic("byte slice capacity exceeded, increase initialCapacity")
+	}
+	return s[:newLen]
+}
+
 func (self *World) CreateEntity() Entity {
 	var id uint32
 	if len(self.freeEntityIDs) > 0 {
@@ -338,22 +309,20 @@ func (self *World) CreateEntity() Entity {
 	if exists {
 		version = meta.Version + 1
 		if version == 0 {
-			version = 1 // Wrap-around safety.
+			version = 1
 		}
 	}
 
 	e := Entity{ID: id, Version: version}
 	arch := self.archetypes[maskType{}]
 	index := len(arch.entities)
+	arch.entities = extendSlice(arch.entities, 1)
+	arch.entities[index] = e
 
 	self.entities[id] = entityMeta{Archetype: arch, Index: index, Version: e.Version}
-	arch.entities = append(arch.entities, e)
-
 	return e
 }
 
-// CreateEntities batch-creates multiple entities with no components.
-// This is more efficient than calling CreateEntity in a loop.
 func (self *World) CreateEntities(count int) []Entity {
 	if count <= 0 {
 		return nil
@@ -362,6 +331,7 @@ func (self *World) CreateEntities(count int) []Entity {
 	entities := make([]Entity, count)
 	arch := self.archetypes[maskType{}]
 	startIndex := len(arch.entities)
+	arch.entities = extendSlice(arch.entities, count)
 
 	for i := 0; i < count; i++ {
 		var id uint32
@@ -387,22 +357,18 @@ func (self *World) CreateEntities(count int) []Entity {
 
 		e := Entity{ID: id, Version: version}
 		entities[i] = e
-		index := startIndex + i
-		self.entities[id] = entityMeta{Archetype: arch, Index: index, Version: e.Version}
-		arch.entities = append(arch.entities, e)
+		idx := startIndex + i
+		arch.entities[idx] = e
+		self.entities[id] = entityMeta{Archetype: arch, Index: idx, Version: e.Version}
 	}
-
 	return entities
 }
 
-// RemoveEntity marks an entity for removal at the end of the frame.
-// Actual removal is deferred to ProcessRemovals for batch processing.
 func (self *World) RemoveEntity(e Entity) {
-	self.toRemove = append(self.toRemove, e)
+	self.toRemove = extendSlice(self.toRemove, 1)
+	self.toRemove[len(self.toRemove)-1] = e
 }
 
-// ProcessRemovals cleans up entities marked for removal.
-// It processes them in batch to improve efficiency.
 func (self *World) ProcessRemovals() {
 	if len(self.toRemove) == 0 {
 		return
@@ -419,16 +385,14 @@ func (self *World) ProcessRemovals() {
 	for id, e := range removeSet {
 		if meta, ok := self.entities[id]; ok {
 			self.removeEntityFromArchetype(e, meta.Archetype, meta.Index)
-			self.freeEntityIDs = append(self.freeEntityIDs, id)
+			self.freeEntityIDs = extendSlice(self.freeEntityIDs, 1)
+			self.freeEntityIDs[len(self.freeEntityIDs)-1] = id
 			delete(self.entities, id)
 		}
 	}
-
 	self.toRemove = self.toRemove[:0]
 }
 
-// removeEntityFromArchetype performs an efficient "swap and pop" removal from an archetype.
-// This avoids shifting elements by swapping with the last one and truncating.
 func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index int) {
 	lastIndex := len(arch.entities) - 1
 	if lastIndex < 0 || index > lastIndex {
@@ -454,9 +418,6 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 	}
 }
 
-// AddComponent adds a component of type T to an entity.
-// Returns pointer to the component and success flag.
-// If the component already exists, it returns the existing one.
 func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
@@ -493,7 +454,7 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 		return nil, false
 	}
 	newBytes := newArch.componentData[newIdx]
-	newBytes = append(newBytes, make([]byte, size)...)
+	newBytes = extendByteSlice(newBytes, size)
 	newArch.componentData[newIdx] = newBytes
 
 	meta.Archetype = newArch
@@ -507,16 +468,12 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	return (*T)(unsafe.Pointer(&finalBytes[newIndex*size])), true
 }
 
-// SetComponent adds a component with specific data to an entity, or updates it if it already exists.
-// This is more convenient than AddComponent + manual set for initialization.
 func SetComponent[T any](w *World, e Entity, comp T) bool {
-	// 1. Validate the entity and get its metadata.
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
 		return false
 	}
 
-	// 2. Get the Component ID for type T.
 	compID, ok := TryGetID[T]()
 	if !ok {
 		return false
@@ -525,9 +482,7 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
 
 	oldArch := meta.Archetype
-	// 3. Check if the entity already has this component.
 	if oldArch.mask.has(compID) {
-		// --- SCENARIO A: UPDATE EXISTING COMPONENT ---
 		componentIndexInArchetype := oldArch.getSlot(compID)
 		if componentIndexInArchetype == -1 {
 			return false
@@ -539,37 +494,30 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
 		return true
 	} else {
-		// --- SCENARIO B: ADD NEW COMPONENT ---
-		// a. Determine the new archetype's mask and get/create it.
 		newMask := setMask(oldArch.mask, compID)
 		newArch := w.getOrCreateArchetype(newMask)
 
-		// b. Move the entity and all its existing component data to the new archetype.
 		oldIndex := meta.Index
 		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch)
 
-		// c. Append the new component data (passed in as `comp`) to the correct slice in the new archetype.
 		newCompIdx := newArch.getSlot(compID)
 		if newCompIdx == -1 {
 			return false
 		}
 		newBytes := newArch.componentData[newCompIdx]
-		newBytes = append(newBytes, src...)
+		newBytes = extendByteSlice(newBytes, size)
+		copy(newBytes[len(newBytes)-size:], src)
 		newArch.componentData[newCompIdx] = newBytes
 
-		// d. Update the entity's metadata to point to its new location.
 		meta.Archetype = newArch
 		meta.Index = newIndex
 		w.entities[e.ID] = meta
 
-		// e. Remove the entity from its old archetype using swap-and-pop.
 		w.removeEntityFromArchetype(e, oldArch, oldIndex)
 		return true
 	}
 }
 
-// RemoveComponent removes a component of type T from an entity.
-// If the component doesn't exist, it returns true anyway.
 func RemoveComponent[T any](w *World, e Entity) bool {
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
@@ -583,7 +531,7 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 
 	oldArch := meta.Archetype
 	if !oldArch.mask.has(compID) {
-		return true // Already removed.
+		return true
 	}
 
 	oldIndex := meta.Index
@@ -601,8 +549,6 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 	return true
 }
 
-// GetComponent retrieves a pointer to a component of type T for an entity.
-// Returns nil and false if not found or entity invalid.
 func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	meta, ok := w.entities[e.ID]
 	if !ok || e.Version != meta.Version {
@@ -627,11 +573,10 @@ func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
 }
 
-// moveEntityBetweenArchetypes copies an entity's data from one archetype to another, optionally excluding IDs.
-// This is used when adding or removing components.
 func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, excludeIDs ...ComponentID) int {
 	newIndex := len(newArch.entities)
-	newArch.entities = append(newArch.entities, e)
+	newArch.entities = extendSlice(newArch.entities, 1)
+	newArch.entities[newIndex] = e
 
 	excludeSet := make(map[ComponentID]struct{}, len(excludeIDs))
 	for _, id := range excludeIDs {
@@ -651,23 +596,20 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 			continue
 		}
 		newBytes := newArch.componentData[newIdx]
-		newBytes = append(newBytes, src...)
+		newBytes = extendByteSlice(newBytes, size)
+		copy(newBytes[len(newBytes)-size:], src)
 		newArch.componentData[newIdx] = newBytes
 	}
 	return newIndex
 }
 
-// Archetype represents a unique combination of components.
-// It stores entities and their component data in parallel slices for cache efficiency.
 type Archetype struct {
-	mask          maskType      // Bitmask of components in this archetype.
-	componentData [][]byte      // Byte slices of component data.
-	componentIDs  []ComponentID // Sorted list of component IDs.
-	entities      []Entity      // List of entities in this archetype.
+	mask          maskType
+	componentData [][]byte
+	componentIDs  []ComponentID
+	entities      []Entity
 }
 
-// getSlot returns the index of the component data slice for the given ID.
-// Returns -1 if not found.
 func (a *Archetype) getSlot(id ComponentID) int {
 	i := sort.Search(len(a.componentIDs), func(j int) bool {
 		return a.componentIDs[j] >= id
