@@ -83,7 +83,7 @@ if !ok1 || !ok2 {
 ```go
 query := lazyecs.Filter2[Position, Velocity](world)
 for query.Next() {
-    p, v := queryBoth.Get()
+    p, v := query.Get()
     p.X += v.VX
     p.Y += v.VY
 }
