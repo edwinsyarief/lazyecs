@@ -72,6 +72,81 @@ func makeMask(ids []ComponentID) maskType {
 	return m
 }
 
+// makeMask1 creates a mask for 1 ID.
+func makeMask1(id1 ComponentID) maskType {
+	var m maskType
+	word1 := int(id1 / bitsPerWord)
+	bit1 := id1 % bitsPerWord
+	m[word1] |= (1 << bit1)
+	return m
+}
+
+// makeMask2 creates a mask for 2 IDs.
+func makeMask2(id1, id2 ComponentID) maskType {
+	var m maskType
+	word1 := int(id1 / bitsPerWord)
+	bit1 := id1 % bitsPerWord
+	m[word1] |= (1 << bit1)
+	word2 := int(id2 / bitsPerWord)
+	bit2 := id2 % bitsPerWord
+	m[word2] |= (1 << bit2)
+	return m
+}
+
+// makeMask3 creates a mask for 3 IDs.
+func makeMask3(id1, id2, id3 ComponentID) maskType {
+	var m maskType
+	word1 := int(id1 / bitsPerWord)
+	bit1 := id1 % bitsPerWord
+	m[word1] |= (1 << bit1)
+	word2 := int(id2 / bitsPerWord)
+	bit2 := id2 % bitsPerWord
+	m[word2] |= (1 << bit2)
+	word3 := int(id3 / bitsPerWord)
+	bit3 := id3 % bitsPerWord
+	m[word3] |= (1 << bit3)
+	return m
+}
+
+// makeMask4 creates a mask for 4 IDs.
+func makeMask4(id1, id2, id3, id4 ComponentID) maskType {
+	var m maskType
+	word1 := int(id1 / bitsPerWord)
+	bit1 := id1 % bitsPerWord
+	m[word1] |= (1 << bit1)
+	word2 := int(id2 / bitsPerWord)
+	bit2 := id2 % bitsPerWord
+	m[word2] |= (1 << bit2)
+	word3 := int(id3 / bitsPerWord)
+	bit3 := id3 % bitsPerWord
+	m[word3] |= (1 << bit3)
+	word4 := int(id4 / bitsPerWord)
+	bit4 := id4 % bitsPerWord
+	m[word4] |= (1 << bit4)
+	return m
+}
+
+// makeMask5 creates a mask for 5 IDs.
+func makeMask5(id1, id2, id3, id4, id5 ComponentID) maskType {
+	var m maskType
+	word1 := int(id1 / bitsPerWord)
+	bit1 := id1 % bitsPerWord
+	m[word1] |= (1 << bit1)
+	word2 := int(id2 / bitsPerWord)
+	bit2 := id2 % bitsPerWord
+	m[word2] |= (1 << bit2)
+	word3 := int(id3 / bitsPerWord)
+	bit3 := id3 % bitsPerWord
+	m[word3] |= (1 << bit3)
+	word4 := int(id4 / bitsPerWord)
+	bit4 := id4 % bitsPerWord
+	m[word4] |= (1 << bit4)
+	word5 := int(id5 / bitsPerWord)
+	bit5 := id5 % bitsPerWord
+	m[word5] |= (1 << bit5)
+	return m
+}
+
 // includesAll checks if m includes all bits set in include.
 // This is used to verify if an archetype matches a query's required components.
 func includesAll(m, include maskType) bool {
@@ -180,6 +255,7 @@ type World struct {
 	freeEntityIDs   []uint32                // Recycled entity IDs for reuse.
 	entities        map[uint32]entityMeta   // Maps entity IDs to their metadata.
 	archetypes      map[maskType]*Archetype // Maps component masks to archetypes.
+	archetypesList  []*Archetype            // List of all archetypes for iteration.
 	toRemove        []Entity                // Entities queued for removal.
 	Resources       sync.Map                // General-purpose resource storage.
 	initialCapacity int                     // Configurable initial capacity.
@@ -238,6 +314,7 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	}
 
 	self.archetypes[mask] = newArch
+	self.archetypesList = append(self.archetypesList, newArch)
 	return newArch
 }
 
@@ -390,7 +467,6 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	if !ok {
 		return nil, false
 	}
-
 	size := int(componentSizes[compID])
 
 	oldArch := meta.Archetype
@@ -445,7 +521,6 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	if !ok {
 		return false
 	}
-
 	size := int(componentSizes[compID])
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
 
@@ -538,7 +613,6 @@ func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	if !ok {
 		return nil, false
 	}
-
 	size := int(componentSizes[compID])
 
 	arch := meta.Archetype
@@ -606,7 +680,10 @@ func (a *Archetype) getSlot(id ComponentID) int {
 
 // Query is an iterator over entities matching 1 component type.
 type Query[T1 any] struct {
-	archetypes    []*Archetype
+	world         *World
+	includeMask   maskType
+	excludeMask   maskType
+	id1           ComponentID
 	archIdx       int
 	index         int
 	currentArch   *Archetype
@@ -615,31 +692,41 @@ type Query[T1 any] struct {
 	currentEntity Entity
 }
 
+// Reset resets the query for reuse.
+func (q *Query[T1]) Reset() {
+	q.archIdx = 0
+	q.index = -1
+	q.currentArch = nil
+}
+
 // Next advances to the next entity. Returns false if no more entities.
 func (q *Query[T1]) Next() bool {
 	q.index++
-	for q.archIdx < len(q.archetypes) {
-		arch := q.archetypes[q.archIdx]
-		if q.index < len(arch.entities) {
-			if q.currentArch != arch {
-				q.currentArch = arch
-				id1 := GetID[T1]()
-				slot1 := arch.getSlot(id1)
-				if slot1 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot1]) > 0 {
-					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
-				} else {
-					q.base1 = nil
-				}
-				q.stride1 = componentSizes[id1]
-			}
-			q.currentEntity = arch.entities[q.index]
-			return true
-		}
+	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
+		q.currentEntity = q.currentArch.entities[q.index]
+		return true
+	}
+
+	for q.archIdx < len(q.world.archetypesList) {
+		arch := q.world.archetypesList[q.archIdx]
 		q.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+			continue
+		}
+		q.currentArch = arch
+		slot1 := arch.getSlot(q.id1)
+		if slot1 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot1]) > 0 {
+			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		} else {
+			q.base1 = nil
+		}
+		q.stride1 = componentSizes[q.id1]
 		q.index = 0
+		q.currentEntity = arch.entities[0]
+		return true
 	}
 	return false
 }
@@ -657,7 +744,11 @@ func (q *Query[T1]) Entity() Entity {
 
 // Query2 is an iterator over entities matching 2 component types.
 type Query2[T1 any, T2 any] struct {
-	archetypes    []*Archetype
+	world         *World
+	includeMask   maskType
+	excludeMask   maskType
+	id1           ComponentID
+	id2           ComponentID
 	archIdx       int
 	index         int
 	currentArch   *Archetype
@@ -668,42 +759,51 @@ type Query2[T1 any, T2 any] struct {
 	currentEntity Entity
 }
 
+// Reset resets the query for reuse.
+func (q *Query2[T1, T2]) Reset() {
+	q.archIdx = 0
+	q.index = -1
+	q.currentArch = nil
+}
+
 // Next advances to the next entity. Returns false if no more entities.
 func (q *Query2[T1, T2]) Next() bool {
 	q.index++
-	for q.archIdx < len(q.archetypes) {
-		arch := q.archetypes[q.archIdx]
-		if q.index < len(arch.entities) {
-			if q.currentArch != arch {
-				q.currentArch = arch
-				id1 := GetID[T1]()
-				slot1 := arch.getSlot(id1)
-				if slot1 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot1]) > 0 {
-					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
-				} else {
-					q.base1 = nil
-				}
-				q.stride1 = componentSizes[id1]
-				id2 := GetID[T2]()
-				slot2 := arch.getSlot(id2)
-				if slot2 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot2]) > 0 {
-					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
-				} else {
-					q.base2 = nil
-				}
-				q.stride2 = componentSizes[id2]
-			}
-			q.currentEntity = arch.entities[q.index]
-			return true
-		}
+	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
+		q.currentEntity = q.currentArch.entities[q.index]
+		return true
+	}
+
+	for q.archIdx < len(q.world.archetypesList) {
+		arch := q.world.archetypesList[q.archIdx]
 		q.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+			continue
+		}
+		q.currentArch = arch
+		slot1 := arch.getSlot(q.id1)
+		if slot1 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot1]) > 0 {
+			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		} else {
+			q.base1 = nil
+		}
+		q.stride1 = componentSizes[q.id1]
+		slot2 := arch.getSlot(q.id2)
+		if slot2 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot2]) > 0 {
+			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		} else {
+			q.base2 = nil
+		}
+		q.stride2 = componentSizes[q.id2]
 		q.index = 0
+		q.currentEntity = arch.entities[0]
+		return true
 	}
 	return false
 }
@@ -722,7 +822,12 @@ func (q *Query2[T1, T2]) Entity() Entity {
 
 // Query3 is an iterator over entities matching 3 component types.
 type Query3[T1 any, T2 any, T3 any] struct {
-	archetypes    []*Archetype
+	world         *World
+	includeMask   maskType
+	excludeMask   maskType
+	id1           ComponentID
+	id2           ComponentID
+	id3           ComponentID
 	archIdx       int
 	index         int
 	currentArch   *Archetype
@@ -735,53 +840,61 @@ type Query3[T1 any, T2 any, T3 any] struct {
 	currentEntity Entity
 }
 
+// Reset resets the query for reuse.
+func (q *Query3[T1, T2, T3]) Reset() {
+	q.archIdx = 0
+	q.index = -1
+	q.currentArch = nil
+}
+
 // Next advances to the next entity. Returns false if no more entities.
 func (q *Query3[T1, T2, T3]) Next() bool {
 	q.index++
-	for q.archIdx < len(q.archetypes) {
-		arch := q.archetypes[q.archIdx]
-		if q.index < len(arch.entities) {
-			if q.currentArch != arch {
-				q.currentArch = arch
-				id1 := GetID[T1]()
-				slot1 := arch.getSlot(id1)
-				if slot1 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot1]) > 0 {
-					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
-				} else {
-					q.base1 = nil
-				}
-				q.stride1 = componentSizes[id1]
-				id2 := GetID[T2]()
-				slot2 := arch.getSlot(id2)
-				if slot2 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot2]) > 0 {
-					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
-				} else {
-					q.base2 = nil
-				}
-				q.stride2 = componentSizes[id2]
-				id3 := GetID[T3]()
-				slot3 := arch.getSlot(id3)
-				if slot3 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot3]) > 0 {
-					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
-				} else {
-					q.base3 = nil
-				}
-				q.stride3 = componentSizes[id3]
-			}
-			q.currentEntity = arch.entities[q.index]
-			return true
-		}
+	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
+		q.currentEntity = q.currentArch.entities[q.index]
+		return true
+	}
+
+	for q.archIdx < len(q.world.archetypesList) {
+		arch := q.world.archetypesList[q.archIdx]
 		q.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+			continue
+		}
+		q.currentArch = arch
+		slot1 := arch.getSlot(q.id1)
+		if slot1 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot1]) > 0 {
+			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		} else {
+			q.base1 = nil
+		}
+		q.stride1 = componentSizes[q.id1]
+		slot2 := arch.getSlot(q.id2)
+		if slot2 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot2]) > 0 {
+			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		} else {
+			q.base2 = nil
+		}
+		q.stride2 = componentSizes[q.id2]
+		slot3 := arch.getSlot(q.id3)
+		if slot3 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot3]) > 0 {
+			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		} else {
+			q.base3 = nil
+		}
+		q.stride3 = componentSizes[q.id3]
 		q.index = 0
+		q.currentEntity = arch.entities[0]
+		return true
 	}
 	return false
 }
@@ -801,7 +914,13 @@ func (q *Query3[T1, T2, T3]) Entity() Entity {
 
 // Query4 is an iterator over entities matching 4 component types.
 type Query4[T1 any, T2 any, T3 any, T4 any] struct {
-	archetypes    []*Archetype
+	world         *World
+	includeMask   maskType
+	excludeMask   maskType
+	id1           ComponentID
+	id2           ComponentID
+	id3           ComponentID
+	id4           ComponentID
 	archIdx       int
 	index         int
 	currentArch   *Archetype
@@ -816,64 +935,71 @@ type Query4[T1 any, T2 any, T3 any, T4 any] struct {
 	currentEntity Entity
 }
 
+// Reset resets the query for reuse.
+func (q *Query4[T1, T2, T3, T4]) Reset() {
+	q.archIdx = 0
+	q.index = -1
+	q.currentArch = nil
+}
+
 // Next advances to the next entity. Returns false if no more entities.
 func (q *Query4[T1, T2, T3, T4]) Next() bool {
 	q.index++
-	for q.archIdx < len(q.archetypes) {
-		arch := q.archetypes[q.archIdx]
-		if q.index < len(arch.entities) {
-			if q.currentArch != arch {
-				q.currentArch = arch
-				id1 := GetID[T1]()
-				slot1 := arch.getSlot(id1)
-				if slot1 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot1]) > 0 {
-					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
-				} else {
-					q.base1 = nil
-				}
-				q.stride1 = componentSizes[id1]
-				id2 := GetID[T2]()
-				slot2 := arch.getSlot(id2)
-				if slot2 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot2]) > 0 {
-					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
-				} else {
-					q.base2 = nil
-				}
-				q.stride2 = componentSizes[id2]
-				id3 := GetID[T3]()
-				slot3 := arch.getSlot(id3)
-				if slot3 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot3]) > 0 {
-					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
-				} else {
-					q.base3 = nil
-				}
-				q.stride3 = componentSizes[id3]
-				id4 := GetID[T4]()
-				slot4 := arch.getSlot(id4)
-				if slot4 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot4]) > 0 {
-					q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
-				} else {
-					q.base4 = nil
-				}
-				q.stride4 = componentSizes[id4]
-			}
-			q.currentEntity = arch.entities[q.index]
-			return true
-		}
+	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
+		q.currentEntity = q.currentArch.entities[q.index]
+		return true
+	}
+
+	for q.archIdx < len(q.world.archetypesList) {
+		arch := q.world.archetypesList[q.archIdx]
 		q.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+			continue
+		}
+		q.currentArch = arch
+		slot1 := arch.getSlot(q.id1)
+		if slot1 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot1]) > 0 {
+			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		} else {
+			q.base1 = nil
+		}
+		q.stride1 = componentSizes[q.id1]
+		slot2 := arch.getSlot(q.id2)
+		if slot2 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot2]) > 0 {
+			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		} else {
+			q.base2 = nil
+		}
+		q.stride2 = componentSizes[q.id2]
+		slot3 := arch.getSlot(q.id3)
+		if slot3 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot3]) > 0 {
+			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		} else {
+			q.base3 = nil
+		}
+		q.stride3 = componentSizes[q.id3]
+		slot4 := arch.getSlot(q.id4)
+		if slot4 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot4]) > 0 {
+			q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+		} else {
+			q.base4 = nil
+		}
+		q.stride4 = componentSizes[q.id4]
 		q.index = 0
+		q.currentEntity = arch.entities[0]
+		return true
 	}
 	return false
 }
@@ -894,7 +1020,14 @@ func (q *Query4[T1, T2, T3, T4]) Entity() Entity {
 
 // Query5 is an iterator over entities matching 5 component types.
 type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
-	archetypes    []*Archetype
+	world         *World
+	includeMask   maskType
+	excludeMask   maskType
+	id1           ComponentID
+	id2           ComponentID
+	id3           ComponentID
+	id4           ComponentID
+	id5           ComponentID
 	archIdx       int
 	index         int
 	currentArch   *Archetype
@@ -911,75 +1044,81 @@ type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	currentEntity Entity
 }
 
+// Reset resets the query for reuse.
+func (q *Query5[T1, T2, T3, T4, T5]) Reset() {
+	q.archIdx = 0
+	q.index = -1
+	q.currentArch = nil
+}
+
 // Next advances to the next entity. Returns false if no more entities.
 func (q *Query5[T1, T2, T3, T4, T5]) Next() bool {
 	q.index++
-	for q.archIdx < len(q.archetypes) {
-		arch := q.archetypes[q.archIdx]
-		if q.index < len(arch.entities) {
-			if q.currentArch != arch {
-				q.currentArch = arch
-				id1 := GetID[T1]()
-				slot1 := arch.getSlot(id1)
-				if slot1 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot1]) > 0 {
-					q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
-				} else {
-					q.base1 = nil
-				}
-				q.stride1 = componentSizes[id1]
-				id2 := GetID[T2]()
-				slot2 := arch.getSlot(id2)
-				if slot2 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot2]) > 0 {
-					q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
-				} else {
-					q.base2 = nil
-				}
-				q.stride2 = componentSizes[id2]
-				id3 := GetID[T3]()
-				slot3 := arch.getSlot(id3)
-				if slot3 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot3]) > 0 {
-					q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
-				} else {
-					q.base3 = nil
-				}
-				q.stride3 = componentSizes[id3]
-				id4 := GetID[T4]()
-				slot4 := arch.getSlot(id4)
-				if slot4 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot4]) > 0 {
-					q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
-				} else {
-					q.base4 = nil
-				}
-				q.stride4 = componentSizes[id4]
-				id5 := GetID[T5]()
-				slot5 := arch.getSlot(id5)
-				if slot5 < 0 {
-					panic("missing component in matching archetype")
-				}
-				if len(arch.componentData[slot5]) > 0 {
-					q.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
-				} else {
-					q.base5 = nil
-				}
-				q.stride5 = componentSizes[id5]
-			}
-			q.currentEntity = arch.entities[q.index]
-			return true
-		}
+	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
+		q.currentEntity = q.currentArch.entities[q.index]
+		return true
+	}
+
+	for q.archIdx < len(q.world.archetypesList) {
+		arch := q.world.archetypesList[q.archIdx]
 		q.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+			continue
+		}
+		q.currentArch = arch
+		slot1 := arch.getSlot(q.id1)
+		if slot1 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot1]) > 0 {
+			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		} else {
+			q.base1 = nil
+		}
+		q.stride1 = componentSizes[q.id1]
+		slot2 := arch.getSlot(q.id2)
+		if slot2 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot2]) > 0 {
+			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		} else {
+			q.base2 = nil
+		}
+		q.stride2 = componentSizes[q.id2]
+		slot3 := arch.getSlot(q.id3)
+		if slot3 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot3]) > 0 {
+			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		} else {
+			q.base3 = nil
+		}
+		q.stride3 = componentSizes[q.id3]
+		slot4 := arch.getSlot(q.id4)
+		if slot4 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot4]) > 0 {
+			q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+		} else {
+			q.base4 = nil
+		}
+		q.stride4 = componentSizes[q.id4]
+		slot5 := arch.getSlot(q.id5)
+		if slot5 < 0 {
+			panic("missing component in matching archetype")
+		}
+		if len(arch.componentData[slot5]) > 0 {
+			q.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
+		} else {
+			q.base5 = nil
+		}
+		q.stride5 = componentSizes[q.id5]
 		q.index = 0
+		q.currentEntity = arch.entities[0]
+		return true
 	}
 	return false
 }
@@ -999,112 +1138,87 @@ func (q *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
 	return q.currentEntity
 }
 
-// Filter creates a query for entities with the specified component.
-func Filter[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
+// Query1 creates a query for entities with the specified component.
+func CreateQuery[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
 	id1 := GetID[T1]()
-	includeMask := makeMask([]ComponentID{id1})
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
-	for m, arch := range w.archetypes {
-		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
 	return &Query[T1]{
-		archetypes: matchingArchetypes,
-		archIdx:    0,
-		index:      -1,
+		world:       w,
+		includeMask: makeMask1(id1),
+		excludeMask: makeMask(excludes),
+		id1:         id1,
+		archIdx:     0,
+		index:       -1,
 	}
 }
 
-// Filter2 creates a query for entities with the specified components.
-func Filter2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1, T2] {
+// Query2 creates a query for entities with the specified components.
+func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1, T2] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
-	includeMask := makeMask([]ComponentID{id1, id2})
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
-	for m, arch := range w.archetypes {
-		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
 	return &Query2[T1, T2]{
-		archetypes: matchingArchetypes,
-		archIdx:    0,
-		index:      -1,
+		world:       w,
+		includeMask: makeMask2(id1, id2),
+		excludeMask: makeMask(excludes),
+		id1:         id1,
+		id2:         id2,
+		archIdx:     0,
+		index:       -1,
 	}
 }
 
-// Filter3 creates a query for entities with the specified components.
-func Filter3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
+// Query3 creates a query for entities with the specified components.
+func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
 	id3 := GetID[T3]()
-	includeMask := makeMask([]ComponentID{id1, id2, id3})
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
-	for m, arch := range w.archetypes {
-		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
 	return &Query3[T1, T2, T3]{
-		archetypes: matchingArchetypes,
-		archIdx:    0,
-		index:      -1,
+		world:       w,
+		includeMask: makeMask3(id1, id2, id3),
+		excludeMask: makeMask(excludes),
+		id1:         id1,
+		id2:         id2,
+		id3:         id3,
+		archIdx:     0,
+		index:       -1,
 	}
 }
 
-// Filter4 creates a query for entities with the specified components.
-func Filter4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
+// Query4 creates a query for entities with the specified components.
+func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
 	id3 := GetID[T3]()
 	id4 := GetID[T4]()
-	includeMask := makeMask([]ComponentID{id1, id2, id3, id4})
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
-	for m, arch := range w.archetypes {
-		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
 	return &Query4[T1, T2, T3, T4]{
-		archetypes: matchingArchetypes,
-		archIdx:    0,
-		index:      -1,
+		world:       w,
+		includeMask: makeMask4(id1, id2, id3, id4),
+		excludeMask: makeMask(excludes),
+		id1:         id1,
+		id2:         id2,
+		id3:         id3,
+		id4:         id4,
+		archIdx:     0,
+		index:       -1,
 	}
 }
 
-// Filter5 creates a query for entities with the specified components.
-func Filter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
+// Query5 creates a query for entities with the specified components.
+func CreateQuery5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
 	id3 := GetID[T3]()
 	id4 := GetID[T4]()
 	id5 := GetID[T5]()
-	includeMask := makeMask([]ComponentID{id1, id2, id3, id4, id5})
-	excludeMask := makeMask(excludes)
-
-	matchingArchetypes := make([]*Archetype, 0, len(w.archetypes)/2)
-	for m, arch := range w.archetypes {
-		if len(arch.entities) > 0 && includesAll(m, includeMask) && !intersects(m, excludeMask) {
-			matchingArchetypes = append(matchingArchetypes, arch)
-		}
-	}
-
 	return &Query5[T1, T2, T3, T4, T5]{
-		archetypes: matchingArchetypes,
-		archIdx:    0,
-		index:      -1,
+		world:       w,
+		includeMask: makeMask5(id1, id2, id3, id4, id5),
+		excludeMask: makeMask(excludes),
+		id1:         id1,
+		id2:         id2,
+		id3:         id3,
+		id4:         id4,
+		id5:         id5,
+		archIdx:     0,
+		index:       -1,
 	}
 }

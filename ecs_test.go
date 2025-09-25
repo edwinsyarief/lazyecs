@@ -176,7 +176,7 @@ func TestEntityRemoval(t *testing.T) {
 	}
 
 	// Check if query is correct
-	query := lazyecs.Filter[Position](world)
+	query := lazyecs.CreateQuery[Position](world)
 	count := 0
 	for query.Next() {
 		count++
@@ -202,7 +202,7 @@ func TestQuery(t *testing.T) {
 	p2.X = 20
 
 	// Query for entities with both Position and Velocity
-	queryBoth := lazyecs.Filter2[Position, Velocity](world)
+	queryBoth := lazyecs.CreateQuery2[Position, Velocity](world)
 	countBoth := 0
 	foundE1 := false
 	for queryBoth.Next() {
@@ -224,7 +224,7 @@ func TestQuery(t *testing.T) {
 	}
 
 	// Query for entities with at least Position
-	queryPos := lazyecs.Filter[Position](world)
+	queryPos := lazyecs.CreateQuery[Position](world)
 	countPos := 0
 	for queryPos.Next() {
 		countPos++
@@ -279,12 +279,86 @@ func TestComponentDataIntegrityAfterSwapAndPop(t *testing.T) {
 	}
 
 	// Check query count
-	query := lazyecs.Filter[Position](world)
+	query := lazyecs.CreateQuery[Position](world)
 	count := 0
 	for query.Next() {
 		count++
 	}
 	if count != 10 {
 		t.Errorf("Query returned %d entities after removal, expected 10", count)
+	}
+}
+
+const numEntities = 100000
+
+// go test -benchmem -run=^$ -bench ^BenchmarkAddComponent$ . -count 1
+func BenchmarkAddComponent(b *testing.B) {
+	world := lazyecs.NewWorld()
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+
+	entities := world.CreateEntities(numEntities)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, e := range entities {
+			lazyecs.AddComponent[Position](world, e)
+		}
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkRemoveComponent$ . -count 1
+func BenchmarkRemoveComponent(b *testing.B) {
+	world := lazyecs.NewWorld()
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+
+	entities := world.CreateEntities(numEntities)
+	for _, e := range entities {
+		lazyecs.AddComponent[Position](world, e)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, e := range entities {
+			lazyecs.RemoveComponent[Position](world, e)
+		}
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkAddRemoveEntities$ . -count 1
+func BenchmarkAddRemoveEntities(b *testing.B) {
+	world := lazyecs.NewWorld()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		entities := world.CreateEntities(numEntities)
+		for _, e := range entities {
+			world.RemoveEntity(e)
+		}
+		world.ProcessRemovals()
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkQuery$ . -count 1
+func BenchmarkQuery(b *testing.B) {
+	world := lazyecs.NewWorld()
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	lazyecs.RegisterComponent[Velocity]()
+
+	entities := world.CreateEntities(numEntities)
+	for _, e := range entities {
+		lazyecs.AddComponent[Position](world, e)
+		lazyecs.AddComponent[Velocity](world, e)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		query := lazyecs.CreateQuery2[Position, Velocity](world)
+		for query.Next() {
+			pos, vel := query.Get()
+			pos.X += vel.VX
+		}
 	}
 }
