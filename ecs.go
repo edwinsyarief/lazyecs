@@ -610,11 +610,11 @@ type Archetype struct {
 	entities      []Entity
 }
 
-func (a *Archetype) getSlot(id ComponentID) int {
-	i := sort.Search(len(a.componentIDs), func(j int) bool {
-		return a.componentIDs[j] >= id
+func (self *Archetype) getSlot(id ComponentID) int {
+	i := sort.Search(len(self.componentIDs), func(j int) bool {
+		return self.componentIDs[j] >= id
 	})
-	if i < len(a.componentIDs) && a.componentIDs[i] == id {
+	if i < len(self.componentIDs) && self.componentIDs[i] == id {
 		return i
 	}
 	return -1
@@ -635,53 +635,53 @@ type Query[T1 any] struct {
 }
 
 // Reset resets the query for reuse.
-func (q *Query[T1]) Reset() {
-	q.archIdx = 0
-	q.index = -1
-	q.currentArch = nil
+func (self *Query[T1]) Reset() {
+	self.archIdx = 0
+	self.index = -1
+	self.currentArch = nil
 }
 
 // Next advances to the next entity. Returns false if no more entities.
-func (q *Query[T1]) Next() bool {
-	q.index++
-	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
-		q.currentEntity = q.currentArch.entities[q.index]
+func (self *Query[T1]) Next() bool {
+	self.index++
+	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
+		self.currentEntity = self.currentArch.entities[self.index]
 		return true
 	}
 
-	for q.archIdx < len(q.world.archetypesList) {
-		arch := q.world.archetypesList[q.archIdx]
-		q.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+	for self.archIdx < len(self.world.archetypesList) {
+		arch := self.world.archetypesList[self.archIdx]
+		self.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
 			continue
 		}
-		q.currentArch = arch
-		slot1 := arch.getSlot(q.id1)
+		self.currentArch = arch
+		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot1]) > 0 {
-			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
 		} else {
-			q.base1 = nil
+			self.base1 = nil
 		}
-		q.stride1 = componentSizes[q.id1]
-		q.index = 0
-		q.currentEntity = arch.entities[0]
+		self.stride1 = componentSizes[self.id1]
+		self.index = 0
+		self.currentEntity = arch.entities[0]
 		return true
 	}
 	return false
 }
 
 // Get returns a pointer to the component for the current entity.
-func (q *Query[T1]) Get() *T1 {
-	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
+func (self *Query[T1]) Get() *T1 {
+	p1 := unsafe.Pointer(uintptr(self.base1) + uintptr(self.index)*self.stride1)
 	return (*T1)(p1)
 }
 
 // Entity returns the current entity.
-func (q *Query[T1]) Entity() Entity {
-	return q.currentEntity
+func (self *Query[T1]) Entity() Entity {
+	return self.currentEntity
 }
 
 // Query2 is an iterator over entities matching 2 component types.
@@ -702,64 +702,64 @@ type Query2[T1 any, T2 any] struct {
 }
 
 // Reset resets the query for reuse.
-func (q *Query2[T1, T2]) Reset() {
-	q.archIdx = 0
-	q.index = -1
-	q.currentArch = nil
+func (self *Query2[T1, T2]) Reset() {
+	self.archIdx = 0
+	self.index = -1
+	self.currentArch = nil
 }
 
 // Next advances to the next entity. Returns false if no more entities.
-func (q *Query2[T1, T2]) Next() bool {
-	q.index++
-	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
-		q.currentEntity = q.currentArch.entities[q.index]
+func (self *Query2[T1, T2]) Next() bool {
+	self.index++
+	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
+		self.currentEntity = self.currentArch.entities[self.index]
 		return true
 	}
 
-	for q.archIdx < len(q.world.archetypesList) {
-		arch := q.world.archetypesList[q.archIdx]
-		q.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+	for self.archIdx < len(self.world.archetypesList) {
+		arch := self.world.archetypesList[self.archIdx]
+		self.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
 			continue
 		}
-		q.currentArch = arch
-		slot1 := arch.getSlot(q.id1)
+		self.currentArch = arch
+		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot1]) > 0 {
-			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
 		} else {
-			q.base1 = nil
+			self.base1 = nil
 		}
-		q.stride1 = componentSizes[q.id1]
-		slot2 := arch.getSlot(q.id2)
+		self.stride1 = componentSizes[self.id1]
+		slot2 := arch.getSlot(self.id2)
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot2]) > 0 {
-			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
 		} else {
-			q.base2 = nil
+			self.base2 = nil
 		}
-		q.stride2 = componentSizes[q.id2]
-		q.index = 0
-		q.currentEntity = arch.entities[0]
+		self.stride2 = componentSizes[self.id2]
+		self.index = 0
+		self.currentEntity = arch.entities[0]
 		return true
 	}
 	return false
 }
 
 // Get returns pointers to the components for the current entity.
-func (q *Query2[T1, T2]) Get() (*T1, *T2) {
-	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
-	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
+func (self *Query2[T1, T2]) Get() (*T1, *T2) {
+	p1 := unsafe.Pointer(uintptr(self.base1) + uintptr(self.index)*self.stride1)
+	p2 := unsafe.Pointer(uintptr(self.base2) + uintptr(self.index)*self.stride2)
 	return (*T1)(p1), (*T2)(p2)
 }
 
 // Entity returns the current entity.
-func (q *Query2[T1, T2]) Entity() Entity {
-	return q.currentEntity
+func (self *Query2[T1, T2]) Entity() Entity {
+	return self.currentEntity
 }
 
 // Query3 is an iterator over entities matching 3 component types.
@@ -783,75 +783,75 @@ type Query3[T1 any, T2 any, T3 any] struct {
 }
 
 // Reset resets the query for reuse.
-func (q *Query3[T1, T2, T3]) Reset() {
-	q.archIdx = 0
-	q.index = -1
-	q.currentArch = nil
+func (self *Query3[T1, T2, T3]) Reset() {
+	self.archIdx = 0
+	self.index = -1
+	self.currentArch = nil
 }
 
 // Next advances to the next entity. Returns false if no more entities.
-func (q *Query3[T1, T2, T3]) Next() bool {
-	q.index++
-	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
-		q.currentEntity = q.currentArch.entities[q.index]
+func (self *Query3[T1, T2, T3]) Next() bool {
+	self.index++
+	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
+		self.currentEntity = self.currentArch.entities[self.index]
 		return true
 	}
 
-	for q.archIdx < len(q.world.archetypesList) {
-		arch := q.world.archetypesList[q.archIdx]
-		q.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+	for self.archIdx < len(self.world.archetypesList) {
+		arch := self.world.archetypesList[self.archIdx]
+		self.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
 			continue
 		}
-		q.currentArch = arch
-		slot1 := arch.getSlot(q.id1)
+		self.currentArch = arch
+		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot1]) > 0 {
-			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
 		} else {
-			q.base1 = nil
+			self.base1 = nil
 		}
-		q.stride1 = componentSizes[q.id1]
-		slot2 := arch.getSlot(q.id2)
+		self.stride1 = componentSizes[self.id1]
+		slot2 := arch.getSlot(self.id2)
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot2]) > 0 {
-			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
 		} else {
-			q.base2 = nil
+			self.base2 = nil
 		}
-		q.stride2 = componentSizes[q.id2]
-		slot3 := arch.getSlot(q.id3)
+		self.stride2 = componentSizes[self.id2]
+		slot3 := arch.getSlot(self.id3)
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot3]) > 0 {
-			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
 		} else {
-			q.base3 = nil
+			self.base3 = nil
 		}
-		q.stride3 = componentSizes[q.id3]
-		q.index = 0
-		q.currentEntity = arch.entities[0]
+		self.stride3 = componentSizes[self.id3]
+		self.index = 0
+		self.currentEntity = arch.entities[0]
 		return true
 	}
 	return false
 }
 
 // Get returns pointers to the components for the current entity.
-func (q *Query3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
-	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
-	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
-	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
+func (self *Query3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
+	p1 := unsafe.Pointer(uintptr(self.base1) + uintptr(self.index)*self.stride1)
+	p2 := unsafe.Pointer(uintptr(self.base2) + uintptr(self.index)*self.stride2)
+	p3 := unsafe.Pointer(uintptr(self.base3) + uintptr(self.index)*self.stride3)
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
 }
 
 // Entity returns the current entity.
-func (q *Query3[T1, T2, T3]) Entity() Entity {
-	return q.currentEntity
+func (self *Query3[T1, T2, T3]) Entity() Entity {
+	return self.currentEntity
 }
 
 // Query4 is an iterator over entities matching 4 component types.
@@ -878,86 +878,86 @@ type Query4[T1 any, T2 any, T3 any, T4 any] struct {
 }
 
 // Reset resets the query for reuse.
-func (q *Query4[T1, T2, T3, T4]) Reset() {
-	q.archIdx = 0
-	q.index = -1
-	q.currentArch = nil
+func (self *Query4[T1, T2, T3, T4]) Reset() {
+	self.archIdx = 0
+	self.index = -1
+	self.currentArch = nil
 }
 
 // Next advances to the next entity. Returns false if no more entities.
-func (q *Query4[T1, T2, T3, T4]) Next() bool {
-	q.index++
-	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
-		q.currentEntity = q.currentArch.entities[q.index]
+func (self *Query4[T1, T2, T3, T4]) Next() bool {
+	self.index++
+	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
+		self.currentEntity = self.currentArch.entities[self.index]
 		return true
 	}
 
-	for q.archIdx < len(q.world.archetypesList) {
-		arch := q.world.archetypesList[q.archIdx]
-		q.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+	for self.archIdx < len(self.world.archetypesList) {
+		arch := self.world.archetypesList[self.archIdx]
+		self.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
 			continue
 		}
-		q.currentArch = arch
-		slot1 := arch.getSlot(q.id1)
+		self.currentArch = arch
+		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot1]) > 0 {
-			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
 		} else {
-			q.base1 = nil
+			self.base1 = nil
 		}
-		q.stride1 = componentSizes[q.id1]
-		slot2 := arch.getSlot(q.id2)
+		self.stride1 = componentSizes[self.id1]
+		slot2 := arch.getSlot(self.id2)
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot2]) > 0 {
-			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
 		} else {
-			q.base2 = nil
+			self.base2 = nil
 		}
-		q.stride2 = componentSizes[q.id2]
-		slot3 := arch.getSlot(q.id3)
+		self.stride2 = componentSizes[self.id2]
+		slot3 := arch.getSlot(self.id3)
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot3]) > 0 {
-			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
 		} else {
-			q.base3 = nil
+			self.base3 = nil
 		}
-		q.stride3 = componentSizes[q.id3]
-		slot4 := arch.getSlot(q.id4)
+		self.stride3 = componentSizes[self.id3]
+		slot4 := arch.getSlot(self.id4)
 		if slot4 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot4]) > 0 {
-			q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+			self.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
 		} else {
-			q.base4 = nil
+			self.base4 = nil
 		}
-		q.stride4 = componentSizes[q.id4]
-		q.index = 0
-		q.currentEntity = arch.entities[0]
+		self.stride4 = componentSizes[self.id4]
+		self.index = 0
+		self.currentEntity = arch.entities[0]
 		return true
 	}
 	return false
 }
 
 // Get returns pointers to the components for the current entity.
-func (q *Query4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
-	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
-	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
-	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
-	p4 := unsafe.Pointer(uintptr(q.base4) + uintptr(q.index)*q.stride4)
+func (self *Query4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
+	p1 := unsafe.Pointer(uintptr(self.base1) + uintptr(self.index)*self.stride1)
+	p2 := unsafe.Pointer(uintptr(self.base2) + uintptr(self.index)*self.stride2)
+	p3 := unsafe.Pointer(uintptr(self.base3) + uintptr(self.index)*self.stride3)
+	p4 := unsafe.Pointer(uintptr(self.base4) + uintptr(self.index)*self.stride4)
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
 }
 
 // Entity returns the current entity.
-func (q *Query4[T1, T2, T3, T4]) Entity() Entity {
-	return q.currentEntity
+func (self *Query4[T1, T2, T3, T4]) Entity() Entity {
+	return self.currentEntity
 }
 
 // Query5 is an iterator over entities matching 5 component types.
@@ -987,97 +987,97 @@ type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 }
 
 // Reset resets the query for reuse.
-func (q *Query5[T1, T2, T3, T4, T5]) Reset() {
-	q.archIdx = 0
-	q.index = -1
-	q.currentArch = nil
+func (self *Query5[T1, T2, T3, T4, T5]) Reset() {
+	self.archIdx = 0
+	self.index = -1
+	self.currentArch = nil
 }
 
 // Next advances to the next entity. Returns false if no more entities.
-func (q *Query5[T1, T2, T3, T4, T5]) Next() bool {
-	q.index++
-	if q.currentArch != nil && q.index < len(q.currentArch.entities) {
-		q.currentEntity = q.currentArch.entities[q.index]
+func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
+	self.index++
+	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
+		self.currentEntity = self.currentArch.entities[self.index]
 		return true
 	}
 
-	for q.archIdx < len(q.world.archetypesList) {
-		arch := q.world.archetypesList[q.archIdx]
-		q.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, q.includeMask) || intersects(arch.mask, q.excludeMask) {
+	for self.archIdx < len(self.world.archetypesList) {
+		arch := self.world.archetypesList[self.archIdx]
+		self.archIdx++
+		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
 			continue
 		}
-		q.currentArch = arch
-		slot1 := arch.getSlot(q.id1)
+		self.currentArch = arch
+		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot1]) > 0 {
-			q.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
 		} else {
-			q.base1 = nil
+			self.base1 = nil
 		}
-		q.stride1 = componentSizes[q.id1]
-		slot2 := arch.getSlot(q.id2)
+		self.stride1 = componentSizes[self.id1]
+		slot2 := arch.getSlot(self.id2)
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot2]) > 0 {
-			q.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
 		} else {
-			q.base2 = nil
+			self.base2 = nil
 		}
-		q.stride2 = componentSizes[q.id2]
-		slot3 := arch.getSlot(q.id3)
+		self.stride2 = componentSizes[self.id2]
+		slot3 := arch.getSlot(self.id3)
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot3]) > 0 {
-			q.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
 		} else {
-			q.base3 = nil
+			self.base3 = nil
 		}
-		q.stride3 = componentSizes[q.id3]
-		slot4 := arch.getSlot(q.id4)
+		self.stride3 = componentSizes[self.id3]
+		slot4 := arch.getSlot(self.id4)
 		if slot4 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot4]) > 0 {
-			q.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+			self.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
 		} else {
-			q.base4 = nil
+			self.base4 = nil
 		}
-		q.stride4 = componentSizes[q.id4]
-		slot5 := arch.getSlot(q.id5)
+		self.stride4 = componentSizes[self.id4]
+		slot5 := arch.getSlot(self.id5)
 		if slot5 < 0 {
 			panic("missing component in matching archetype")
 		}
 		if len(arch.componentData[slot5]) > 0 {
-			q.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
+			self.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
 		} else {
-			q.base5 = nil
+			self.base5 = nil
 		}
-		q.stride5 = componentSizes[q.id5]
-		q.index = 0
-		q.currentEntity = arch.entities[0]
+		self.stride5 = componentSizes[self.id5]
+		self.index = 0
+		self.currentEntity = arch.entities[0]
 		return true
 	}
 	return false
 }
 
 // Get returns pointers to the components for the current entity.
-func (q *Query5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
-	p1 := unsafe.Pointer(uintptr(q.base1) + uintptr(q.index)*q.stride1)
-	p2 := unsafe.Pointer(uintptr(q.base2) + uintptr(q.index)*q.stride2)
-	p3 := unsafe.Pointer(uintptr(q.base3) + uintptr(q.index)*q.stride3)
-	p4 := unsafe.Pointer(uintptr(q.base4) + uintptr(q.index)*q.stride4)
-	p5 := unsafe.Pointer(uintptr(q.base5) + uintptr(q.index)*q.stride5)
+func (self *Query5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
+	p1 := unsafe.Pointer(uintptr(self.base1) + uintptr(self.index)*self.stride1)
+	p2 := unsafe.Pointer(uintptr(self.base2) + uintptr(self.index)*self.stride2)
+	p3 := unsafe.Pointer(uintptr(self.base3) + uintptr(self.index)*self.stride3)
+	p4 := unsafe.Pointer(uintptr(self.base4) + uintptr(self.index)*self.stride4)
+	p5 := unsafe.Pointer(uintptr(self.base5) + uintptr(self.index)*self.stride5)
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
 }
 
 // Entity returns the current entity.
-func (q *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
-	return q.currentEntity
+func (self *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
+	return self.currentEntity
 }
 
 // Query1 creates a query for entities with the specified component.
