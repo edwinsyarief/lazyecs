@@ -263,11 +263,12 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	}
 	sort.Slice(compIDs, func(i, j int) bool { return compIDs[i] < compIDs[j] })
 	newArch.componentIDs = compIDs
-	newArch.componentData = make([][]byte, len(compIDs))
+	newArch.componentStorages = make([]reflect.Value, len(compIDs))
 
 	for i, id := range compIDs {
-		size := int(componentSizes[id])
-		newArch.componentData[i] = make([]byte, 0, self.initialCapacity*size)
+		typ := idToType[id]
+		slice := reflect.MakeSlice(reflect.SliceOf(typ), 0, self.initialCapacity)
+		newArch.componentStorages[i] = slice
 	}
 
 	self.archetypes[mask] = newArch
@@ -275,20 +276,42 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	return newArch
 }
 
-func extendSlice[T any](s []T, n int) []T {
-	newLen := len(s) + n
-	if cap(s) < newLen {
-		panic("slice capacity exceeded, increase initialCapacity")
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
-	return s[:newLen]
+	return b
 }
 
-func extendByteSlice(s []byte, n int) []byte {
+func extendSlice[T any](s []T, n int) []T {
 	newLen := len(s) + n
-	if cap(s) < newLen {
-		panic("byte slice capacity exceeded, increase initialCapacity")
+	if cap(s) >= newLen {
+		return s[:newLen]
 	}
-	return s[:newLen]
+	newCap := max(2*cap(s), newLen)
+	ns := make([]T, newLen, newCap)
+	copy(ns, s)
+	return ns
+}
+
+func extendStorage(arch *Archetype, slot int, n int, elemSize int) {
+	rv := arch.componentStorages[slot]
+	newLen := rv.Len() + n
+	if rv.Cap() >= newLen {
+		arch.componentStorages[slot] = rv.Slice(0, newLen)
+		return
+	}
+	newCap := max(2*rv.Cap(), newLen)
+	newSlice := reflect.MakeSlice(rv.Type(), newLen, newCap)
+	oldByteLen := rv.Len() * elemSize
+	if oldByteLen > 0 {
+		oldBase := rv.Pointer()
+		newBase := newSlice.Pointer()
+		srcBytes := unsafe.Slice((*byte)(unsafe.Pointer(oldBase)), oldByteLen)
+		dstBytes := unsafe.Slice((*byte)(unsafe.Pointer(newBase)), oldByteLen)
+		copy(dstBytes, srcBytes)
+	}
+	arch.componentStorages[slot] = newSlice
 }
 
 func (self *World) CreateEntity() Entity {
@@ -409,12 +432,16 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 		self.entities[lastEntity.ID] = meta
 	}
 
-	for i := range arch.componentData {
+	for i := range arch.componentStorages {
 		id := arch.componentIDs[i]
 		size := int(componentSizes[id])
-		bytes := arch.componentData[i]
-		copy(bytes[index*size:(index+1)*size], bytes[lastIndex*size:(lastIndex+1)*size])
-		arch.componentData[i] = bytes[:lastIndex*size]
+		rv := arch.componentStorages[i]
+		indexPtr := unsafe.Pointer(rv.Pointer() + uintptr(index)*uintptr(size))
+		lastPtr := unsafe.Pointer(rv.Pointer() + uintptr(lastIndex)*uintptr(size))
+		srcBytes := unsafe.Slice((*byte)(lastPtr), size)
+		dstBytes := unsafe.Slice((*byte)(indexPtr), size)
+		copy(dstBytes, srcBytes)
+		arch.componentStorages[i] = rv.Slice(0, lastIndex)
 	}
 }
 
@@ -436,11 +463,12 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 		if idx == -1 {
 			return nil, false
 		}
-		bytes := oldArch.componentData[idx]
-		if meta.Index*size >= len(bytes) {
+		rv := oldArch.componentStorages[idx]
+		if meta.Index >= rv.Len() {
 			return nil, false
 		}
-		return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
+		base := rv.Pointer()
+		return (*T)(unsafe.Pointer(base + uintptr(meta.Index)*uintptr(size))), true
 	}
 
 	newMask := setMask(oldArch.mask, compID)
@@ -453,9 +481,7 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	if newIdx == -1 {
 		return nil, false
 	}
-	newBytes := newArch.componentData[newIdx]
-	newBytes = extendByteSlice(newBytes, size)
-	newArch.componentData[newIdx] = newBytes
+	extendStorage(newArch, newIdx, 1, size)
 
 	meta.Archetype = newArch
 	meta.Index = newIndex
@@ -464,8 +490,9 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	w.removeEntityFromArchetype(e, oldArch, oldIndex)
 
 	finalIdx := newArch.getSlot(compID)
-	finalBytes := newArch.componentData[finalIdx]
-	return (*T)(unsafe.Pointer(&finalBytes[newIndex*size])), true
+	finalRV := newArch.componentStorages[finalIdx]
+	finalBase := finalRV.Pointer()
+	return (*T)(unsafe.Pointer(finalBase + uintptr(newIndex)*uintptr(size))), true
 }
 
 func SetComponent[T any](w *World, e Entity, comp T) bool {
@@ -487,11 +514,13 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		if componentIndexInArchetype == -1 {
 			return false
 		}
-		bytes := oldArch.componentData[componentIndexInArchetype]
-		if meta.Index*size >= len(bytes) {
+		rv := oldArch.componentStorages[componentIndexInArchetype]
+		if meta.Index >= rv.Len() {
 			return false
 		}
-		copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
+		base := rv.Pointer()
+		dst := unsafe.Slice((*byte)(unsafe.Pointer(base+uintptr(meta.Index)*uintptr(size))), size)
+		copy(dst, src)
 		return true
 	} else {
 		newMask := setMask(oldArch.mask, compID)
@@ -504,10 +533,11 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		if newCompIdx == -1 {
 			return false
 		}
-		newBytes := newArch.componentData[newCompIdx]
-		newBytes = extendByteSlice(newBytes, size)
-		copy(newBytes[len(newBytes)-size:], src)
-		newArch.componentData[newCompIdx] = newBytes
+		extendStorage(newArch, newCompIdx, 1, size)
+		rv := newArch.componentStorages[newCompIdx]
+		base := rv.Pointer()
+		dst := unsafe.Slice((*byte)(unsafe.Pointer(base+uintptr((rv.Len()-1)*size))), size)
+		copy(dst, src)
 
 		meta.Archetype = newArch
 		meta.Index = newIndex
@@ -566,11 +596,12 @@ func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	if idx == -1 {
 		return nil, false
 	}
-	bytes := arch.componentData[idx]
-	if meta.Index*size >= len(bytes) {
+	rv := arch.componentStorages[idx]
+	if meta.Index >= rv.Len() {
 		return nil, false
 	}
-	return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
+	base := rv.Pointer()
+	return (*T)(unsafe.Pointer(base + uintptr(meta.Index)*uintptr(size))), true
 }
 
 func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, excludeIDs ...ComponentID) int {
@@ -588,26 +619,30 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 		if _, excluded := excludeSet[id]; excluded {
 			continue
 		}
-		oldBytes := oldArch.componentData[i]
+		oldRV := oldArch.componentStorages[i]
 		size := int(componentSizes[id])
-		src := oldBytes[oldIndex*size : (oldIndex+1)*size]
+		oldBase := oldRV.Pointer()
+		srcPtr := unsafe.Pointer(oldBase + uintptr(oldIndex)*uintptr(size))
 		newIdx := newArch.getSlot(id)
 		if newIdx == -1 {
 			continue
 		}
-		newBytes := newArch.componentData[newIdx]
-		newBytes = extendByteSlice(newBytes, size)
-		copy(newBytes[len(newBytes)-size:], src)
-		newArch.componentData[newIdx] = newBytes
+		extendStorage(newArch, newIdx, 1, size)
+		newRV := newArch.componentStorages[newIdx]
+		newBase := newRV.Pointer()
+		dstPtr := unsafe.Pointer(newBase + uintptr((newRV.Len()-1)*size))
+		srcBytes := unsafe.Slice((*byte)(srcPtr), size)
+		dstBytes := unsafe.Slice((*byte)(dstPtr), size)
+		copy(dstBytes, srcBytes)
 	}
 	return newIndex
 }
 
 type Archetype struct {
-	mask          maskType
-	componentData [][]byte
-	componentIDs  []ComponentID
-	entities      []Entity
+	mask              maskType
+	componentStorages []reflect.Value
+	componentIDs      []ComponentID
+	entities          []Entity
 }
 
 func (self *Archetype) getSlot(id ComponentID) int {
@@ -660,8 +695,9 @@ func (self *Query[T1]) Next() bool {
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot1]) > 0 {
-			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		rv := arch.componentStorages[slot1]
+		if rv.Len() > 0 {
+			self.base1 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base1 = nil
 		}
@@ -727,8 +763,9 @@ func (self *Query2[T1, T2]) Next() bool {
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot1]) > 0 {
-			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		rv := arch.componentStorages[slot1]
+		if rv.Len() > 0 {
+			self.base1 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base1 = nil
 		}
@@ -737,8 +774,9 @@ func (self *Query2[T1, T2]) Next() bool {
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot2]) > 0 {
-			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		rv = arch.componentStorages[slot2]
+		if rv.Len() > 0 {
+			self.base2 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base2 = nil
 		}
@@ -808,8 +846,9 @@ func (self *Query3[T1, T2, T3]) Next() bool {
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot1]) > 0 {
-			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		rv := arch.componentStorages[slot1]
+		if rv.Len() > 0 {
+			self.base1 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base1 = nil
 		}
@@ -818,8 +857,9 @@ func (self *Query3[T1, T2, T3]) Next() bool {
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot2]) > 0 {
-			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		rv = arch.componentStorages[slot2]
+		if rv.Len() > 0 {
+			self.base2 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base2 = nil
 		}
@@ -828,8 +868,9 @@ func (self *Query3[T1, T2, T3]) Next() bool {
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot3]) > 0 {
-			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		rv = arch.componentStorages[slot3]
+		if rv.Len() > 0 {
+			self.base3 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base3 = nil
 		}
@@ -903,8 +944,9 @@ func (self *Query4[T1, T2, T3, T4]) Next() bool {
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot1]) > 0 {
-			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		rv := arch.componentStorages[slot1]
+		if rv.Len() > 0 {
+			self.base1 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base1 = nil
 		}
@@ -913,8 +955,9 @@ func (self *Query4[T1, T2, T3, T4]) Next() bool {
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot2]) > 0 {
-			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		rv = arch.componentStorages[slot2]
+		if rv.Len() > 0 {
+			self.base2 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base2 = nil
 		}
@@ -923,8 +966,9 @@ func (self *Query4[T1, T2, T3, T4]) Next() bool {
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot3]) > 0 {
-			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		rv = arch.componentStorages[slot3]
+		if rv.Len() > 0 {
+			self.base3 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base3 = nil
 		}
@@ -933,8 +977,9 @@ func (self *Query4[T1, T2, T3, T4]) Next() bool {
 		if slot4 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot4]) > 0 {
-			self.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+		rv = arch.componentStorages[slot4]
+		if rv.Len() > 0 {
+			self.base4 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base4 = nil
 		}
@@ -1012,8 +1057,9 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		if slot1 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot1]) > 0 {
-			self.base1 = unsafe.Pointer(&arch.componentData[slot1][0])
+		rv := arch.componentStorages[slot1]
+		if rv.Len() > 0 {
+			self.base1 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base1 = nil
 		}
@@ -1022,8 +1068,9 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		if slot2 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot2]) > 0 {
-			self.base2 = unsafe.Pointer(&arch.componentData[slot2][0])
+		rv = arch.componentStorages[slot2]
+		if rv.Len() > 0 {
+			self.base2 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base2 = nil
 		}
@@ -1032,8 +1079,9 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		if slot3 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot3]) > 0 {
-			self.base3 = unsafe.Pointer(&arch.componentData[slot3][0])
+		rv = arch.componentStorages[slot3]
+		if rv.Len() > 0 {
+			self.base3 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base3 = nil
 		}
@@ -1042,8 +1090,9 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		if slot4 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot4]) > 0 {
-			self.base4 = unsafe.Pointer(&arch.componentData[slot4][0])
+		rv = arch.componentStorages[slot4]
+		if rv.Len() > 0 {
+			self.base4 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base4 = nil
 		}
@@ -1052,8 +1101,9 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		if slot5 < 0 {
 			panic("missing component in matching archetype")
 		}
-		if len(arch.componentData[slot5]) > 0 {
-			self.base5 = unsafe.Pointer(&arch.componentData[slot5][0])
+		rv = arch.componentStorages[slot5]
+		if rv.Len() > 0 {
+			self.base5 = unsafe.Pointer(rv.Pointer())
 		} else {
 			self.base5 = nil
 		}
@@ -1080,7 +1130,7 @@ func (self *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
 	return self.currentEntity
 }
 
-// Query1 creates a query for entities with the specified component.
+// CreateQuery creates a query for entities with the specified component.
 func CreateQuery[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
 	id1 := GetID[T1]()
 	return &Query[T1]{
@@ -1093,7 +1143,7 @@ func CreateQuery[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
 	}
 }
 
-// Query2 creates a query for entities with the specified components.
+// CreateQuery2 creates a query for entities with the specified components.
 func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1, T2] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1108,7 +1158,7 @@ func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1,
 	}
 }
 
-// Query3 creates a query for entities with the specified components.
+// CreateQuery3 creates a query for entities with the specified components.
 func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1125,7 +1175,7 @@ func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Qu
 	}
 }
 
-// Query4 creates a query for entities with the specified components.
+// CreateQuery4 creates a query for entities with the specified components.
 func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1144,7 +1194,7 @@ func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...Componen
 	}
 }
 
-// Query5 creates a query for entities with the specified components.
+// CreateQuery5 creates a query for entities with the specified components.
 func CreateQuery5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
