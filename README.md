@@ -62,7 +62,7 @@ func init() {
 The `World` is the container for all your entities and components.
 
 ```go
-import "fmt"
+import "github.com/edwinsyarief/lazyecs"
 
 func main() {
     // Create a new ECS world.
