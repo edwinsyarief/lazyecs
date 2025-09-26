@@ -1,0 +1,10 @@
+goos: linux
+goarch: amd64
+pkg: github.com/edwinsyarief/lazyecs
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkAddComponent-4        	     445	   2623389 ns/op	    9001 B/op	     224 allocs/op
+BenchmarkRemoveComponent-4     	     570	   2111578 ns/op	    4210 B/op	     175 allocs/op
+BenchmarkAddRemoveEntities-4   	     518	   2292537 ns/op	  802816 B/op	       1 allocs/op
+BenchmarkQuery-4               	    4154	    290031 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/edwinsyarief/lazyecs	5.692s
