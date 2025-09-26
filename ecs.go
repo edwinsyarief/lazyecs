@@ -164,8 +164,7 @@ func intersects(m, exclude maskType) bool {
 
 var (
 	nextComponentID ComponentID
-	typeToID        = make(map[reflect.Type]ComponentID, maxComponentTypes)
-	idToType        = make(map[ComponentID]reflect.Type, maxComponentTypes)
+	idToType        [maxComponentTypes]reflect.Type
 	componentSizes  [maxComponentTypes]uintptr
 )
 
@@ -173,8 +172,7 @@ var (
 // This is useful for tests or applications that need to re-initialize the ECS state.
 func ResetGlobalRegistry() {
 	nextComponentID = 0
-	typeToID = make(map[reflect.Type]ComponentID, maxComponentTypes)
-	idToType = make(map[ComponentID]reflect.Type, maxComponentTypes)
+	idToType = [maxComponentTypes]reflect.Type{}
 	componentSizes = [maxComponentTypes]uintptr{}
 }
 
@@ -185,8 +183,10 @@ func RegisterComponent[T any]() ComponentID {
 	var t T
 	compType := reflect.TypeOf(t)
 
-	if id, ok := typeToID[compType]; ok {
-		return id
+	for i := ComponentID(0); i < nextComponentID; i++ {
+		if idToType[i] == compType {
+			return i
+		}
 	}
 
 	if int(nextComponentID) >= maxComponentTypes {
@@ -194,7 +194,6 @@ func RegisterComponent[T any]() ComponentID {
 	}
 
 	id := nextComponentID
-	typeToID[compType] = id
 	idToType[id] = compType
 	componentSizes[id] = unsafe.Sizeof(t)
 	nextComponentID++
@@ -206,11 +205,12 @@ func RegisterComponent[T any]() ComponentID {
 func GetID[T any]() ComponentID {
 	var zero T
 	typ := reflect.TypeOf(zero)
-	id, ok := typeToID[typ]
-	if !ok {
-		panic(fmt.Sprintf("component type %s not registered", typ))
+	for i := ComponentID(0); i < nextComponentID; i++ {
+		if idToType[i] == typ {
+			return i
+		}
 	}
-	return id
+	panic(fmt.Sprintf("component type %s not registered", typ))
 }
 
 // TryGetID returns the ComponentID for a given component type and a boolean indicating if it was found.
@@ -218,8 +218,12 @@ func GetID[T any]() ComponentID {
 func TryGetID[T any]() (ComponentID, bool) {
 	var zero T
 	typ := reflect.TypeOf(zero)
-	id, ok := typeToID[typ]
-	return id, ok
+	for i := ComponentID(0); i < nextComponentID; i++ {
+		if idToType[i] == typ {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // Entity represents a unique entity in the ECS world.
@@ -242,15 +246,14 @@ type WorldOptions struct {
 
 // World manages all entities, components, and systems.
 type World struct {
-	nextEntityID    uint32                  // The next available entity ID.
-	freeEntityIDs   []uint32                // A list of freed entity IDs to be recycled.
-	entitiesSlice   []entityMeta            // A slice mapping entity IDs to their metadata.
-	archetypes      map[maskType]*Archetype // A map of component masks to archetypes.
-	archetypesList  []*Archetype            // A list of all archetypes.
-	toRemove        []Entity                // A list of entities to be removed.
-	removeSet       []Entity                // A set of entities to be removed in the current frame.
-	Resources       sync.Map                // A map for storing global resources.
-	initialCapacity int                     // The initial capacity for new archetypes.
+	nextEntityID    uint32       // The next available entity ID.
+	freeEntityIDs   []uint32     // A list of freed entity IDs to be recycled.
+	entitiesSlice   []entityMeta // A slice mapping entity IDs to their metadata.
+	archetypesList  []*Archetype // A list of all archetypes.
+	toRemove        []Entity     // A list of entities to be removed.
+	removeSet       []Entity     // A set of entities to be removed in the current frame.
+	Resources       sync.Map     // A map for storing global resources.
+	initialCapacity int          // The initial capacity for new archetypes.
 }
 
 // NewWorld creates a new World with default options.
@@ -266,7 +269,6 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 	}
 	w := &World{
 		entitiesSlice:   make([]entityMeta, 0, cap),
-		archetypes:      make(map[maskType]*Archetype, 32),
 		archetypesList:  make([]*Archetype, 0, 64),
 		toRemove:        make([]Entity, 0, cap),
 		removeSet:       make([]Entity, 0, cap),
@@ -279,8 +281,10 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 
 // getOrCreateArchetype gets an existing archetype or creates a new one for the given component mask.
 func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
-	if arch, ok := self.archetypes[mask]; ok {
-		return arch
+	for _, arch := range self.archetypesList {
+		if arch.mask == mask {
+			return arch
+		}
 	}
 
 	var count int
@@ -309,8 +313,8 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	for i := range slots {
 		slots[i] = -1
 	}
-	for i, id := range compIDs {
-		slots[id] = i
+	for i := range compIDs {
+		slots[i] = i
 	}
 	newArch.slots = slots
 
@@ -320,7 +324,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 		newArch.componentStorages[i] = slice
 	}
 
-	self.archetypes[mask] = newArch
 	self.archetypesList = append(self.archetypesList, newArch)
 	return newArch
 }
@@ -390,7 +393,7 @@ func (self *World) CreateEntity() Entity {
 	}
 
 	e := Entity{ID: id, Version: version}
-	arch := self.archetypes[maskType{}]
+	arch := self.getOrCreateArchetype(maskType{})
 	index := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, 1)
 	arch.entities[index] = e
@@ -409,7 +412,7 @@ func (self *World) CreateEntities(count int) []Entity {
 	}
 
 	entities := make([]Entity, count)
-	arch := self.archetypes[maskType{}]
+	arch := self.getOrCreateArchetype(maskType{})
 	startIndex := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, count)
 
@@ -775,7 +778,6 @@ type Archetype struct {
 }
 
 // getSlot finds the index of a component ID in the archetype's componentID list.
-// It uses a binary search for efficient lookup.
 func (self *Archetype) getSlot(id ComponentID) int {
 	return self.slots[id]
 }
@@ -783,16 +785,17 @@ func (self *Archetype) getSlot(id ComponentID) int {
 // Query is an iterator over entities that have a specific set of components.
 // This query is for entities with one component type.
 type Query[T1 any] struct {
-	world         *World         // The world to query.
-	includeMask   maskType       // A mask of components to include.
-	excludeMask   maskType       // A mask of components to exclude.
-	id1           ComponentID    // The ID of the first component.
-	archIdx       int            // The current archetype index.
-	index         int            // The current entity index within the archetype.
-	currentArch   *Archetype     // The current archetype being iterated.
-	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
-	stride1       uintptr        // The size of the first component type.
-	currentEntity Entity         // The current entity being iterated.
+	world          *World         // The world to query.
+	includeMask    maskType       // A mask of components to include.
+	excludeMask    maskType       // A mask of components to exclude.
+	id1            ComponentID    // The ID of the first component.
+	archIdx        int            // The current archetype index.
+	index          int            // The current entity index within the archetype.
+	currentArch    *Archetype     // The current archetype being iterated.
+	base1          unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1        uintptr        // The size of the first component type.
+	currentEntity  Entity         // The current entity being iterated.
+	matchingArches []*Archetype   // Collected matching archetypes for faster iteration.
 }
 
 // Reset resets the query for reuse.
@@ -800,6 +803,7 @@ func (self *Query[T1]) Reset() {
 	self.archIdx = 0
 	self.index = -1
 	self.currentArch = nil
+	self.matchingArches = self.matchingArches[:0]
 }
 
 // Next advances to the next entity. Returns false if no more entities.
@@ -810,12 +814,19 @@ func (self *Query[T1]) Next() bool {
 		return true
 	}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
-			continue
+	if len(self.matchingArches) == 0 {
+		for _, arch := range self.world.archetypesList {
+			if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+				continue
+			}
+			self.matchingArches = append(self.matchingArches, arch)
 		}
+		self.archIdx = 0
+	}
+
+	for self.archIdx < len(self.matchingArches) {
+		arch := self.matchingArches[self.archIdx]
+		self.archIdx++
 		self.currentArch = arch
 		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
@@ -849,19 +860,20 @@ func (self *Query[T1]) Entity() Entity {
 // Query2 is an iterator over entities that have a specific set of components.
 // This query is for entities with two component types.
 type Query2[T1 any, T2 any] struct {
-	world         *World         // The world to query.
-	includeMask   maskType       // A mask of components to include.
-	excludeMask   maskType       // A mask of components to exclude.
-	id1           ComponentID    // The ID of the first component.
-	id2           ComponentID    // The ID of the second component.
-	archIdx       int            // The current archetype index.
-	index         int            // The current entity index within the archetype.
-	currentArch   *Archetype     // The current archetype being iterated.
-	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
-	stride1       uintptr        // The size of the first component type.
-	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
-	stride2       uintptr        // The size of the second component type.
-	currentEntity Entity         // The current entity being iterated.
+	world          *World         // The world to query.
+	includeMask    maskType       // A mask of components to include.
+	excludeMask    maskType       // A mask of components to exclude.
+	id1            ComponentID    // The ID of the first component.
+	id2            ComponentID    // The ID of the second component.
+	archIdx        int            // The current archetype index.
+	index          int            // The current entity index within the archetype.
+	currentArch    *Archetype     // The current archetype being iterated.
+	base1          unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1        uintptr        // The size of the first component type.
+	base2          unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2        uintptr        // The size of the second component type.
+	currentEntity  Entity         // The current entity being iterated.
+	matchingArches []*Archetype   // Collected matching archetypes for faster iteration.
 }
 
 // Reset resets the query for reuse.
@@ -869,6 +881,7 @@ func (self *Query2[T1, T2]) Reset() {
 	self.archIdx = 0
 	self.index = -1
 	self.currentArch = nil
+	self.matchingArches = self.matchingArches[:0]
 }
 
 // Next advances to the next entity. Returns false if no more entities.
@@ -879,12 +892,19 @@ func (self *Query2[T1, T2]) Next() bool {
 		return true
 	}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
-			continue
+	if len(self.matchingArches) == 0 {
+		for _, arch := range self.world.archetypesList {
+			if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+				continue
+			}
+			self.matchingArches = append(self.matchingArches, arch)
 		}
+		self.archIdx = 0
+	}
+
+	for self.archIdx < len(self.matchingArches) {
+		arch := self.matchingArches[self.archIdx]
+		self.archIdx++
 		self.currentArch = arch
 		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
@@ -930,22 +950,23 @@ func (self *Query2[T1, T2]) Entity() Entity {
 // Query3 is an iterator over entities that have a specific set of components.
 // This query is for entities with three component types.
 type Query3[T1 any, T2 any, T3 any] struct {
-	world         *World         // The world to query.
-	includeMask   maskType       // A mask of components to include.
-	excludeMask   maskType       // A mask of components to exclude.
-	id1           ComponentID    // The ID of the first component.
-	id2           ComponentID    // The ID of the second component.
-	id3           ComponentID    // The ID of the third component.
-	archIdx       int            // The current archetype index.
-	index         int            // The current entity index within the archetype.
-	currentArch   *Archetype     // The current archetype being iterated.
-	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
-	stride1       uintptr        // The size of the first component type.
-	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
-	stride2       uintptr        // The size of the second component type.
-	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
-	stride3       uintptr        // The size of the third component type.
-	currentEntity Entity         // The current entity being iterated.
+	world          *World         // The world to query.
+	includeMask    maskType       // A mask of components to include.
+	excludeMask    maskType       // A mask of components to exclude.
+	id1            ComponentID    // The ID of the first component.
+	id2            ComponentID    // The ID of the second component.
+	id3            ComponentID    // The ID of the third component.
+	archIdx        int            // The current archetype index.
+	index          int            // The current entity index within the archetype.
+	currentArch    *Archetype     // The current archetype being iterated.
+	base1          unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1        uintptr        // The size of the first component type.
+	base2          unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2        uintptr        // The size of the second component type.
+	base3          unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3        uintptr        // The size of the third component type.
+	currentEntity  Entity         // The current entity being iterated.
+	matchingArches []*Archetype   // Collected matching archetypes for faster iteration.
 }
 
 // Reset resets the query for reuse.
@@ -953,6 +974,7 @@ func (self *Query3[T1, T2, T3]) Reset() {
 	self.archIdx = 0
 	self.index = -1
 	self.currentArch = nil
+	self.matchingArches = self.matchingArches[:0]
 }
 
 // Next advances to the next entity. Returns false if no more entities.
@@ -963,12 +985,19 @@ func (self *Query3[T1, T2, T3]) Next() bool {
 		return true
 	}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
-			continue
+	if len(self.matchingArches) == 0 {
+		for _, arch := range self.world.archetypesList {
+			if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+				continue
+			}
+			self.matchingArches = append(self.matchingArches, arch)
 		}
+		self.archIdx = 0
+	}
+
+	for self.archIdx < len(self.matchingArches) {
+		arch := self.matchingArches[self.archIdx]
+		self.archIdx++
 		self.currentArch = arch
 		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
@@ -1026,25 +1055,26 @@ func (self *Query3[T1, T2, T3]) Entity() Entity {
 // Query4 is an iterator over entities that have a specific set of components.
 // This query is for entities with four component types.
 type Query4[T1 any, T2 any, T3 any, T4 any] struct {
-	world         *World         // The world to query.
-	includeMask   maskType       // A mask of components to include.
-	excludeMask   maskType       // A mask of components to exclude.
-	id1           ComponentID    // The ID of the first component.
-	id2           ComponentID    // The ID of the second component.
-	id3           ComponentID    // The ID of the third component.
-	id4           ComponentID    // The ID of the fourth component.
-	archIdx       int            // The current archetype index.
-	index         int            // The current entity index within the archetype.
-	currentArch   *Archetype     // The current archetype being iterated.
-	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
-	stride1       uintptr        // The size of the first component type.
-	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
-	stride2       uintptr        // The size of the second component type.
-	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
-	stride3       uintptr        // The size of the third component type.
-	base4         unsafe.Pointer // A pointer to the base of the fourth component's storage.
-	stride4       uintptr        // The size of the fourth component type.
-	currentEntity Entity         // The current entity being iterated.
+	world          *World         // The world to query.
+	includeMask    maskType       // A mask of components to include.
+	excludeMask    maskType       // A mask of components to exclude.
+	id1            ComponentID    // The ID of the first component.
+	id2            ComponentID    // The ID of the second component.
+	id3            ComponentID    // The ID of the third component.
+	id4            ComponentID    // The ID of the fourth component.
+	archIdx        int            // The current archetype index.
+	index          int            // The current entity index within the archetype.
+	currentArch    *Archetype     // The current archetype being iterated.
+	base1          unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1        uintptr        // The size of the first component type.
+	base2          unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2        uintptr        // The size of the second component type.
+	base3          unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3        uintptr        // The size of the third component type.
+	base4          unsafe.Pointer // A pointer to the base of the fourth component's storage.
+	stride4        uintptr        // The size of the fourth component type.
+	currentEntity  Entity         // The current entity being iterated.
+	matchingArches []*Archetype   // Collected matching archetypes for faster iteration.
 }
 
 // Reset resets the query for reuse.
@@ -1052,6 +1082,7 @@ func (self *Query4[T1, T2, T3, T4]) Reset() {
 	self.archIdx = 0
 	self.index = -1
 	self.currentArch = nil
+	self.matchingArches = self.matchingArches[:0]
 }
 
 // Next advances to the next entity. Returns false if no more entities.
@@ -1062,12 +1093,19 @@ func (self *Query4[T1, T2, T3, T4]) Next() bool {
 		return true
 	}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
-			continue
+	if len(self.matchingArches) == 0 {
+		for _, arch := range self.world.archetypesList {
+			if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+				continue
+			}
+			self.matchingArches = append(self.matchingArches, arch)
 		}
+		self.archIdx = 0
+	}
+
+	for self.archIdx < len(self.matchingArches) {
+		arch := self.matchingArches[self.archIdx]
+		self.archIdx++
 		self.currentArch = arch
 		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
@@ -1137,28 +1175,29 @@ func (self *Query4[T1, T2, T3, T4]) Entity() Entity {
 // Query5 is an iterator over entities that have a specific set of components.
 // This query is for entities with five component types.
 type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
-	world         *World         // The world to query.
-	includeMask   maskType       // A mask of components to include.
-	excludeMask   maskType       // A mask of components to exclude.
-	id1           ComponentID    // The ID of the first component.
-	id2           ComponentID    // The ID of the second component.
-	id3           ComponentID    // The ID of the third component.
-	id4           ComponentID    // The ID of the fourth component.
-	id5           ComponentID    // The ID of the fifth component.
-	archIdx       int            // The current archetype index.
-	index         int            // The current entity index within the archetype.
-	currentArch   *Archetype     // The current archetype being iterated.
-	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
-	stride1       uintptr        // The size of the first component type.
-	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
-	stride2       uintptr        // The size of the second component type.
-	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
-	stride3       uintptr        // The size of the third component type.
-	base4         unsafe.Pointer // A pointer to the base of the fourth component's storage.
-	stride4       uintptr        // The size of the fourth component type.
-	base5         unsafe.Pointer // A pointer to the base of the fifth component's storage.
-	stride5       uintptr        // The size of the fifth component type.
-	currentEntity Entity         // The current entity being iterated.
+	world          *World         // The world to query.
+	includeMask    maskType       // A mask of components to include.
+	excludeMask    maskType       // A mask of components to exclude.
+	id1            ComponentID    // The ID of the first component.
+	id2            ComponentID    // The ID of the second component.
+	id3            ComponentID    // The ID of the third component.
+	id4            ComponentID    // The ID of the fourth component.
+	id5            ComponentID    // The ID of the fifth component.
+	archIdx        int            // The current archetype index.
+	index          int            // The current entity index within the archetype.
+	currentArch    *Archetype     // The current archetype being iterated.
+	base1          unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1        uintptr        // The size of the first component type.
+	base2          unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2        uintptr        // The size of the second component type.
+	base3          unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3        uintptr        // The size of the third component type.
+	base4          unsafe.Pointer // A pointer to the base of the fourth component's storage.
+	stride4        uintptr        // The size of the fourth component type.
+	base5          unsafe.Pointer // A pointer to the base of the fifth component's storage.
+	stride5        uintptr        // The size of the fifth component type.
+	currentEntity  Entity         // The current entity being iterated.
+	matchingArches []*Archetype   // Collected matching archetypes for faster iteration.
 }
 
 // Reset resets the query for reuse.
@@ -1166,6 +1205,7 @@ func (self *Query5[T1, T2, T3, T4, T5]) Reset() {
 	self.archIdx = 0
 	self.index = -1
 	self.currentArch = nil
+	self.matchingArches = self.matchingArches[:0]
 }
 
 // Next advances to the next entity. Returns false if no more entities.
@@ -1176,12 +1216,19 @@ func (self *Query5[T1, T2, T3, T4, T5]) Next() bool {
 		return true
 	}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
-			continue
+	if len(self.matchingArches) == 0 {
+		for _, arch := range self.world.archetypesList {
+			if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+				continue
+			}
+			self.matchingArches = append(self.matchingArches, arch)
 		}
+		self.archIdx = 0
+	}
+
+	for self.archIdx < len(self.matchingArches) {
+		arch := self.matchingArches[self.archIdx]
+		self.archIdx++
 		self.currentArch = arch
 		slot1 := arch.getSlot(self.id1)
 		if slot1 < 0 {
