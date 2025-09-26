@@ -150,15 +150,15 @@ func intersects(m, exclude maskType) bool {
 
 var (
 	nextComponentID ComponentID
-	typeToID        = make(map[reflect.Type]ComponentID)
-	idToType        = make(map[ComponentID]reflect.Type)
+	typeToID        = make(map[reflect.Type]ComponentID, maxComponentTypes)
+	idToType        = make(map[ComponentID]reflect.Type, maxComponentTypes)
 	componentSizes  [maxComponentTypes]uintptr
 )
 
 func ResetGlobalRegistry() {
 	nextComponentID = 0
-	typeToID = make(map[reflect.Type]ComponentID)
-	idToType = make(map[ComponentID]reflect.Type)
+	typeToID = make(map[reflect.Type]ComponentID, maxComponentTypes)
+	idToType = make(map[ComponentID]reflect.Type, maxComponentTypes)
 	componentSizes = [maxComponentTypes]uintptr{}
 }
 
@@ -217,10 +217,11 @@ type WorldOptions struct {
 type World struct {
 	nextEntityID    uint32
 	freeEntityIDs   []uint32
-	entities        map[uint32]entityMeta
+	entitiesSlice   []entityMeta
 	archetypes      map[maskType]*Archetype
 	archetypesList  []*Archetype
 	toRemove        []Entity
+	removeSet       []Entity
 	Resources       sync.Map
 	initialCapacity int
 }
@@ -235,9 +236,10 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 		cap = opts.InitialCapacity
 	}
 	w := &World{
-		entities:        make(map[uint32]entityMeta),
-		archetypes:      make(map[maskType]*Archetype),
+		entitiesSlice:   make([]entityMeta, 0, cap),
+		archetypes:      make(map[maskType]*Archetype, 32),
 		toRemove:        make([]Entity, 0, cap),
+		removeSet:       make([]Entity, 0, cap),
 		freeEntityIDs:   make([]uint32, 0, cap),
 		initialCapacity: cap,
 	}
@@ -255,8 +257,8 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 		entities: make([]Entity, 0, self.initialCapacity),
 	}
 
-	compIDs := make([]ComponentID, 0, len(idToType))
-	for id := range idToType {
+	compIDs := make([]ComponentID, 0, nextComponentID)
+	for id := ComponentID(0); id < nextComponentID; id++ {
 		if mask.has(id) {
 			compIDs = append(compIDs, id)
 		}
@@ -327,9 +329,9 @@ func (self *World) CreateEntity() Entity {
 		self.nextEntityID++
 	}
 
-	meta, exists := self.entities[id]
 	version := uint32(1)
-	if exists {
+	if int(id) < len(self.entitiesSlice) {
+		meta := self.entitiesSlice[id]
 		version = meta.Version + 1
 		if version == 0 {
 			version = 1
@@ -342,7 +344,10 @@ func (self *World) CreateEntity() Entity {
 	arch.entities = extendSlice(arch.entities, 1)
 	arch.entities[index] = e
 
-	self.entities[id] = entityMeta{Archetype: arch, Index: index, Version: e.Version}
+	if int(id) >= len(self.entitiesSlice) {
+		self.entitiesSlice = extendSlice(self.entitiesSlice, int(id)-len(self.entitiesSlice)+1)
+	}
+	self.entitiesSlice[id] = entityMeta{Archetype: arch, Index: index, Version: e.Version}
 	return e
 }
 
@@ -356,6 +361,7 @@ func (self *World) CreateEntities(count int) []Entity {
 	startIndex := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, count)
 
+	maxID := uint32(0)
 	for i := 0; i < count; i++ {
 		var id uint32
 		if len(self.freeEntityIDs) > 0 {
@@ -369,9 +375,13 @@ func (self *World) CreateEntities(count int) []Entity {
 			self.nextEntityID++
 		}
 
-		meta, exists := self.entities[id]
+		if id > maxID {
+			maxID = id
+		}
+
 		version := uint32(1)
-		if exists {
+		if int(id) < len(self.entitiesSlice) {
+			meta := self.entitiesSlice[id]
 			version = meta.Version + 1
 			if version == 0 {
 				version = 1
@@ -380,10 +390,19 @@ func (self *World) CreateEntities(count int) []Entity {
 
 		e := Entity{ID: id, Version: version}
 		entities[i] = e
-		idx := startIndex + i
-		arch.entities[idx] = e
-		self.entities[id] = entityMeta{Archetype: arch, Index: idx, Version: e.Version}
+		arch.entities[startIndex+i] = e
 	}
+
+	if int(maxID) >= len(self.entitiesSlice) {
+		self.entitiesSlice = extendSlice(self.entitiesSlice, int(maxID)-len(self.entitiesSlice)+1)
+	}
+
+	for i := 0; i < count; i++ {
+		id := entities[i].ID
+		idx := startIndex + i
+		self.entitiesSlice[id] = entityMeta{Archetype: arch, Index: idx, Version: entities[i].Version}
+	}
+
 	return entities
 }
 
@@ -397,21 +416,23 @@ func (self *World) ProcessRemovals() {
 		return
 	}
 
-	removeSet := make(map[uint32]Entity, len(self.toRemove))
+	self.removeSet = self.removeSet[:0]
 	for _, e := range self.toRemove {
-		meta, ok := self.entities[e.ID]
-		if ok && e.Version == meta.Version {
-			removeSet[e.ID] = e
+		if int(e.ID) < len(self.entitiesSlice) {
+			meta := self.entitiesSlice[e.ID]
+			if meta.Version == e.Version {
+				self.removeSet = append(self.removeSet, e)
+			}
 		}
 	}
 
-	for id, e := range removeSet {
-		if meta, ok := self.entities[id]; ok {
-			self.removeEntityFromArchetype(e, meta.Archetype, meta.Index)
-			self.freeEntityIDs = extendSlice(self.freeEntityIDs, 1)
-			self.freeEntityIDs[len(self.freeEntityIDs)-1] = id
-			delete(self.entities, id)
-		}
+	for _, e := range self.removeSet {
+		id := e.ID
+		meta := self.entitiesSlice[id]
+		self.removeEntityFromArchetype(e, meta.Archetype, meta.Index)
+		self.freeEntityIDs = extendSlice(self.freeEntityIDs, 1)
+		self.freeEntityIDs[len(self.freeEntityIDs)-1] = id
+		self.entitiesSlice[id] = entityMeta{}
 	}
 	self.toRemove = self.toRemove[:0]
 }
@@ -427,9 +448,9 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 	arch.entities = arch.entities[:lastIndex]
 
 	if e.ID != lastEntity.ID {
-		meta := self.entities[lastEntity.ID]
+		meta := self.entitiesSlice[lastEntity.ID]
 		meta.Index = index
-		self.entities[lastEntity.ID] = meta
+		self.entitiesSlice[lastEntity.ID] = meta
 	}
 
 	for i := range arch.componentStorages {
@@ -446,8 +467,11 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 }
 
 func AddComponent[T any](w *World, e Entity) (*T, bool) {
-	meta, ok := w.entities[e.ID]
-	if !ok || e.Version != meta.Version {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
 		return nil, false
 	}
 
@@ -485,7 +509,7 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 
 	meta.Archetype = newArch
 	meta.Index = newIndex
-	w.entities[e.ID] = meta
+	w.entitiesSlice[e.ID] = meta
 
 	w.removeEntityFromArchetype(e, oldArch, oldIndex)
 
@@ -496,8 +520,11 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 }
 
 func SetComponent[T any](w *World, e Entity, comp T) bool {
-	meta, ok := w.entities[e.ID]
-	if !ok || e.Version != meta.Version {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
 		return false
 	}
 
@@ -541,7 +568,7 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 
 		meta.Archetype = newArch
 		meta.Index = newIndex
-		w.entities[e.ID] = meta
+		w.entitiesSlice[e.ID] = meta
 
 		w.removeEntityFromArchetype(e, oldArch, oldIndex)
 		return true
@@ -549,8 +576,11 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 }
 
 func RemoveComponent[T any](w *World, e Entity) bool {
-	meta, ok := w.entities[e.ID]
-	if !ok || e.Version != meta.Version {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
 		return false
 	}
 
@@ -572,7 +602,7 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 
 	meta.Archetype = newArch
 	meta.Index = newIndex
-	w.entities[e.ID] = meta
+	w.entitiesSlice[e.ID] = meta
 
 	w.removeEntityFromArchetype(e, oldArch, oldIndex)
 
@@ -580,8 +610,11 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 }
 
 func GetComponent[T any](w *World, e Entity) (*T, bool) {
-	meta, ok := w.entities[e.ID]
-	if !ok || e.Version != meta.Version {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
 		return nil, false
 	}
 
@@ -609,31 +642,52 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 	newArch.entities = extendSlice(newArch.entities, 1)
 	newArch.entities[newIndex] = e
 
-	excludeSet := make(map[ComponentID]struct{}, len(excludeIDs))
-	for _, id := range excludeIDs {
-		excludeSet[id] = struct{}{}
-	}
-
-	for i := range oldArch.componentIDs {
-		id := oldArch.componentIDs[i]
-		if _, excluded := excludeSet[id]; excluded {
-			continue
+	exLen := len(excludeIDs)
+	if exLen == 0 {
+		for i := range oldArch.componentIDs {
+			id := oldArch.componentIDs[i]
+			oldRV := oldArch.componentStorages[i]
+			size := int(componentSizes[id])
+			oldBase := oldRV.Pointer()
+			srcPtr := unsafe.Pointer(oldBase + uintptr(oldIndex)*uintptr(size))
+			newIdx := newArch.getSlot(id)
+			if newIdx == -1 {
+				continue
+			}
+			extendStorage(newArch, newIdx, 1, size)
+			newRV := newArch.componentStorages[newIdx]
+			newBase := newRV.Pointer()
+			dstPtr := unsafe.Pointer(newBase + uintptr((newRV.Len()-1)*size))
+			srcBytes := unsafe.Slice((*byte)(srcPtr), size)
+			dstBytes := unsafe.Slice((*byte)(dstPtr), size)
+			copy(dstBytes, srcBytes)
 		}
-		oldRV := oldArch.componentStorages[i]
-		size := int(componentSizes[id])
-		oldBase := oldRV.Pointer()
-		srcPtr := unsafe.Pointer(oldBase + uintptr(oldIndex)*uintptr(size))
-		newIdx := newArch.getSlot(id)
-		if newIdx == -1 {
-			continue
+	} else {
+		var exclude [maxComponentTypes]bool
+		for _, id := range excludeIDs {
+			exclude[id] = true
 		}
-		extendStorage(newArch, newIdx, 1, size)
-		newRV := newArch.componentStorages[newIdx]
-		newBase := newRV.Pointer()
-		dstPtr := unsafe.Pointer(newBase + uintptr((newRV.Len()-1)*size))
-		srcBytes := unsafe.Slice((*byte)(srcPtr), size)
-		dstBytes := unsafe.Slice((*byte)(dstPtr), size)
-		copy(dstBytes, srcBytes)
+		for i := range oldArch.componentIDs {
+			id := oldArch.componentIDs[i]
+			if exclude[id] {
+				continue
+			}
+			oldRV := oldArch.componentStorages[i]
+			size := int(componentSizes[id])
+			oldBase := oldRV.Pointer()
+			srcPtr := unsafe.Pointer(oldBase + uintptr(oldIndex)*uintptr(size))
+			newIdx := newArch.getSlot(id)
+			if newIdx == -1 {
+				continue
+			}
+			extendStorage(newArch, newIdx, 1, size)
+			newRV := newArch.componentStorages[newIdx]
+			newBase := newRV.Pointer()
+			dstPtr := unsafe.Pointer(newBase + uintptr((newRV.Len()-1)*size))
+			srcBytes := unsafe.Slice((*byte)(srcPtr), size)
+			dstBytes := unsafe.Slice((*byte)(dstPtr), size)
+			copy(dstBytes, srcBytes)
+		}
 	}
 	return newIndex
 }
