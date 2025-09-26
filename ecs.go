@@ -1,3 +1,4 @@
+// Package lazyecs provides a simple and efficient Entity-Component-System (ECS) library.
 package lazyecs
 
 import (
@@ -8,6 +9,7 @@ import (
 	"unsafe"
 )
 
+// ComponentID is a unique identifier for a component type.
 type ComponentID uint32
 
 const (
@@ -17,8 +19,10 @@ const (
 	defaultInitialCapacity = 4096
 )
 
+// maskType is a bitmask used to represent a set of component types.
 type maskType [maskWords]uint64
 
+// has checks if the mask has a specific component ID.
 func (m maskType) has(id ComponentID) bool {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -28,6 +32,7 @@ func (m maskType) has(id ComponentID) bool {
 	return (m[word] & (1 << bit)) != 0
 }
 
+// setMask adds a component ID to the mask.
 func setMask(m maskType, id ComponentID) maskType {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -39,6 +44,7 @@ func setMask(m maskType, id ComponentID) maskType {
 	return nm
 }
 
+// unsetMask removes a component ID from the mask.
 func unsetMask(m maskType, id ComponentID) maskType {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
@@ -50,6 +56,7 @@ func unsetMask(m maskType, id ComponentID) maskType {
 	return nm
 }
 
+// makeMask creates a mask from a slice of component IDs.
 func makeMask(ids []ComponentID) maskType {
 	var m maskType
 	for _, id := range ids {
@@ -60,6 +67,7 @@ func makeMask(ids []ComponentID) maskType {
 	return m
 }
 
+// makeMask1 creates a mask for a single component ID.
 func makeMask1(id1 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -68,6 +76,7 @@ func makeMask1(id1 ComponentID) maskType {
 	return m
 }
 
+// makeMask2 creates a mask for two component IDs.
 func makeMask2(id1, id2 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -79,6 +88,7 @@ func makeMask2(id1, id2 ComponentID) maskType {
 	return m
 }
 
+// makeMask3 creates a mask for three component IDs.
 func makeMask3(id1, id2, id3 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -93,6 +103,7 @@ func makeMask3(id1, id2, id3 ComponentID) maskType {
 	return m
 }
 
+// makeMask4 creates a mask for four component IDs.
 func makeMask4(id1, id2, id3, id4 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -110,6 +121,7 @@ func makeMask4(id1, id2, id3, id4 ComponentID) maskType {
 	return m
 }
 
+// makeMask5 creates a mask for five component IDs.
 func makeMask5(id1, id2, id3, id4, id5 ComponentID) maskType {
 	var m maskType
 	word1 := int(id1 / bitsPerWord)
@@ -130,6 +142,7 @@ func makeMask5(id1, id2, id3, id4, id5 ComponentID) maskType {
 	return m
 }
 
+// includesAll checks if a mask contains all the bits of another mask.
 func includesAll(m, include maskType) bool {
 	for i := 0; i < maskWords; i++ {
 		if (m[i] & include[i]) != include[i] {
@@ -139,6 +152,7 @@ func includesAll(m, include maskType) bool {
 	return true
 }
 
+// intersects checks if a mask has any bits in common with another mask.
 func intersects(m, exclude maskType) bool {
 	for i := 0; i < maskWords; i++ {
 		if (m[i] & exclude[i]) != 0 {
@@ -155,6 +169,8 @@ var (
 	componentSizes  [maxComponentTypes]uintptr
 )
 
+// ResetGlobalRegistry resets the global component registry.
+// This is useful for tests or applications that need to re-initialize the ECS state.
 func ResetGlobalRegistry() {
 	nextComponentID = 0
 	typeToID = make(map[reflect.Type]ComponentID, maxComponentTypes)
@@ -162,6 +178,9 @@ func ResetGlobalRegistry() {
 	componentSizes = [maxComponentTypes]uintptr{}
 }
 
+// RegisterComponent registers a component type and returns its unique ID.
+// If the component type is already registered, it returns the existing ID.
+// It panics if the maximum number of component types is exceeded.
 func RegisterComponent[T any]() ComponentID {
 	var t T
 	compType := reflect.TypeOf(t)
@@ -182,6 +201,8 @@ func RegisterComponent[T any]() ComponentID {
 	return id
 }
 
+// GetID returns the ComponentID for a given component type.
+// It panics if the component type has not been registered.
 func GetID[T any]() ComponentID {
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -192,6 +213,8 @@ func GetID[T any]() ComponentID {
 	return id
 }
 
+// TryGetID returns the ComponentID for a given component type and a boolean indicating if it was found.
+// It does not panic if the component type is not registered.
 func TryGetID[T any]() (ComponentID, bool) {
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -199,37 +222,43 @@ func TryGetID[T any]() (ComponentID, bool) {
 	return id, ok
 }
 
+// Entity represents a unique entity in the ECS world.
 type Entity struct {
-	ID      uint32
-	Version uint32
+	ID      uint32 // The unique ID of the entity.
+	Version uint32 // The version of the entity, used to check for validity.
 }
 
+// entityMeta stores metadata about an entity.
 type entityMeta struct {
-	Archetype *Archetype
-	Index     int
-	Version   uint32
+	Archetype *Archetype // A pointer to the entity's archetype.
+	Index     int        // The entity's index within the archetype.
+	Version   uint32     // The current version of the entity.
 }
 
+// WorldOptions provides configuration options for creating a new World.
 type WorldOptions struct {
-	InitialCapacity int
+	InitialCapacity int // The initial capacity for entities and components.
 }
 
+// World manages all entities, components, and systems.
 type World struct {
-	nextEntityID    uint32
-	freeEntityIDs   []uint32
-	entitiesSlice   []entityMeta
-	archetypes      map[maskType]*Archetype
-	archetypesList  []*Archetype
-	toRemove        []Entity
-	removeSet       []Entity
-	Resources       sync.Map
-	initialCapacity int
+	nextEntityID    uint32                  // The next available entity ID.
+	freeEntityIDs   []uint32                // A list of freed entity IDs to be recycled.
+	entitiesSlice   []entityMeta            // A slice mapping entity IDs to their metadata.
+	archetypes      map[maskType]*Archetype // A map of component masks to archetypes.
+	archetypesList  []*Archetype            // A list of all archetypes.
+	toRemove        []Entity                // A list of entities to be removed.
+	removeSet       []Entity                // A set of entities to be removed in the current frame.
+	Resources       sync.Map                // A map for storing global resources.
+	initialCapacity int                     // The initial capacity for new archetypes.
 }
 
+// NewWorld creates a new World with default options.
 func NewWorld() *World {
 	return NewWorldWithOptions(WorldOptions{})
 }
 
+// NewWorldWithOptions creates a new World with the specified options.
 func NewWorldWithOptions(opts WorldOptions) *World {
 	cap := defaultInitialCapacity
 	if opts.InitialCapacity > 0 {
@@ -247,6 +276,7 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 	return w
 }
 
+// getOrCreateArchetype gets an existing archetype or creates a new one for the given component mask.
 func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	if arch, ok := self.archetypes[mask]; ok {
 		return arch
@@ -278,6 +308,7 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	return newArch
 }
 
+// max returns the larger of two integers.
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -285,6 +316,7 @@ func max(a, b int) int {
 	return b
 }
 
+// extendSlice extends a slice by n elements, reallocating if necessary.
 func extendSlice[T any](s []T, n int) []T {
 	newLen := len(s) + n
 	if cap(s) >= newLen {
@@ -296,6 +328,7 @@ func extendSlice[T any](s []T, n int) []T {
 	return ns
 }
 
+// extendStorage extends the component storage for an archetype.
 func extendStorage(arch *Archetype, slot int, n int, elemSize int) {
 	rv := arch.componentStorages[slot]
 	newLen := rv.Len() + n
@@ -316,6 +349,7 @@ func extendStorage(arch *Archetype, slot int, n int, elemSize int) {
 	arch.componentStorages[slot] = newSlice
 }
 
+// CreateEntity creates a new entity with no components.
 func (self *World) CreateEntity() Entity {
 	var id uint32
 	if len(self.freeEntityIDs) > 0 {
@@ -351,6 +385,7 @@ func (self *World) CreateEntity() Entity {
 	return e
 }
 
+// CreateEntities creates a batch of new entities with no components.
 func (self *World) CreateEntities(count int) []Entity {
 	if count <= 0 {
 		return nil
@@ -406,11 +441,14 @@ func (self *World) CreateEntities(count int) []Entity {
 	return entities
 }
 
+// RemoveEntity marks an entity for removal. The actual removal is processed by ProcessRemovals.
 func (self *World) RemoveEntity(e Entity) {
 	self.toRemove = extendSlice(self.toRemove, 1)
 	self.toRemove[len(self.toRemove)-1] = e
 }
 
+// ProcessRemovals processes the entities marked for removal.
+// This should be called once per frame, e.g., at the end of the game loop.
 func (self *World) ProcessRemovals() {
 	if len(self.toRemove) == 0 {
 		return
@@ -437,6 +475,7 @@ func (self *World) ProcessRemovals() {
 	self.toRemove = self.toRemove[:0]
 }
 
+// removeEntityFromArchetype removes an entity from an archetype using the swap-and-pop method.
 func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index int) {
 	lastIndex := len(arch.entities) - 1
 	if lastIndex < 0 || index > lastIndex {
@@ -466,6 +505,9 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 	}
 }
 
+// AddComponent adds a component of type T to an entity.
+// It returns a pointer to the newly added component and a boolean indicating success.
+// If the entity already has the component, it returns a pointer to the existing component.
 func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	if int(e.ID) >= len(w.entitiesSlice) {
 		return nil, false
@@ -519,6 +561,9 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	return (*T)(unsafe.Pointer(finalBase + uintptr(newIndex)*uintptr(size))), true
 }
 
+// SetComponent sets the component data for an entity.
+// If the entity does not have the component, it will be added.
+// It returns a boolean indicating success.
 func SetComponent[T any](w *World, e Entity, comp T) bool {
 	if int(e.ID) >= len(w.entitiesSlice) {
 		return false
@@ -575,6 +620,9 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	}
 }
 
+// RemoveComponent removes a component of type T from an entity.
+// It returns a boolean indicating whether the component was successfully removed.
+// If the entity does not have the component, it returns true.
 func RemoveComponent[T any](w *World, e Entity) bool {
 	if int(e.ID) >= len(w.entitiesSlice) {
 		return false
@@ -609,6 +657,8 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 	return true
 }
 
+// GetComponent retrieves a pointer to the component of type T for the given entity.
+// It returns a pointer to the component and a boolean indicating whether the component was found.
 func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	if int(e.ID) >= len(w.entitiesSlice) {
 		return nil, false
@@ -637,6 +687,9 @@ func GetComponent[T any](w *World, e Entity) (*T, bool) {
 	return (*T)(unsafe.Pointer(base + uintptr(meta.Index)*uintptr(size))), true
 }
 
+// moveEntityBetweenArchetypes moves an entity from an old archetype to a new one.
+// It copies all component data, except for the components specified in excludeIDs.
+// It returns the new index of the entity in the new archetype.
 func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, excludeIDs ...ComponentID) int {
 	newIndex := len(newArch.entities)
 	newArch.entities = extendSlice(newArch.entities, 1)
@@ -692,13 +745,17 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 	return newIndex
 }
 
+// Archetype represents a unique combination of component types.
+// Entities with the same set of components are stored in the same archetype.
 type Archetype struct {
-	mask              maskType
-	componentStorages []reflect.Value
-	componentIDs      []ComponentID
-	entities          []Entity
+	mask              maskType        // The component mask for this archetype.
+	componentStorages []reflect.Value // Slices of component data.
+	componentIDs      []ComponentID   // A sorted list of component IDs in this archetype.
+	entities          []Entity        // The list of entities in this archetype.
 }
 
+// getSlot finds the index of a component ID in the archetype's componentID list.
+// It uses a binary search for efficient lookup.
 func (self *Archetype) getSlot(id ComponentID) int {
 	i := sort.Search(len(self.componentIDs), func(j int) bool {
 		return self.componentIDs[j] >= id
@@ -709,18 +766,19 @@ func (self *Archetype) getSlot(id ComponentID) int {
 	return -1
 }
 
-// Query is an iterator over entities matching 1 component type.
+// Query is an iterator over entities that have a specific set of components.
+// This query is for entities with one component type.
 type Query[T1 any] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	base1         unsafe.Pointer
-	stride1       uintptr
-	currentEntity Entity
+	world         *World         // The world to query.
+	includeMask   maskType       // A mask of components to include.
+	excludeMask   maskType       // A mask of components to exclude.
+	id1           ComponentID    // The ID of the first component.
+	archIdx       int            // The current archetype index.
+	index         int            // The current entity index within the archetype.
+	currentArch   *Archetype     // The current archetype being iterated.
+	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1       uintptr        // The size of the first component type.
+	currentEntity Entity         // The current entity being iterated.
 }
 
 // Reset resets the query for reuse.
@@ -774,21 +832,22 @@ func (self *Query[T1]) Entity() Entity {
 	return self.currentEntity
 }
 
-// Query2 is an iterator over entities matching 2 component types.
+// Query2 is an iterator over entities that have a specific set of components.
+// This query is for entities with two component types.
 type Query2[T1 any, T2 any] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	id2           ComponentID
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	base1         unsafe.Pointer
-	stride1       uintptr
-	base2         unsafe.Pointer
-	stride2       uintptr
-	currentEntity Entity
+	world         *World         // The world to query.
+	includeMask   maskType       // A mask of components to include.
+	excludeMask   maskType       // A mask of components to exclude.
+	id1           ComponentID    // The ID of the first component.
+	id2           ComponentID    // The ID of the second component.
+	archIdx       int            // The current archetype index.
+	index         int            // The current entity index within the archetype.
+	currentArch   *Archetype     // The current archetype being iterated.
+	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1       uintptr        // The size of the first component type.
+	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2       uintptr        // The size of the second component type.
+	currentEntity Entity         // The current entity being iterated.
 }
 
 // Reset resets the query for reuse.
@@ -854,24 +913,25 @@ func (self *Query2[T1, T2]) Entity() Entity {
 	return self.currentEntity
 }
 
-// Query3 is an iterator over entities matching 3 component types.
+// Query3 is an iterator over entities that have a specific set of components.
+// This query is for entities with three component types.
 type Query3[T1 any, T2 any, T3 any] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	id2           ComponentID
-	id3           ComponentID
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	base1         unsafe.Pointer
-	stride1       uintptr
-	base2         unsafe.Pointer
-	stride2       uintptr
-	base3         unsafe.Pointer
-	stride3       uintptr
-	currentEntity Entity
+	world         *World         // The world to query.
+	includeMask   maskType       // A mask of components to include.
+	excludeMask   maskType       // A mask of components to exclude.
+	id1           ComponentID    // The ID of the first component.
+	id2           ComponentID    // The ID of the second component.
+	id3           ComponentID    // The ID of the third component.
+	archIdx       int            // The current archetype index.
+	index         int            // The current entity index within the archetype.
+	currentArch   *Archetype     // The current archetype being iterated.
+	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1       uintptr        // The size of the first component type.
+	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2       uintptr        // The size of the second component type.
+	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3       uintptr        // The size of the third component type.
+	currentEntity Entity         // The current entity being iterated.
 }
 
 // Reset resets the query for reuse.
@@ -949,27 +1009,28 @@ func (self *Query3[T1, T2, T3]) Entity() Entity {
 	return self.currentEntity
 }
 
-// Query4 is an iterator over entities matching 4 component types.
+// Query4 is an iterator over entities that have a specific set of components.
+// This query is for entities with four component types.
 type Query4[T1 any, T2 any, T3 any, T4 any] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	id2           ComponentID
-	id3           ComponentID
-	id4           ComponentID
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	base1         unsafe.Pointer
-	stride1       uintptr
-	base2         unsafe.Pointer
-	stride2       uintptr
-	base3         unsafe.Pointer
-	stride3       uintptr
-	base4         unsafe.Pointer
-	stride4       uintptr
-	currentEntity Entity
+	world         *World         // The world to query.
+	includeMask   maskType       // A mask of components to include.
+	excludeMask   maskType       // A mask of components to exclude.
+	id1           ComponentID    // The ID of the first component.
+	id2           ComponentID    // The ID of the second component.
+	id3           ComponentID    // The ID of the third component.
+	id4           ComponentID    // The ID of the fourth component.
+	archIdx       int            // The current archetype index.
+	index         int            // The current entity index within the archetype.
+	currentArch   *Archetype     // The current archetype being iterated.
+	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1       uintptr        // The size of the first component type.
+	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2       uintptr        // The size of the second component type.
+	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3       uintptr        // The size of the third component type.
+	base4         unsafe.Pointer // A pointer to the base of the fourth component's storage.
+	stride4       uintptr        // The size of the fourth component type.
+	currentEntity Entity         // The current entity being iterated.
 }
 
 // Reset resets the query for reuse.
@@ -1059,30 +1120,31 @@ func (self *Query4[T1, T2, T3, T4]) Entity() Entity {
 	return self.currentEntity
 }
 
-// Query5 is an iterator over entities matching 5 component types.
+// Query5 is an iterator over entities that have a specific set of components.
+// This query is for entities with five component types.
 type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	id2           ComponentID
-	id3           ComponentID
-	id4           ComponentID
-	id5           ComponentID
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	base1         unsafe.Pointer
-	stride1       uintptr
-	base2         unsafe.Pointer
-	stride2       uintptr
-	base3         unsafe.Pointer
-	stride3       uintptr
-	base4         unsafe.Pointer
-	stride4       uintptr
-	base5         unsafe.Pointer
-	stride5       uintptr
-	currentEntity Entity
+	world         *World         // The world to query.
+	includeMask   maskType       // A mask of components to include.
+	excludeMask   maskType       // A mask of components to exclude.
+	id1           ComponentID    // The ID of the first component.
+	id2           ComponentID    // The ID of the second component.
+	id3           ComponentID    // The ID of the third component.
+	id4           ComponentID    // The ID of the fourth component.
+	id5           ComponentID    // The ID of the fifth component.
+	archIdx       int            // The current archetype index.
+	index         int            // The current entity index within the archetype.
+	currentArch   *Archetype     // The current archetype being iterated.
+	base1         unsafe.Pointer // A pointer to the base of the first component's storage.
+	stride1       uintptr        // The size of the first component type.
+	base2         unsafe.Pointer // A pointer to the base of the second component's storage.
+	stride2       uintptr        // The size of the second component type.
+	base3         unsafe.Pointer // A pointer to the base of the third component's storage.
+	stride3       uintptr        // The size of the third component type.
+	base4         unsafe.Pointer // A pointer to the base of the fourth component's storage.
+	stride4       uintptr        // The size of the fourth component type.
+	base5         unsafe.Pointer // A pointer to the base of the fifth component's storage.
+	stride5       uintptr        // The size of the fifth component type.
+	currentEntity Entity         // The current entity being iterated.
 }
 
 // Reset resets the query for reuse.
@@ -1184,7 +1246,17 @@ func (self *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
 	return self.currentEntity
 }
 
-// CreateQuery creates a query for entities with the specified component.
+// CreateQuery creates a new query for entities with one specific component type.
+// It allows specifying component types to exclude from the query results.
+//
+// Parameters:
+//
+//	w: The World to query.
+//	excludes: A variadic list of ComponentIDs to exclude from the query.
+//
+// Returns:
+//
+//	A pointer to a new Query[T1].
 func CreateQuery[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
 	id1 := GetID[T1]()
 	return &Query[T1]{
@@ -1197,7 +1269,17 @@ func CreateQuery[T1 any](w *World, excludes ...ComponentID) *Query[T1] {
 	}
 }
 
-// CreateQuery2 creates a query for entities with the specified components.
+// CreateQuery2 creates a new query for entities with two specific component types.
+// It allows specifying component types to exclude from the query results.
+//
+// Parameters:
+//
+//	w: The World to query.
+//	excludes: A variadic list of ComponentIDs to exclude from the query.
+//
+// Returns:
+//
+//	A pointer to a new Query2[T1, T2].
 func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1, T2] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1212,7 +1294,17 @@ func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1,
 	}
 }
 
-// CreateQuery3 creates a query for entities with the specified components.
+// CreateQuery3 creates a new query for entities with three specific component types.
+// It allows specifying component types to exclude from the query results.
+//
+// Parameters:
+//
+//	w: The World to query.
+//	excludes: A variadic list of ComponentIDs to exclude from the query.
+//
+// Returns:
+//
+//	A pointer to a new Query3[T1, T2, T3].
 func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1229,7 +1321,17 @@ func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Qu
 	}
 }
 
-// CreateQuery4 creates a query for entities with the specified components.
+// CreateQuery4 creates a new query for entities with four specific component types.
+// It allows specifying component types to exclude from the query results.
+//
+// Parameters:
+//
+//	w: The World to query.
+//	excludes: A variadic list of ComponentIDs to exclude from the query.
+//
+// Returns:
+//
+//	A pointer to a new Query4[T1, T2, T3, T4].
 func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
@@ -1248,7 +1350,17 @@ func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...Componen
 	}
 }
 
-// CreateQuery5 creates a query for entities with the specified components.
+// CreateQuery5 creates a new query for entities with five specific component types.
+// It allows specifying component types to exclude from the query results.
+//
+// Parameters:
+//
+//	w: The World to query.
+//	excludes: A variadic list of ComponentIDs to exclude from the query.
+//
+// Returns:
+//
+//	A pointer to a new Query5[T1, T2, T3, T4, T5].
 func CreateQuery5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
 	id1 := GetID[T1]()
 	id2 := GetID[T2]()
