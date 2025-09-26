@@ -330,14 +330,25 @@ func BenchmarkRemoveComponent(b *testing.B) {
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkAddRemoveEntities$ . -count 1
-func BenchmarkAddRemoveEntities(b *testing.B) {
+// go test -benchmem -run=^$ -bench ^BenchmarkAddEntities$ . -count 1
+func BenchmarkAddEntities(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
 		InitialCapacity: 100000,
 	})
 
 	for b.Loop() {
-		entities := world.CreateEntities(numEntities)
+		world.CreateEntities(numEntities)
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkRemoveEntities$ . -count 1
+func BenchmarkRemoveEntities(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: 100000,
+	})
+
+	entities := world.CreateEntities(numEntities)
+	for b.Loop() {
 		for _, e := range entities {
 			world.RemoveEntity(e)
 		}
