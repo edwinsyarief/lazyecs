@@ -3,8 +3,8 @@ package lazyecs
 
 import (
 	"fmt"
+	"math/bits"
 	"reflect"
-	"sort"
 	"sync"
 	"unsafe"
 )
@@ -16,20 +16,20 @@ const (
 	bitsPerWord            = 64
 	maskWords              = 4
 	maxComponentTypes      = maskWords * bitsPerWord
-	defaultInitialCapacity = 4096
+	defaultInitialCapacity = 65536
 )
 
 // maskType is a bitmask used to represent a set of component types.
 type maskType [maskWords]uint64
 
 // has checks if the mask has a specific component ID.
-func (m maskType) has(id ComponentID) bool {
+func (self maskType) has(id ComponentID) bool {
 	word := int(id / bitsPerWord)
 	if word >= maskWords {
 		return false
 	}
 	bit := id % bitsPerWord
-	return (m[word] & (1 << bit)) != 0
+	return (self[word] & (1 << bit)) != 0
 }
 
 // setMask adds a component ID to the mask.
@@ -267,6 +267,7 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 	w := &World{
 		entitiesSlice:   make([]entityMeta, 0, cap),
 		archetypes:      make(map[maskType]*Archetype, 32),
+		archetypesList:  make([]*Archetype, 0, 64),
 		toRemove:        make([]Entity, 0, cap),
 		removeSet:       make([]Entity, 0, cap),
 		freeEntityIDs:   make([]uint32, 0, cap),
@@ -282,20 +283,36 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 		return arch
 	}
 
-	newArch := &Archetype{
-		mask:     mask,
-		entities: make([]Entity, 0, self.initialCapacity),
+	var count int
+	for _, w := range mask {
+		count += bits.OnesCount64(w)
 	}
-
-	compIDs := make([]ComponentID, 0, nextComponentID)
-	for id := ComponentID(0); id < nextComponentID; id++ {
-		if mask.has(id) {
-			compIDs = append(compIDs, id)
+	compIDs := make([]ComponentID, 0, count)
+	for word := 0; word < maskWords; word++ {
+		w := mask[word]
+		baseID := ComponentID(word * bitsPerWord)
+		for bit := uint(0); bit < bitsPerWord; bit++ {
+			if (w & (1 << bit)) != 0 {
+				compIDs = append(compIDs, baseID+ComponentID(bit))
+			}
 		}
 	}
-	sort.Slice(compIDs, func(i, j int) bool { return compIDs[i] < compIDs[j] })
-	newArch.componentIDs = compIDs
-	newArch.componentStorages = make([]reflect.Value, len(compIDs))
+	// No need to sort; IDs are appended in ascending order.
+
+	newArch := &Archetype{
+		mask:              mask,
+		entities:          make([]Entity, 0, self.initialCapacity),
+		componentIDs:      compIDs,
+		componentStorages: make([]reflect.Value, len(compIDs)),
+	}
+	var slots [maxComponentTypes]int
+	for i := range slots {
+		slots[i] = -1
+	}
+	for i, id := range compIDs {
+		slots[id] = i
+	}
+	newArch.slots = slots
 
 	for i, id := range compIDs {
 		typ := idToType[id]
@@ -464,12 +481,14 @@ func (self *World) ProcessRemovals() {
 		}
 	}
 
-	for _, e := range self.removeSet {
+	oldFreeLen := len(self.freeEntityIDs)
+	self.freeEntityIDs = extendSlice(self.freeEntityIDs, len(self.removeSet))
+
+	for i, e := range self.removeSet {
 		id := e.ID
 		meta := self.entitiesSlice[id]
 		self.removeEntityFromArchetype(e, meta.Archetype, meta.Index)
-		self.freeEntityIDs = extendSlice(self.freeEntityIDs, 1)
-		self.freeEntityIDs[len(self.freeEntityIDs)-1] = id
+		self.freeEntityIDs[oldFreeLen+i] = id
 		self.entitiesSlice[id] = entityMeta{}
 	}
 	self.toRemove = self.toRemove[:0]
@@ -748,22 +767,17 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 // Archetype represents a unique combination of component types.
 // Entities with the same set of components are stored in the same archetype.
 type Archetype struct {
-	mask              maskType        // The component mask for this archetype.
-	componentStorages []reflect.Value // Slices of component data.
-	componentIDs      []ComponentID   // A sorted list of component IDs in this archetype.
-	entities          []Entity        // The list of entities in this archetype.
+	mask              maskType               // The component mask for this archetype.
+	componentStorages []reflect.Value        // Slices of component data.
+	componentIDs      []ComponentID          // A sorted list of component IDs in this archetype.
+	entities          []Entity               // The list of entities in this archetype.
+	slots             [maxComponentTypes]int // Slot lookup for component IDs; -1 if not present.
 }
 
 // getSlot finds the index of a component ID in the archetype's componentID list.
 // It uses a binary search for efficient lookup.
 func (self *Archetype) getSlot(id ComponentID) int {
-	i := sort.Search(len(self.componentIDs), func(j int) bool {
-		return self.componentIDs[j] >= id
-	})
-	if i < len(self.componentIDs) && self.componentIDs[i] == id {
-		return i
-	}
-	return -1
+	return self.slots[id]
 }
 
 // Query is an iterator over entities that have a specific set of components.
