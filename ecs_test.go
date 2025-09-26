@@ -302,8 +302,7 @@ func BenchmarkAddComponent(b *testing.B) {
 
 	entities := world.CreateEntities(numEntities)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, e := range entities {
 			lazyecs.AddComponent[Position](world, e)
 		}
@@ -324,8 +323,7 @@ func BenchmarkRemoveComponent(b *testing.B) {
 		lazyecs.AddComponent[Position](world, e)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, e := range entities {
 			lazyecs.RemoveComponent[Position](world, e)
 		}
@@ -338,8 +336,7 @@ func BenchmarkAddRemoveEntities(b *testing.B) {
 		InitialCapacity: 100000,
 	})
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		entities := world.CreateEntities(numEntities)
 		for _, e := range entities {
 			world.RemoveEntity(e)
@@ -364,13 +361,12 @@ func BenchmarkQuery(b *testing.B) {
 		lazyecs.AddComponent[Velocity](world, e)
 	}
 
-	b.ResetTimer()
 	query := lazyecs.CreateQuery2[Position, Velocity](world)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
+		query.Reset()
 		for query.Next() {
 			pos, vel := query.Get()
 			pos.X += vel.VX
 		}
-		query.Reset()
 	}
 }
