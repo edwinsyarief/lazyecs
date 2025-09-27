@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/bits"
 	"reflect"
+	"sort"
 	"sync"
 	"unsafe"
 )
@@ -53,6 +54,24 @@ func unsetMask(m maskType, id ComponentID) maskType {
 	bit := id % bitsPerWord
 	nm := m
 	nm[word] &^= (1 << bit)
+	return nm
+}
+
+// orMask performs a bitwise OR between two masks.
+func orMask(m1, m2 maskType) maskType {
+	var nm maskType
+	for i := 0; i < maskWords; i++ {
+		nm[i] = m1[i] | m2[i]
+	}
+	return nm
+}
+
+// andNotMask performs a bitwise AND NOT (m1 &^ m2) between two masks.
+func andNotMask(m1, m2 maskType) maskType {
+	var nm maskType
+	for i := 0; i < maskWords; i++ {
+		nm[i] = m1[i] &^ m2[i]
+	}
 	return nm
 }
 
@@ -255,17 +274,17 @@ type CopyOp struct {
 
 // World manages all entities, components, and systems.
 type World struct {
-	nextEntityID      uint32                                    // The next available entity ID.
-	freeEntityIDs     []uint32                                  // A list of freed entity IDs to be recycled.
-	entitiesSlice     []entityMeta                              // A slice mapping entity IDs to their metadata.
-	archetypes        map[maskType]*Archetype                   // A map of component masks to archetypes.
-	archetypesList    []*Archetype                              // A list of all archetypes.
-	toRemove          []Entity                                  // A list of entities to be removed.
-	removeSet         []Entity                                  // A set of entities to be removed in the current frame.
-	Resources         sync.Map                                  // A map for storing global resources.
-	initialCapacity   int                                       // The initial capacity for new archetypes.
-	addTransitions    map[*Archetype]map[ComponentID]Transition // Cache for add component transitions with precomputed copies.
-	removeTransitions map[*Archetype]map[ComponentID]Transition // Cache for remove component transitions with precomputed copies.
+	nextEntityID      uint32                                 // The next available entity ID.
+	freeEntityIDs     []uint32                               // A list of freed entity IDs to be recycled.
+	entitiesSlice     []entityMeta                           // A slice mapping entity IDs to their metadata.
+	archetypes        map[maskType]*Archetype                // A map of component masks to archetypes.
+	archetypesList    []*Archetype                           // A list of all archetypes.
+	toRemove          []Entity                               // A list of entities to be removed.
+	removeSet         []Entity                               // A set of entities to be removed in the current frame.
+	Resources         sync.Map                               // A map for storing global resources.
+	initialCapacity   int                                    // The initial capacity for new archetypes.
+	addTransitions    map[*Archetype]map[maskType]Transition // Cache for add component transitions with precomputed copies.
+	removeTransitions map[*Archetype]map[maskType]Transition // Cache for remove component transitions with precomputed copies.
 }
 
 // NewWorld creates a new World with default options.
@@ -287,8 +306,8 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 		removeSet:         make([]Entity, 0, cap),
 		freeEntityIDs:     make([]uint32, 0, cap),
 		initialCapacity:   cap,
-		addTransitions:    make(map[*Archetype]map[ComponentID]Transition),
-		removeTransitions: make(map[*Archetype]map[ComponentID]Transition),
+		addTransitions:    make(map[*Archetype]map[maskType]Transition),
+		removeTransitions: make(map[*Archetype]map[maskType]Transition),
 	}
 	w.getOrCreateArchetype(maskType{})
 	return w
@@ -546,7 +565,8 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	size := int(componentSizes[compID])
 
 	oldArch := meta.Archetype
-	if oldArch.mask.has(compID) {
+	addMask := makeMask1(compID)
+	if intersects(oldArch.mask, addMask) {
 		idx := oldArch.getSlot(compID)
 		if idx == -1 {
 			return nil, false
@@ -558,15 +578,17 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 		return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
 	}
 
+	newMask := orMask(oldArch.mask, addMask)
+
 	var transition Transition
-	if addMap, ok := w.addTransitions[oldArch]; ok {
-		if tr, ok := addMap[compID]; ok {
+	addMap, ok := w.addTransitions[oldArch]
+	if ok {
+		if tr, ok := addMap[addMask]; ok {
 			transition = tr
 		}
 	}
 	var newArch *Archetype
 	if transition.target == nil {
-		newMask := setMask(oldArch.mask, compID)
 		newArch = w.getOrCreateArchetype(newMask)
 		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
 		for from, id := range oldArch.componentIDs {
@@ -576,12 +598,10 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 			}
 		}
 		transition = Transition{target: newArch, copies: copies}
-		addMap, ok := w.addTransitions[oldArch]
-		if !ok {
-			addMap = make(map[ComponentID]Transition)
-			w.addTransitions[oldArch] = addMap
+		if _, ok := w.addTransitions[oldArch]; !ok {
+			w.addTransitions[oldArch] = make(map[maskType]Transition)
 		}
-		addMap[compID] = transition
+		w.addTransitions[oldArch][addMask] = transition
 	} else {
 		newArch = transition.target
 	}
@@ -608,6 +628,1290 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 	return (*T)(unsafe.Pointer(&finalBytes[newIndex*size])), true
 }
 
+// AddComponent2 adds two components to an entity if not already present.
+// It returns pointers to the components (existing or new) and a boolean indicating success.
+func AddComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2, bool) {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return nil, nil, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return nil, nil, false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+
+	oldArch := meta.Archetype
+	addMask := makeMask2(id1, id2)
+	if includesAll(oldArch.mask, addMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		if idx1 == -1 || idx2 == -1 {
+			return nil, nil, false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) {
+			return nil, nil, false
+		}
+		return (*T1)(unsafe.Pointer(&bytes1[meta.Index*size1])), (*T2)(unsafe.Pointer(&bytes2[meta.Index*size2])), true
+	}
+
+	newMask := orMask(oldArch.mask, addMask)
+
+	var transition Transition
+	addMap, ok := w.addTransitions[oldArch]
+	if ok {
+		if tr, ok := addMap[addMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.addTransitions[oldArch]; !ok {
+			w.addTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.addTransitions[oldArch][addMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	oldIndex := meta.Index
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	// Extend new components (zero-initialized)
+	ids := []ComponentID{id1, id2}
+	for _, id := range ids {
+		if !oldArch.mask.has(id) {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return nil, nil, false
+			}
+			bytes := newArch.componentData[idx]
+			bytes = extendByteSlice(bytes, int(componentSizes[id]))
+			newArch.componentData[idx] = bytes
+		}
+	}
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	idx1 := newArch.getSlot(id1)
+	idx2 := newArch.getSlot(id2)
+	if idx1 == -1 || idx2 == -1 {
+		return nil, nil, false
+	}
+	bytes1 := newArch.componentData[idx1]
+	bytes2 := newArch.componentData[idx2]
+	return (*T1)(unsafe.Pointer(&bytes1[newIndex*size1])), (*T2)(unsafe.Pointer(&bytes2[newIndex*size2])), true
+}
+
+// AddComponent3 adds three components to an entity if not already present.
+// It returns pointers to the components (existing or new) and a boolean indicating success.
+func AddComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3, bool) {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, nil, nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return nil, nil, nil, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return nil, nil, nil, false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+
+	oldArch := meta.Archetype
+	addMask := makeMask3(id1, id2, id3)
+	if includesAll(oldArch.mask, addMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 {
+			return nil, nil, nil, false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) {
+			return nil, nil, nil, false
+		}
+		return (*T1)(unsafe.Pointer(&bytes1[meta.Index*size1])), (*T2)(unsafe.Pointer(&bytes2[meta.Index*size2])), (*T3)(unsafe.Pointer(&bytes3[meta.Index*size3])), true
+	}
+
+	newMask := orMask(oldArch.mask, addMask)
+
+	var transition Transition
+	addMap, ok := w.addTransitions[oldArch]
+	if ok {
+		if tr, ok := addMap[addMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.addTransitions[oldArch]; !ok {
+			w.addTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.addTransitions[oldArch][addMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	oldIndex := meta.Index
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	// Extend new components (zero-initialized)
+	ids := []ComponentID{id1, id2, id3}
+	for _, id := range ids {
+		if !oldArch.mask.has(id) {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return nil, nil, nil, false
+			}
+			bytes := newArch.componentData[idx]
+			bytes = extendByteSlice(bytes, int(componentSizes[id]))
+			newArch.componentData[idx] = bytes
+		}
+	}
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	idx1 := newArch.getSlot(id1)
+	idx2 := newArch.getSlot(id2)
+	idx3 := newArch.getSlot(id3)
+	if idx1 == -1 || idx2 == -1 || idx3 == -1 {
+		return nil, nil, nil, false
+	}
+	bytes1 := newArch.componentData[idx1]
+	bytes2 := newArch.componentData[idx2]
+	bytes3 := newArch.componentData[idx3]
+	return (*T1)(unsafe.Pointer(&bytes1[newIndex*size1])), (*T2)(unsafe.Pointer(&bytes2[newIndex*size2])), (*T3)(unsafe.Pointer(&bytes3[newIndex*size3])), true
+}
+
+// AddComponent4 adds four components to an entity if not already present.
+// It returns pointers to the components (existing or new) and a boolean indicating success.
+func AddComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2, *T3, *T4, bool) {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, nil, nil, nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return nil, nil, nil, nil, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return nil, nil, nil, nil, false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+
+	oldArch := meta.Archetype
+	addMask := makeMask4(id1, id2, id3, id4)
+	if includesAll(oldArch.mask, addMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		idx4 := oldArch.getSlot(id4)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 {
+			return nil, nil, nil, nil, false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		bytes4 := oldArch.componentData[idx4]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) || meta.Index*size4 >= len(bytes4) {
+			return nil, nil, nil, nil, false
+		}
+		return (*T1)(unsafe.Pointer(&bytes1[meta.Index*size1])), (*T2)(unsafe.Pointer(&bytes2[meta.Index*size2])), (*T3)(unsafe.Pointer(&bytes3[meta.Index*size3])), (*T4)(unsafe.Pointer(&bytes4[meta.Index*size4])), true
+	}
+
+	newMask := orMask(oldArch.mask, addMask)
+
+	var transition Transition
+	addMap, ok := w.addTransitions[oldArch]
+	if ok {
+		if tr, ok := addMap[addMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.addTransitions[oldArch]; !ok {
+			w.addTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.addTransitions[oldArch][addMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	oldIndex := meta.Index
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	// Extend new components (zero-initialized)
+	ids := []ComponentID{id1, id2, id3, id4}
+	for _, id := range ids {
+		if !oldArch.mask.has(id) {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return nil, nil, nil, nil, false
+			}
+			bytes := newArch.componentData[idx]
+			bytes = extendByteSlice(bytes, int(componentSizes[id]))
+			newArch.componentData[idx] = bytes
+		}
+	}
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	idx1 := newArch.getSlot(id1)
+	idx2 := newArch.getSlot(id2)
+	idx3 := newArch.getSlot(id3)
+	idx4 := newArch.getSlot(id4)
+	if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 {
+		return nil, nil, nil, nil, false
+	}
+	bytes1 := newArch.componentData[idx1]
+	bytes2 := newArch.componentData[idx2]
+	bytes3 := newArch.componentData[idx3]
+	bytes4 := newArch.componentData[idx4]
+	return (*T1)(unsafe.Pointer(&bytes1[newIndex*size1])), (*T2)(unsafe.Pointer(&bytes2[newIndex*size2])), (*T3)(unsafe.Pointer(&bytes3[newIndex*size3])), (*T4)(unsafe.Pointer(&bytes4[newIndex*size4])), true
+}
+
+// AddComponent5 adds five components to an entity if not already present.
+// It returns pointers to the components (existing or new) and a boolean indicating success.
+func AddComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5, bool) {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return nil, nil, nil, nil, nil, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return nil, nil, nil, nil, nil, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return nil, nil, nil, nil, nil, false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	size5 := int(componentSizes[id5])
+
+	oldArch := meta.Archetype
+	addMask := makeMask5(id1, id2, id3, id4, id5)
+	if includesAll(oldArch.mask, addMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		idx4 := oldArch.getSlot(id4)
+		idx5 := oldArch.getSlot(id5)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 || idx5 == -1 {
+			return nil, nil, nil, nil, nil, false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		bytes4 := oldArch.componentData[idx4]
+		bytes5 := oldArch.componentData[idx5]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) || meta.Index*size4 >= len(bytes4) || meta.Index*size5 >= len(bytes5) {
+			return nil, nil, nil, nil, nil, false
+		}
+		return (*T1)(unsafe.Pointer(&bytes1[meta.Index*size1])), (*T2)(unsafe.Pointer(&bytes2[meta.Index*size2])), (*T3)(unsafe.Pointer(&bytes3[meta.Index*size3])), (*T4)(unsafe.Pointer(&bytes4[meta.Index*size4])), (*T5)(unsafe.Pointer(&bytes5[meta.Index*size5])), true
+	}
+
+	newMask := orMask(oldArch.mask, addMask)
+
+	var transition Transition
+	addMap, ok := w.addTransitions[oldArch]
+	if ok {
+		if tr, ok := addMap[addMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.addTransitions[oldArch]; !ok {
+			w.addTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.addTransitions[oldArch][addMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	oldIndex := meta.Index
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	// Extend new components (zero-initialized)
+	ids := []ComponentID{id1, id2, id3, id4, id5}
+	for _, id := range ids {
+		if !oldArch.mask.has(id) {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return nil, nil, nil, nil, nil, false
+			}
+			bytes := newArch.componentData[idx]
+			bytes = extendByteSlice(bytes, int(componentSizes[id]))
+			newArch.componentData[idx] = bytes
+		}
+	}
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	idx1 := newArch.getSlot(id1)
+	idx2 := newArch.getSlot(id2)
+	idx3 := newArch.getSlot(id3)
+	idx4 := newArch.getSlot(id4)
+	idx5 := newArch.getSlot(id5)
+	if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 || idx5 == -1 {
+		return nil, nil, nil, nil, nil, false
+	}
+	bytes1 := newArch.componentData[idx1]
+	bytes2 := newArch.componentData[idx2]
+	bytes3 := newArch.componentData[idx3]
+	bytes4 := newArch.componentData[idx4]
+	bytes5 := newArch.componentData[idx5]
+	return (*T1)(unsafe.Pointer(&bytes1[newIndex*size1])), (*T2)(unsafe.Pointer(&bytes2[newIndex*size2])), (*T3)(unsafe.Pointer(&bytes3[newIndex*size3])), (*T4)(unsafe.Pointer(&bytes4[newIndex*size4])), (*T5)(unsafe.Pointer(&bytes5[newIndex*size5])), true
+}
+
+// AddComponentBatch adds a component to multiple entities.
+// It returns pointers to the components in order of the input entities.
+func AddComponentBatch[T any](w *World, entities []Entity) []*T {
+	id, ok := TryGetID[T]()
+	if !ok {
+		return nil
+	}
+	addMask := makeMask1(id)
+	size := int(componentSizes[id])
+
+	// Sort to group by archetype without map
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	res := make([]*T, len(entities))
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, addMask) {
+			slot := oldArch.getSlot(id)
+			if slot == -1 {
+				continue
+			}
+			base := unsafe.Pointer(&oldArch.componentData[slot][0])
+			stride := uintptr(size)
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				p := unsafe.Pointer(uintptr(base) + uintptr(meta.Index)*stride)
+				res[gi] = (*T)(p)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, addMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][addMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		// Pre-extend all component data
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot := newArch.getSlot(id)
+		base := unsafe.Pointer(&newArch.componentData[slot][0])
+		stride := uintptr(size)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num) // pre-allocate with cap
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			// Copy existing components
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			p := unsafe.Pointer(uintptr(base) + uintptr(newIndex)*stride)
+			res[gi] = (*T)(p)
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+
+	return res
+}
+
+// AddComponentBatch2 adds two components to multiple entities.
+// It returns pointers to the components in order of the input entities.
+func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*T2) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return nil, nil
+	}
+	addMask := makeMask2(id1, id2)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+
+	// Sort to group by archetype without map
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	res1 := make([]*T1, len(entities))
+	res2 := make([]*T2, len(entities))
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, addMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			if slot1 == -1 || slot2 == -1 {
+				continue
+			}
+			base1 := unsafe.Pointer(&oldArch.componentData[slot1][0])
+			base2 := unsafe.Pointer(&oldArch.componentData[slot2][0])
+			stride1 := uintptr(size1)
+			stride2 := uintptr(size2)
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				p1 := unsafe.Pointer(uintptr(base1) + uintptr(meta.Index)*stride1)
+				p2 := unsafe.Pointer(uintptr(base2) + uintptr(meta.Index)*stride2)
+				res1[gi] = (*T1)(p1)
+				res2[gi] = (*T2)(p2)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, addMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][addMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		base1 := unsafe.Pointer(&newArch.componentData[slot1][0])
+		base2 := unsafe.Pointer(&newArch.componentData[slot2][0])
+		stride1 := uintptr(size1)
+		stride2 := uintptr(size2)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			p1 := unsafe.Pointer(uintptr(base1) + uintptr(newIndex)*stride1)
+			p2 := unsafe.Pointer(uintptr(base2) + uintptr(newIndex)*stride2)
+			res1[gi] = (*T1)(p1)
+			res2[gi] = (*T2)(p2)
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+
+	return res1, res2
+}
+
+// AddComponentBatch3 adds three components to multiple entities.
+// It returns pointers to the components in order of the input entities.
+func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return nil, nil, nil
+	}
+	addMask := makeMask3(id1, id2, id3)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	res1 := make([]*T1, len(entities))
+	res2 := make([]*T2, len(entities))
+	res3 := make([]*T3, len(entities))
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, addMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 {
+				continue
+			}
+			base1 := unsafe.Pointer(&oldArch.componentData[slot1][0])
+			base2 := unsafe.Pointer(&oldArch.componentData[slot2][0])
+			base3 := unsafe.Pointer(&oldArch.componentData[slot3][0])
+			stride1 := uintptr(size1)
+			stride2 := uintptr(size2)
+			stride3 := uintptr(size3)
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				p1 := unsafe.Pointer(uintptr(base1) + uintptr(meta.Index)*stride1)
+				p2 := unsafe.Pointer(uintptr(base2) + uintptr(meta.Index)*stride2)
+				p3 := unsafe.Pointer(uintptr(base3) + uintptr(meta.Index)*stride3)
+				res1[gi] = (*T1)(p1)
+				res2[gi] = (*T2)(p2)
+				res3[gi] = (*T3)(p3)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, addMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][addMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+		base1 := unsafe.Pointer(&newArch.componentData[slot1][0])
+		base2 := unsafe.Pointer(&newArch.componentData[slot2][0])
+		base3 := unsafe.Pointer(&newArch.componentData[slot3][0])
+		stride1 := uintptr(size1)
+		stride2 := uintptr(size2)
+		stride3 := uintptr(size3)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			p1 := unsafe.Pointer(uintptr(base1) + uintptr(newIndex)*stride1)
+			p2 := unsafe.Pointer(uintptr(base2) + uintptr(newIndex)*stride2)
+			p3 := unsafe.Pointer(uintptr(base3) + uintptr(newIndex)*stride3)
+			res1[gi] = (*T1)(p1)
+			res2[gi] = (*T2)(p2)
+			res3[gi] = (*T3)(p3)
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+
+	return res1, res2, res3
+}
+
+// AddComponentBatch4 adds four components to multiple entities.
+// It returns pointers to the components in order of the input entities.
+func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3, []*T4) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return nil, nil, nil, nil
+	}
+	addMask := makeMask4(id1, id2, id3, id4)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	res1 := make([]*T1, len(entities))
+	res2 := make([]*T2, len(entities))
+	res3 := make([]*T3, len(entities))
+	res4 := make([]*T4, len(entities))
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, addMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			slot4 := oldArch.getSlot(id4)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 || slot4 == -1 {
+				continue
+			}
+			base1 := unsafe.Pointer(&oldArch.componentData[slot1][0])
+			base2 := unsafe.Pointer(&oldArch.componentData[slot2][0])
+			base3 := unsafe.Pointer(&oldArch.componentData[slot3][0])
+			base4 := unsafe.Pointer(&oldArch.componentData[slot4][0])
+			stride1 := uintptr(size1)
+			stride2 := uintptr(size2)
+			stride3 := uintptr(size3)
+			stride4 := uintptr(size4)
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				p1 := unsafe.Pointer(uintptr(base1) + uintptr(meta.Index)*stride1)
+				p2 := unsafe.Pointer(uintptr(base2) + uintptr(meta.Index)*stride2)
+				p3 := unsafe.Pointer(uintptr(base3) + uintptr(meta.Index)*stride3)
+				p4 := unsafe.Pointer(uintptr(base4) + uintptr(meta.Index)*stride4)
+				res1[gi] = (*T1)(p1)
+				res2[gi] = (*T2)(p2)
+				res3[gi] = (*T3)(p3)
+				res4[gi] = (*T4)(p4)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, addMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][addMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+		slot4 := newArch.getSlot(id4)
+		base1 := unsafe.Pointer(&newArch.componentData[slot1][0])
+		base2 := unsafe.Pointer(&newArch.componentData[slot2][0])
+		base3 := unsafe.Pointer(&newArch.componentData[slot3][0])
+		base4 := unsafe.Pointer(&newArch.componentData[slot4][0])
+		stride1 := uintptr(size1)
+		stride2 := uintptr(size2)
+		stride3 := uintptr(size3)
+		stride4 := uintptr(size4)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			p1 := unsafe.Pointer(uintptr(base1) + uintptr(newIndex)*stride1)
+			p2 := unsafe.Pointer(uintptr(base2) + uintptr(newIndex)*stride2)
+			p3 := unsafe.Pointer(uintptr(base3) + uintptr(newIndex)*stride3)
+			p4 := unsafe.Pointer(uintptr(base4) + uintptr(newIndex)*stride4)
+			res1[gi] = (*T1)(p1)
+			res2[gi] = (*T2)(p2)
+			res3[gi] = (*T3)(p3)
+			res4[gi] = (*T4)(p4)
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+
+	return res1, res2, res3, res4
+}
+
+// AddComponentBatch5 adds five components to multiple entities.
+// It returns pointers to the components in order of the input entities.
+func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3, []*T4, []*T5) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return nil, nil, nil, nil, nil
+	}
+	addMask := makeMask5(id1, id2, id3, id4, id5)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	size5 := int(componentSizes[id5])
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	res1 := make([]*T1, len(entities))
+	res2 := make([]*T2, len(entities))
+	res3 := make([]*T3, len(entities))
+	res4 := make([]*T4, len(entities))
+	res5 := make([]*T5, len(entities))
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, addMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			slot4 := oldArch.getSlot(id4)
+			slot5 := oldArch.getSlot(id5)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 || slot4 == -1 || slot5 == -1 {
+				continue
+			}
+			base1 := unsafe.Pointer(&oldArch.componentData[slot1][0])
+			base2 := unsafe.Pointer(&oldArch.componentData[slot2][0])
+			base3 := unsafe.Pointer(&oldArch.componentData[slot3][0])
+			base4 := unsafe.Pointer(&oldArch.componentData[slot4][0])
+			base5 := unsafe.Pointer(&oldArch.componentData[slot5][0])
+			stride1 := uintptr(size1)
+			stride2 := uintptr(size2)
+			stride3 := uintptr(size3)
+			stride4 := uintptr(size4)
+			stride5 := uintptr(size5)
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				p1 := unsafe.Pointer(uintptr(base1) + uintptr(meta.Index)*stride1)
+				p2 := unsafe.Pointer(uintptr(base2) + uintptr(meta.Index)*stride2)
+				p3 := unsafe.Pointer(uintptr(base3) + uintptr(meta.Index)*stride3)
+				p4 := unsafe.Pointer(uintptr(base4) + uintptr(meta.Index)*stride4)
+				p5 := unsafe.Pointer(uintptr(base5) + uintptr(meta.Index)*stride5)
+				res1[gi] = (*T1)(p1)
+				res2[gi] = (*T2)(p2)
+				res3[gi] = (*T3)(p3)
+				res4[gi] = (*T4)(p4)
+				res5[gi] = (*T5)(p5)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, addMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][addMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+		slot4 := newArch.getSlot(id4)
+		slot5 := newArch.getSlot(id5)
+		base1 := unsafe.Pointer(&newArch.componentData[slot1][0])
+		base2 := unsafe.Pointer(&newArch.componentData[slot2][0])
+		base3 := unsafe.Pointer(&newArch.componentData[slot3][0])
+		base4 := unsafe.Pointer(&newArch.componentData[slot4][0])
+		base5 := unsafe.Pointer(&newArch.componentData[slot5][0])
+		stride1 := uintptr(size1)
+		stride2 := uintptr(size2)
+		stride3 := uintptr(size3)
+		stride4 := uintptr(size4)
+		stride5 := uintptr(size5)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			p1 := unsafe.Pointer(uintptr(base1) + uintptr(newIndex)*stride1)
+			p2 := unsafe.Pointer(uintptr(base2) + uintptr(newIndex)*stride2)
+			p3 := unsafe.Pointer(uintptr(base3) + uintptr(newIndex)*stride3)
+			p4 := unsafe.Pointer(uintptr(base4) + uintptr(newIndex)*stride4)
+			p5 := unsafe.Pointer(uintptr(base5) + uintptr(newIndex)*stride5)
+			res1[gi] = (*T1)(p1)
+			res2[gi] = (*T2)(p2)
+			res3[gi] = (*T3)(p3)
+			res4[gi] = (*T4)(p4)
+			res5[gi] = (*T5)(p5)
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+
+	return res1, res2, res3, res4, res5
+}
+
 // SetComponent sets the component data for an entity.
 // If the entity does not have the component, it will be added.
 // It returns a boolean indicating success.
@@ -628,7 +1932,8 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
 
 	oldArch := meta.Archetype
-	if oldArch.mask.has(compID) {
+	addMask := makeMask1(compID)
+	if intersects(oldArch.mask, addMask) {
 		componentIndexInArchetype := oldArch.getSlot(compID)
 		if componentIndexInArchetype == -1 {
 			return false
@@ -640,15 +1945,16 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
 		return true
 	} else {
+		newMask := orMask(oldArch.mask, addMask)
 		var transition Transition
-		if addMap, ok := w.addTransitions[oldArch]; ok {
-			if tr, ok := addMap[compID]; ok {
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[addMask]; ok {
 				transition = tr
 			}
 		}
 		var newArch *Archetype
 		if transition.target == nil {
-			newMask := setMask(oldArch.mask, compID)
 			newArch = w.getOrCreateArchetype(newMask)
 			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
 			for from, id := range oldArch.componentIDs {
@@ -658,12 +1964,10 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 				}
 			}
 			transition = Transition{target: newArch, copies: copies}
-			addMap, ok := w.addTransitions[oldArch]
-			if !ok {
-				addMap = make(map[ComponentID]Transition)
-				w.addTransitions[oldArch] = addMap
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
 			}
-			addMap[compID] = transition
+			w.addTransitions[oldArch][addMask] = transition
 		} else {
 			newArch = transition.target
 		}
@@ -689,6 +1993,1233 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 	}
 }
 
+// SetComponent2 sets two components for an entity.
+// If any component is missing, it adds them; otherwise, updates existing ones.
+// It returns a boolean indicating success.
+func SetComponent2[T1 any, T2 any](w *World, e Entity, comp1 T1, comp2 T2) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+
+	oldArch := meta.Archetype
+	setMask := makeMask2(id1, id2)
+	if includesAll(oldArch.mask, setMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		if idx1 == -1 || idx2 == -1 {
+			return false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) {
+			return false
+		}
+		copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+		copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+		return true
+	} else {
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		oldIndex := meta.Index
+		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+		ids := []ComponentID{id1, id2}
+		srcs := [][]byte{src1, src2}
+		sizes := []int{size1, size2}
+		for i, id := range ids {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return false
+			}
+			bytes := newArch.componentData[idx]
+			if oldArch.mask.has(id) {
+				copy(bytes[newIndex*sizes[i]:(newIndex+1)*sizes[i]], srcs[i])
+			} else {
+				bytes = extendByteSlice(bytes, sizes[i])
+				copy(bytes[len(bytes)-sizes[i]:], srcs[i])
+				newArch.componentData[idx] = bytes
+			}
+		}
+
+		meta.Archetype = newArch
+		meta.Index = newIndex
+		w.entitiesSlice[e.ID] = meta
+
+		w.removeEntityFromArchetype(e, oldArch, oldIndex)
+		return true
+	}
+}
+
+// SetComponent3 sets three components for an entity.
+// If any component is missing, it adds them; otherwise, updates existing ones.
+// It returns a boolean indicating success.
+func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, comp1 T1, comp2 T2, comp3 T3) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+
+	oldArch := meta.Archetype
+	setMask := makeMask3(id1, id2, id3)
+	if includesAll(oldArch.mask, setMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 {
+			return false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) {
+			return false
+		}
+		copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+		copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+		copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+		return true
+	} else {
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		oldIndex := meta.Index
+		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+		ids := []ComponentID{id1, id2, id3}
+		srcs := [][]byte{src1, src2, src3}
+		sizes := []int{size1, size2, size3}
+		for i, id := range ids {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return false
+			}
+			bytes := newArch.componentData[idx]
+			if oldArch.mask.has(id) {
+				copy(bytes[newIndex*sizes[i]:(newIndex+1)*sizes[i]], srcs[i])
+			} else {
+				bytes = extendByteSlice(bytes, sizes[i])
+				copy(bytes[len(bytes)-sizes[i]:], srcs[i])
+				newArch.componentData[idx] = bytes
+			}
+		}
+
+		meta.Archetype = newArch
+		meta.Index = newIndex
+		w.entitiesSlice[e.ID] = meta
+
+		w.removeEntityFromArchetype(e, oldArch, oldIndex)
+		return true
+	}
+}
+
+// SetComponent4 sets four components for an entity.
+// If any component is missing, it adds them; otherwise, updates existing ones.
+// It returns a boolean indicating success.
+func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, comp1 T1, comp2 T2, comp3 T3, comp4 T4) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&comp4)), size4)
+
+	oldArch := meta.Archetype
+	setMask := makeMask4(id1, id2, id3, id4)
+	if includesAll(oldArch.mask, setMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		idx4 := oldArch.getSlot(id4)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 {
+			return false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		bytes4 := oldArch.componentData[idx4]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) || meta.Index*size4 >= len(bytes4) {
+			return false
+		}
+		copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+		copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+		copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+		copy(bytes4[meta.Index*size4:(meta.Index+1)*size4], src4)
+		return true
+	} else {
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		oldIndex := meta.Index
+		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+		ids := []ComponentID{id1, id2, id3, id4}
+		srcs := [][]byte{src1, src2, src3, src4}
+		sizes := []int{size1, size2, size3, size4}
+		for i, id := range ids {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return false
+			}
+			bytes := newArch.componentData[idx]
+			if oldArch.mask.has(id) {
+				copy(bytes[newIndex*sizes[i]:(newIndex+1)*sizes[i]], srcs[i])
+			} else {
+				bytes = extendByteSlice(bytes, sizes[i])
+				copy(bytes[len(bytes)-sizes[i]:], srcs[i])
+				newArch.componentData[idx] = bytes
+			}
+		}
+
+		meta.Archetype = newArch
+		meta.Index = newIndex
+		w.entitiesSlice[e.ID] = meta
+
+		w.removeEntityFromArchetype(e, oldArch, oldIndex)
+		return true
+	}
+}
+
+// SetComponent5 sets five components for an entity.
+// If any component is missing, it adds them; otherwise, updates existing ones.
+// It returns a boolean indicating success.
+func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return false
+	}
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	size5 := int(componentSizes[id5])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&comp4)), size4)
+	src5 := unsafe.Slice((*byte)(unsafe.Pointer(&comp5)), size5)
+
+	oldArch := meta.Archetype
+	setMask := makeMask5(id1, id2, id3, id4, id5)
+	if includesAll(oldArch.mask, setMask) {
+		idx1 := oldArch.getSlot(id1)
+		idx2 := oldArch.getSlot(id2)
+		idx3 := oldArch.getSlot(id3)
+		idx4 := oldArch.getSlot(id4)
+		idx5 := oldArch.getSlot(id5)
+		if idx1 == -1 || idx2 == -1 || idx3 == -1 || idx4 == -1 || idx5 == -1 {
+			return false
+		}
+		bytes1 := oldArch.componentData[idx1]
+		bytes2 := oldArch.componentData[idx2]
+		bytes3 := oldArch.componentData[idx3]
+		bytes4 := oldArch.componentData[idx4]
+		bytes5 := oldArch.componentData[idx5]
+		if meta.Index*size1 >= len(bytes1) || meta.Index*size2 >= len(bytes2) || meta.Index*size3 >= len(bytes3) || meta.Index*size4 >= len(bytes4) || meta.Index*size5 >= len(bytes5) {
+			return false
+		}
+		copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+		copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+		copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+		copy(bytes4[meta.Index*size4:(meta.Index+1)*size4], src4)
+		copy(bytes5[meta.Index*size5:(meta.Index+1)*size5], src5)
+		return true
+	} else {
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		oldIndex := meta.Index
+		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+		ids := []ComponentID{id1, id2, id3, id4, id5}
+		srcs := [][]byte{src1, src2, src3, src4, src5}
+		sizes := []int{size1, size2, size3, size4, size5}
+		for i, id := range ids {
+			idx := newArch.getSlot(id)
+			if idx == -1 {
+				return false
+			}
+			bytes := newArch.componentData[idx]
+			if oldArch.mask.has(id) {
+				copy(bytes[newIndex*sizes[i]:(newIndex+1)*sizes[i]], srcs[i])
+			} else {
+				bytes = extendByteSlice(bytes, sizes[i])
+				copy(bytes[len(bytes)-sizes[i]:], srcs[i])
+				newArch.componentData[idx] = bytes
+			}
+		}
+
+		meta.Archetype = newArch
+		meta.Index = newIndex
+		w.entitiesSlice[e.ID] = meta
+
+		w.removeEntityFromArchetype(e, oldArch, oldIndex)
+		return true
+	}
+}
+
+// SetComponentBatch sets a component to the same value for multiple entities.
+// If the component is missing in some entities, it adds it.
+// It does not return anything.
+func SetComponentBatch[T any](w *World, entities []Entity, comp T) {
+	id, ok := TryGetID[T]()
+	if !ok {
+		return
+	}
+	setMask := makeMask1(id)
+	size := int(componentSizes[id])
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, setMask) {
+			slot := oldArch.getSlot(id)
+			if slot == -1 {
+				continue
+			}
+			bytes := oldArch.componentData[slot]
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot := newArch.getSlot(id)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				srcCopy := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
+			}
+
+			// Set the component
+			bytes := newArch.componentData[slot]
+			dstStart := len(bytes) - num*size + j*size
+			copy(bytes[dstStart:dstStart+size], src)
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// SetComponentBatch2 sets two components to the same values for multiple entities.
+// If any component is missing in some entities, it adds them.
+// It does not return anything.
+func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, comp1 T1, comp2 T2) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return
+	}
+	setMask := makeMask2(id1, id2)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, setMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			if slot1 == -1 || slot2 == -1 {
+				continue
+			}
+			bytes1 := oldArch.componentData[slot1]
+			bytes2 := oldArch.componentData[slot2]
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+				copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				srcCopy := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
+			}
+
+			// Set the components
+			bytes1 := newArch.componentData[slot1]
+			dstStart1 := len(bytes1) - num*size1 + j*size1
+			copy(bytes1[dstStart1:dstStart1+size1], src1)
+			bytes2 := newArch.componentData[slot2]
+			dstStart2 := len(bytes2) - num*size2 + j*size2
+			copy(bytes2[dstStart2:dstStart2+size2], src2)
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// SetComponentBatch3 sets three components to the same values for multiple entities.
+// If any component is missing in some entities, it adds them.
+// It does not return anything.
+func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, comp1 T1, comp2 T2, comp3 T3) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return
+	}
+	setMask := makeMask3(id1, id2, id3)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, setMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 {
+				continue
+			}
+			bytes1 := oldArch.componentData[slot1]
+			bytes2 := oldArch.componentData[slot2]
+			bytes3 := oldArch.componentData[slot3]
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+				copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+				copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				srcCopy := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
+			}
+
+			bytes1 := newArch.componentData[slot1]
+			dstStart1 := len(bytes1) - num*size1 + j*size1
+			copy(bytes1[dstStart1:dstStart1+size1], src1)
+			bytes2 := newArch.componentData[slot2]
+			dstStart2 := len(bytes2) - num*size2 + j*size2
+			copy(bytes2[dstStart2:dstStart2+size2], src2)
+			bytes3 := newArch.componentData[slot3]
+			dstStart3 := len(bytes3) - num*size3 + j*size3
+			copy(bytes3[dstStart3:dstStart3+size3], src3)
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// SetComponentBatch4 sets four components to the same values for multiple entities.
+// If any component is missing in some entities, it adds them.
+// It does not return anything.
+func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Entity, comp1 T1, comp2 T2, comp3 T3, comp4 T4) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return
+	}
+	setMask := makeMask4(id1, id2, id3, id4)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&comp4)), size4)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, setMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			slot4 := oldArch.getSlot(id4)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 || slot4 == -1 {
+				continue
+			}
+			bytes1 := oldArch.componentData[slot1]
+			bytes2 := oldArch.componentData[slot2]
+			bytes3 := oldArch.componentData[slot3]
+			bytes4 := oldArch.componentData[slot4]
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+				copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+				copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+				copy(bytes4[meta.Index*size4:(meta.Index+1)*size4], src4)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+		slot4 := newArch.getSlot(id4)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				srcCopy := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
+			}
+
+			bytes1 := newArch.componentData[slot1]
+			dstStart1 := len(bytes1) - num*size1 + j*size1
+			copy(bytes1[dstStart1:dstStart1+size1], src1)
+			bytes2 := newArch.componentData[slot2]
+			dstStart2 := len(bytes2) - num*size2 + j*size2
+			copy(bytes2[dstStart2:dstStart2+size2], src2)
+			bytes3 := newArch.componentData[slot3]
+			dstStart3 := len(bytes3) - num*size3 + j*size3
+			copy(bytes3[dstStart3:dstStart3+size3], src3)
+			bytes4 := newArch.componentData[slot4]
+			dstStart4 := len(bytes4) - num*size4 + j*size4
+			copy(bytes4[dstStart4:dstStart4+size4], src4)
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// SetComponentBatch5 sets five components to the same values for multiple entities.
+// If any component is missing in some entities, it adds them.
+// It does not return anything.
+func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entities []Entity, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return
+	}
+	setMask := makeMask5(id1, id2, id3, id4, id5)
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	size5 := int(componentSizes[id5])
+	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&comp1)), size1)
+	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&comp2)), size2)
+	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&comp3)), size3)
+	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&comp4)), size4)
+	src5 := unsafe.Slice((*byte)(unsafe.Pointer(&comp5)), size5)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if includesAll(oldArch.mask, setMask) {
+			slot1 := oldArch.getSlot(id1)
+			slot2 := oldArch.getSlot(id2)
+			slot3 := oldArch.getSlot(id3)
+			slot4 := oldArch.getSlot(id4)
+			slot5 := oldArch.getSlot(id5)
+			if slot1 == -1 || slot2 == -1 || slot3 == -1 || slot4 == -1 || slot5 == -1 {
+				continue
+			}
+			bytes1 := oldArch.componentData[slot1]
+			bytes2 := oldArch.componentData[slot2]
+			bytes3 := oldArch.componentData[slot3]
+			bytes4 := oldArch.componentData[slot4]
+			bytes5 := oldArch.componentData[slot5]
+			for k := start; k < i; k++ {
+				gi := temp[k].idx
+				meta := w.entitiesSlice[entities[gi].ID]
+				copy(bytes1[meta.Index*size1:(meta.Index+1)*size1], src1)
+				copy(bytes2[meta.Index*size2:(meta.Index+1)*size2], src2)
+				copy(bytes3[meta.Index*size3:(meta.Index+1)*size3], src3)
+				copy(bytes4[meta.Index*size4:(meta.Index+1)*size4], src4)
+				copy(bytes5[meta.Index*size5:(meta.Index+1)*size5], src5)
+			}
+			continue
+		}
+
+		newMask := orMask(oldArch.mask, setMask)
+		var transition Transition
+		addMap, ok := w.addTransitions[oldArch]
+		if ok {
+			if tr, ok := addMap[setMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.addTransitions[oldArch]; !ok {
+				w.addTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.addTransitions[oldArch][setMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, id := range newArch.componentIDs {
+			csize := int(componentSizes[id])
+			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
+		}
+
+		slot1 := newArch.getSlot(id1)
+		slot2 := newArch.getSlot(id2)
+		slot3 := newArch.getSlot(id3)
+		slot4 := newArch.getSlot(id4)
+		slot5 := newArch.getSlot(id5)
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				srcCopy := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
+			}
+
+			bytes1 := newArch.componentData[slot1]
+			dstStart1 := len(bytes1) - num*size1 + j*size1
+			copy(bytes1[dstStart1:dstStart1+size1], src1)
+			bytes2 := newArch.componentData[slot2]
+			dstStart2 := len(bytes2) - num*size2 + j*size2
+			copy(bytes2[dstStart2:dstStart2+size2], src2)
+			bytes3 := newArch.componentData[slot3]
+			dstStart3 := len(bytes3) - num*size3 + j*size3
+			copy(bytes3[dstStart3:dstStart3+size3], src3)
+			bytes4 := newArch.componentData[slot4]
+			dstStart4 := len(bytes4) - num*size4 + j*size4
+			copy(bytes4[dstStart4:dstStart4+size4], src4)
+			bytes5 := newArch.componentData[slot5]
+			dstStart5 := len(bytes5) - num*size5 + j*size5
+			copy(bytes5[dstStart5:dstStart5+size5], src5)
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
 // RemoveComponent removes a component of type T from an entity.
 // It returns a boolean indicating whether the component was successfully removed.
 // If the entity does not have the component, it returns true.
@@ -707,25 +3238,28 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 	}
 
 	oldArch := meta.Archetype
-	if !oldArch.mask.has(compID) {
+	removeMask := makeMask1(compID)
+	if !intersects(oldArch.mask, removeMask) {
 		return true
 	}
 
 	oldIndex := meta.Index
 
+	newMask := andNotMask(oldArch.mask, removeMask)
+
 	var transition Transition
-	if removeMap, ok := w.removeTransitions[oldArch]; ok {
-		if tr, ok := removeMap[compID]; ok {
+	removeMap, ok := w.removeTransitions[oldArch]
+	if ok {
+		if tr, ok := removeMap[removeMask]; ok {
 			transition = tr
 		}
 	}
 	var newArch *Archetype
 	if transition.target == nil {
-		newMask := unsetMask(oldArch.mask, compID)
 		newArch = w.getOrCreateArchetype(newMask)
 		copies := make([]CopyOp, 0, len(oldArch.componentIDs)-1)
 		for from, id := range oldArch.componentIDs {
-			if id == compID {
+			if removeMask.has(id) {
 				continue
 			}
 			to := newArch.getSlot(id)
@@ -734,12 +3268,10 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 			}
 		}
 		transition = Transition{target: newArch, copies: copies}
-		removeMap, ok := w.removeTransitions[oldArch]
-		if !ok {
-			removeMap = make(map[ComponentID]Transition)
-			w.removeTransitions[oldArch] = removeMap
+		if _, ok := w.removeTransitions[oldArch]; !ok {
+			w.removeTransitions[oldArch] = make(map[maskType]Transition)
 		}
-		removeMap[compID] = transition
+		w.removeTransitions[oldArch][removeMask] = transition
 	} else {
 		newArch = transition.target
 	}
@@ -753,6 +3285,911 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 	w.removeEntityFromArchetype(e, oldArch, oldIndex)
 
 	return true
+}
+
+// RemoveComponent2 removes two components from an entity if present.
+// It returns a boolean indicating success.
+func RemoveComponent2[T1 any, T2 any](w *World, e Entity) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return false
+	}
+
+	oldArch := meta.Archetype
+	removeMask := makeMask2(id1, id2)
+	if !intersects(oldArch.mask, removeMask) {
+		return true
+	}
+
+	oldIndex := meta.Index
+
+	newMask := andNotMask(oldArch.mask, removeMask)
+
+	var transition Transition
+	removeMap, ok := w.removeTransitions[oldArch]
+	if ok {
+		if tr, ok := removeMap[removeMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			if removeMask.has(id) {
+				continue
+			}
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.removeTransitions[oldArch]; !ok {
+			w.removeTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.removeTransitions[oldArch][removeMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	return true
+}
+
+// RemoveComponent3 removes three components from an entity if present.
+// It returns a boolean indicating success.
+func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return false
+	}
+
+	oldArch := meta.Archetype
+	removeMask := makeMask3(id1, id2, id3)
+	if !intersects(oldArch.mask, removeMask) {
+		return true
+	}
+
+	oldIndex := meta.Index
+
+	newMask := andNotMask(oldArch.mask, removeMask)
+
+	var transition Transition
+	removeMap, ok := w.removeTransitions[oldArch]
+	if ok {
+		if tr, ok := removeMap[removeMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			if removeMask.has(id) {
+				continue
+			}
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.removeTransitions[oldArch]; !ok {
+			w.removeTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.removeTransitions[oldArch][removeMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	return true
+}
+
+// RemoveComponent4 removes four components from an entity if present.
+// It returns a boolean indicating success.
+func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return false
+	}
+
+	oldArch := meta.Archetype
+	removeMask := makeMask4(id1, id2, id3, id4)
+	if !intersects(oldArch.mask, removeMask) {
+		return true
+	}
+
+	oldIndex := meta.Index
+
+	newMask := andNotMask(oldArch.mask, removeMask)
+
+	var transition Transition
+	removeMap, ok := w.removeTransitions[oldArch]
+	if ok {
+		if tr, ok := removeMap[removeMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			if removeMask.has(id) {
+				continue
+			}
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.removeTransitions[oldArch]; !ok {
+			w.removeTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.removeTransitions[oldArch][removeMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	return true
+}
+
+// RemoveComponent5 removes five components from an entity if present.
+// It returns a boolean indicating success.
+func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) bool {
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return false
+	}
+
+	oldArch := meta.Archetype
+	removeMask := makeMask5(id1, id2, id3, id4, id5)
+	if !intersects(oldArch.mask, removeMask) {
+		return true
+	}
+
+	oldIndex := meta.Index
+
+	newMask := andNotMask(oldArch.mask, removeMask)
+
+	var transition Transition
+	removeMap, ok := w.removeTransitions[oldArch]
+	if ok {
+		if tr, ok := removeMap[removeMask]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			if removeMask.has(id) {
+				continue
+			}
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		if _, ok := w.removeTransitions[oldArch]; !ok {
+			w.removeTransitions[oldArch] = make(map[maskType]Transition)
+		}
+		w.removeTransitions[oldArch][removeMask] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+
+	meta.Archetype = newArch
+	meta.Index = newIndex
+	w.entitiesSlice[e.ID] = meta
+
+	w.removeEntityFromArchetype(e, oldArch, oldIndex)
+
+	return true
+}
+
+// removePair is used for batch removals.
+type removePair struct {
+	index int
+	e     Entity
+}
+
+// RemoveComponentBatch removes a component from multiple entities if present.
+func RemoveComponentBatch[T any](w *World, entities []Entity) {
+	id, ok := TryGetID[T]()
+	if !ok {
+		return
+	}
+	removeMask := makeMask1(id)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if !intersects(oldArch.mask, removeMask) {
+			continue
+		}
+
+		newMask := andNotMask(oldArch.mask, removeMask)
+		var transition Transition
+		removeMap, ok := w.removeTransitions[oldArch]
+		if ok {
+			if tr, ok := removeMap[removeMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				if removeMask.has(id) {
+					continue
+				}
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.removeTransitions[oldArch]; !ok {
+				w.removeTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.removeTransitions[oldArch][removeMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, op := range transition.copies {
+			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
+		}
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// RemoveComponentBatch2 removes two components from multiple entities if present.
+func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return
+	}
+	removeMask := makeMask2(id1, id2)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if !intersects(oldArch.mask, removeMask) {
+			continue
+		}
+
+		newMask := andNotMask(oldArch.mask, removeMask)
+		var transition Transition
+		removeMap, ok := w.removeTransitions[oldArch]
+		if ok {
+			if tr, ok := removeMap[removeMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				if removeMask.has(id) {
+					continue
+				}
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.removeTransitions[oldArch]; !ok {
+				w.removeTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.removeTransitions[oldArch][removeMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, op := range transition.copies {
+			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
+		}
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// RemoveComponentBatch3 removes three components from multiple entities if present.
+func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return
+	}
+	removeMask := makeMask3(id1, id2, id3)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if !intersects(oldArch.mask, removeMask) {
+			continue
+		}
+
+		newMask := andNotMask(oldArch.mask, removeMask)
+		var transition Transition
+		removeMap, ok := w.removeTransitions[oldArch]
+		if ok {
+			if tr, ok := removeMap[removeMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				if removeMask.has(id) {
+					continue
+				}
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.removeTransitions[oldArch]; !ok {
+				w.removeTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.removeTransitions[oldArch][removeMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, op := range transition.copies {
+			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
+		}
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// RemoveComponentBatch4 removes four components from multiple entities if present.
+func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Entity) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return
+	}
+	removeMask := makeMask4(id1, id2, id3, id4)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if !intersects(oldArch.mask, removeMask) {
+			continue
+		}
+
+		newMask := andNotMask(oldArch.mask, removeMask)
+		var transition Transition
+		removeMap, ok := w.removeTransitions[oldArch]
+		if ok {
+			if tr, ok := removeMap[removeMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				if removeMask.has(id) {
+					continue
+				}
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.removeTransitions[oldArch]; !ok {
+				w.removeTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.removeTransitions[oldArch][removeMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, op := range transition.copies {
+			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
+		}
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
+}
+
+// RemoveComponentBatch5 removes five components from multiple entities if present.
+func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entities []Entity) {
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return
+	}
+	removeMask := makeMask5(id1, id2, id3, id4, id5)
+
+	type entry struct {
+		idx  int
+		arch *Archetype
+	}
+	temp := make([]entry, len(entities))
+	numValid := 0
+	for i, e := range entities {
+		if int(e.ID) >= len(w.entitiesSlice) {
+			continue
+		}
+		meta := w.entitiesSlice[e.ID]
+		if meta.Version != e.Version {
+			continue
+		}
+		temp[numValid] = entry{idx: i, arch: meta.Archetype}
+		numValid++
+	}
+	temp = temp[:numValid]
+	sort.Slice(temp, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
+	})
+
+	var pairs []removePair
+
+	i := 0
+	for i < numValid {
+		oldArch := temp[i].arch
+		start := i
+		for i < numValid && temp[i].arch == oldArch {
+			i++
+		}
+		groupSize := i - start
+		if groupSize == 0 {
+			continue
+		}
+
+		if !intersects(oldArch.mask, removeMask) {
+			continue
+		}
+
+		newMask := andNotMask(oldArch.mask, removeMask)
+		var transition Transition
+		removeMap, ok := w.removeTransitions[oldArch]
+		if ok {
+			if tr, ok := removeMap[removeMask]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				if removeMask.has(id) {
+					continue
+				}
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			if _, ok := w.removeTransitions[oldArch]; !ok {
+				w.removeTransitions[oldArch] = make(map[maskType]Transition)
+			}
+			w.removeTransitions[oldArch][removeMask] = transition
+		} else {
+			newArch = transition.target
+		}
+
+		num := groupSize
+		startNew := len(newArch.entities)
+		newArch.entities = extendSlice(newArch.entities, num)
+
+		for _, op := range transition.copies {
+			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
+		}
+
+		pairs = pairs[:0]
+		pairs = extendSlice(pairs, num)
+
+		j := 0
+		for k := start; k < i; k++ {
+			gi := temp[k].idx
+			e := entities[gi]
+			meta := w.entitiesSlice[e.ID]
+			oldIndex := meta.Index
+			newIndex := startNew + j
+			newArch.entities[newIndex] = e
+
+			for _, op := range transition.copies {
+				oldBytes := oldArch.componentData[op.from]
+				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
+				dstBytes := newArch.componentData[op.to]
+				dstStart := len(dstBytes) - num*op.size + j*op.size
+				copy(dstBytes[dstStart:dstStart+op.size], src)
+			}
+
+			meta.Archetype = newArch
+			meta.Index = newIndex
+			w.entitiesSlice[e.ID] = meta
+
+			pairs[j] = removePair{index: oldIndex, e: e}
+			j++
+		}
+
+		sort.Slice(pairs, func(a, b int) bool {
+			return pairs[a].index > pairs[b].index
+		})
+		for _, pair := range pairs {
+			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
+		}
+	}
 }
 
 // GetComponent retrieves a pointer to the component of type T for the given entity.
