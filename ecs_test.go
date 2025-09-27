@@ -787,32 +787,6 @@ func BenchmarkRemoveEntities(b *testing.B) {
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkQuery$ . -count 1
-func BenchmarkQuery(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-	lazyecs.RegisterComponent[Velocity]()
-
-	entities := world.CreateEntities(numEntities)
-	for _, e := range entities {
-		lazyecs.AddComponent[Position](world, e)
-		lazyecs.AddComponent[Velocity](world, e)
-	}
-
-	query := lazyecs.CreateQuery[Position](world)
-	for b.Loop() {
-		query.Reset()
-		for query.Next() {
-			pos := query.Get()
-			pos.X += 1
-		}
-	}
-}
-
 // go test -benchmem -run=^$ -bench ^BenchmarkBatchCreationTo_Preallocated$ . -count 1
 func BenchmarkBatchCreationTo_Preallocated(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
@@ -844,5 +818,31 @@ func BenchmarkBatchCreationWithComponentsTo_Preallocated(b *testing.B) {
 	for b.Loop() {
 		dst = dst[:0]
 		_ = batch.CreateEntitiesWithComponentsTo(numEntities, dst, pos)
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkQuery$ . -count 1
+func BenchmarkQuery(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: initialCapacity,
+	})
+
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	lazyecs.RegisterComponent[Velocity]()
+
+	entities := world.CreateEntities(numEntities)
+	for _, e := range entities {
+		lazyecs.AddComponent[Position](world, e)
+		lazyecs.AddComponent[Velocity](world, e)
+	}
+
+	query := lazyecs.CreateQuery[Position](world)
+	for b.Loop() {
+		query.Reset()
+		for query.Next() {
+			pos := query.Get()
+			pos.X += 1
+		}
 	}
 }
