@@ -240,17 +240,32 @@ type WorldOptions struct {
 	InitialCapacity int // The initial capacity for entities and components.
 }
 
+// Transition caches the target archetype and precomputed copy operations for a transition.
+type Transition struct {
+	target *Archetype
+	copies []CopyOp
+}
+
+// CopyOp defines a single component copy operation from old to new archetype.
+type CopyOp struct {
+	from int // Slot in old archetype's componentData.
+	to   int // Slot in new archetype's componentData.
+	size int // Size of the component in bytes.
+}
+
 // World manages all entities, components, and systems.
 type World struct {
-	nextEntityID    uint32                  // The next available entity ID.
-	freeEntityIDs   []uint32                // A list of freed entity IDs to be recycled.
-	entitiesSlice   []entityMeta            // A slice mapping entity IDs to their metadata.
-	archetypes      map[maskType]*Archetype // A map of component masks to archetypes.
-	archetypesList  []*Archetype            // A list of all archetypes.
-	toRemove        []Entity                // A list of entities to be removed.
-	removeSet       []Entity                // A set of entities to be removed in the current frame.
-	Resources       sync.Map                // A map for storing global resources.
-	initialCapacity int                     // The initial capacity for new archetypes.
+	nextEntityID      uint32                                    // The next available entity ID.
+	freeEntityIDs     []uint32                                  // A list of freed entity IDs to be recycled.
+	entitiesSlice     []entityMeta                              // A slice mapping entity IDs to their metadata.
+	archetypes        map[maskType]*Archetype                   // A map of component masks to archetypes.
+	archetypesList    []*Archetype                              // A list of all archetypes.
+	toRemove          []Entity                                  // A list of entities to be removed.
+	removeSet         []Entity                                  // A set of entities to be removed in the current frame.
+	Resources         sync.Map                                  // A map for storing global resources.
+	initialCapacity   int                                       // The initial capacity for new archetypes.
+	addTransitions    map[*Archetype]map[ComponentID]Transition // Cache for add component transitions with precomputed copies.
+	removeTransitions map[*Archetype]map[ComponentID]Transition // Cache for remove component transitions with precomputed copies.
 }
 
 // NewWorld creates a new World with default options.
@@ -265,13 +280,15 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 		cap = opts.InitialCapacity
 	}
 	w := &World{
-		entitiesSlice:   make([]entityMeta, 0, cap),
-		archetypes:      make(map[maskType]*Archetype, 32),
-		archetypesList:  make([]*Archetype, 0, 64),
-		toRemove:        make([]Entity, 0, cap),
-		removeSet:       make([]Entity, 0, cap),
-		freeEntityIDs:   make([]uint32, 0, cap),
-		initialCapacity: cap,
+		entitiesSlice:     make([]entityMeta, 0, cap),
+		archetypes:        make(map[maskType]*Archetype, 32),
+		archetypesList:    make([]*Archetype, 0, 64),
+		toRemove:          make([]Entity, 0, cap),
+		removeSet:         make([]Entity, 0, cap),
+		freeEntityIDs:     make([]uint32, 0, cap),
+		initialCapacity:   cap,
+		addTransitions:    make(map[*Archetype]map[ComponentID]Transition),
+		removeTransitions: make(map[*Archetype]map[ComponentID]Transition),
 	}
 	w.getOrCreateArchetype(maskType{})
 	return w
@@ -541,11 +558,36 @@ func AddComponent[T any](w *World, e Entity) (*T, bool) {
 		return (*T)(unsafe.Pointer(&bytes[meta.Index*size])), true
 	}
 
-	newMask := setMask(oldArch.mask, compID)
-	newArch := w.getOrCreateArchetype(newMask)
+	var transition Transition
+	if addMap, ok := w.addTransitions[oldArch]; ok {
+		if tr, ok := addMap[compID]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newMask := setMask(oldArch.mask, compID)
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+		for from, id := range oldArch.componentIDs {
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		addMap, ok := w.addTransitions[oldArch]
+		if !ok {
+			addMap = make(map[ComponentID]Transition)
+			w.addTransitions[oldArch] = addMap
+		}
+		addMap[compID] = transition
+	} else {
+		newArch = transition.target
+	}
 
 	oldIndex := meta.Index
-	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch)
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
 
 	newIdx := newArch.getSlot(compID)
 	if newIdx == -1 {
@@ -598,11 +640,36 @@ func SetComponent[T any](w *World, e Entity, comp T) bool {
 		copy(bytes[meta.Index*size:(meta.Index+1)*size], src)
 		return true
 	} else {
-		newMask := setMask(oldArch.mask, compID)
-		newArch := w.getOrCreateArchetype(newMask)
+		var transition Transition
+		if addMap, ok := w.addTransitions[oldArch]; ok {
+			if tr, ok := addMap[compID]; ok {
+				transition = tr
+			}
+		}
+		var newArch *Archetype
+		if transition.target == nil {
+			newMask := setMask(oldArch.mask, compID)
+			newArch = w.getOrCreateArchetype(newMask)
+			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
+			for from, id := range oldArch.componentIDs {
+				to := newArch.getSlot(id)
+				if to >= 0 {
+					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+				}
+			}
+			transition = Transition{target: newArch, copies: copies}
+			addMap, ok := w.addTransitions[oldArch]
+			if !ok {
+				addMap = make(map[ComponentID]Transition)
+				w.addTransitions[oldArch] = addMap
+			}
+			addMap[compID] = transition
+		} else {
+			newArch = transition.target
+		}
 
 		oldIndex := meta.Index
-		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch)
+		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
 
 		newCompIdx := newArch.getSlot(compID)
 		if newCompIdx == -1 {
@@ -645,10 +712,39 @@ func RemoveComponent[T any](w *World, e Entity) bool {
 	}
 
 	oldIndex := meta.Index
-	newMask := unsetMask(oldArch.mask, compID)
-	newArch := w.getOrCreateArchetype(newMask)
 
-	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, compID)
+	var transition Transition
+	if removeMap, ok := w.removeTransitions[oldArch]; ok {
+		if tr, ok := removeMap[compID]; ok {
+			transition = tr
+		}
+	}
+	var newArch *Archetype
+	if transition.target == nil {
+		newMask := unsetMask(oldArch.mask, compID)
+		newArch = w.getOrCreateArchetype(newMask)
+		copies := make([]CopyOp, 0, len(oldArch.componentIDs)-1)
+		for from, id := range oldArch.componentIDs {
+			if id == compID {
+				continue
+			}
+			to := newArch.getSlot(id)
+			if to >= 0 {
+				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
+			}
+		}
+		transition = Transition{target: newArch, copies: copies}
+		removeMap, ok := w.removeTransitions[oldArch]
+		if !ok {
+			removeMap = make(map[ComponentID]Transition)
+			w.removeTransitions[oldArch] = removeMap
+		}
+		removeMap[compID] = transition
+	} else {
+		newArch = transition.target
+	}
+
+	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
 
 	meta.Archetype = newArch
 	meta.Index = newIndex
@@ -689,51 +785,21 @@ func GetComponent[T any](w *World, e Entity) (*T, bool) {
 }
 
 // moveEntityBetweenArchetypes moves an entity from an old archetype to a new one.
-// It copies all component data, except for the components specified in excludeIDs.
+// It copies component data using the precomputed list of copy operations.
 // It returns the new index of the entity in the new archetype.
-func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, excludeIDs ...ComponentID) int {
+func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, copies []CopyOp) int {
 	newIndex := len(newArch.entities)
 	newArch.entities = extendSlice(newArch.entities, 1)
 	newArch.entities[newIndex] = e
 
-	exLen := len(excludeIDs)
-	if exLen == 0 {
-		for i := range oldArch.componentIDs {
-			id := oldArch.componentIDs[i]
-			oldBytes := oldArch.componentData[i]
-			size := int(componentSizes[id])
-			src := oldBytes[oldIndex*size : (oldIndex+1)*size]
-			newIdx := newArch.getSlot(id)
-			if newIdx == -1 {
-				continue
-			}
-			newBytes := newArch.componentData[newIdx]
-			newBytes = extendByteSlice(newBytes, size)
-			copy(newBytes[len(newBytes)-size:], src)
-			newArch.componentData[newIdx] = newBytes
-		}
-	} else {
-		var exclude [maxComponentTypes]bool
-		for _, id := range excludeIDs {
-			exclude[id] = true
-		}
-		for i := range oldArch.componentIDs {
-			id := oldArch.componentIDs[i]
-			if exclude[id] {
-				continue
-			}
-			oldBytes := oldArch.componentData[i]
-			size := int(componentSizes[id])
-			src := oldBytes[oldIndex*size : (oldIndex+1)*size]
-			newIdx := newArch.getSlot(id)
-			if newIdx == -1 {
-				continue
-			}
-			newBytes := newArch.componentData[newIdx]
-			newBytes = extendByteSlice(newBytes, size)
-			copy(newBytes[len(newBytes)-size:], src)
-			newArch.componentData[newIdx] = newBytes
-		}
+	for _, op := range copies {
+		oldBytes := oldArch.componentData[op.from]
+		size := op.size
+		src := oldBytes[oldIndex*size : (oldIndex+1)*size]
+		newBytes := newArch.componentData[op.to]
+		newBytes = extendByteSlice(newBytes, size)
+		copy(newBytes[len(newBytes)-size:], src)
+		newArch.componentData[op.to] = newBytes
 	}
 	return newIndex
 }

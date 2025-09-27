@@ -290,11 +290,12 @@ func TestComponentDataIntegrityAfterSwapAndPop(t *testing.T) {
 }
 
 const numEntities = 100000
+const initialCapacity = 100000
 
 // go test -benchmem -run=^$ -bench ^BenchmarkAddComponent$ . -count 1
 func BenchmarkAddComponent(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: 100000,
+		InitialCapacity: initialCapacity,
 	})
 
 	lazyecs.ResetGlobalRegistry()
@@ -309,10 +310,28 @@ func BenchmarkAddComponent(b *testing.B) {
 	}
 }
 
+// go test -benchmem -run=^$ -bench ^BenchmarkSetComponent$ . -count 1
+func BenchmarkSetComponent(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: initialCapacity,
+	})
+
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+
+	entities := world.CreateEntities(numEntities)
+
+	for b.Loop() {
+		for _, e := range entities {
+			lazyecs.SetComponent(world, e, Position{X: 10, Y: 10})
+		}
+	}
+}
+
 // go test -benchmem -run=^$ -bench ^BenchmarkRemoveComponent$ . -count 1
 func BenchmarkRemoveComponent(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: 100000,
+		InitialCapacity: initialCapacity,
 	})
 
 	lazyecs.ResetGlobalRegistry()
@@ -333,7 +352,7 @@ func BenchmarkRemoveComponent(b *testing.B) {
 // go test -benchmem -run=^$ -bench ^BenchmarkAddEntities$ . -count 1
 func BenchmarkAddEntities(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: 100000,
+		InitialCapacity: initialCapacity,
 	})
 
 	for b.Loop() {
@@ -344,7 +363,7 @@ func BenchmarkAddEntities(b *testing.B) {
 // go test -benchmem -run=^$ -bench ^BenchmarkRemoveEntities$ . -count 1
 func BenchmarkRemoveEntities(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: 100000,
+		InitialCapacity: initialCapacity,
 	})
 
 	entities := world.CreateEntities(numEntities)
@@ -359,7 +378,7 @@ func BenchmarkRemoveEntities(b *testing.B) {
 // go test -benchmem -run=^$ -bench ^BenchmarkQuery$ . -count 1
 func BenchmarkQuery(b *testing.B) {
 	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: 100000,
+		InitialCapacity: initialCapacity,
 	})
 
 	lazyecs.ResetGlobalRegistry()
