@@ -58,7 +58,7 @@ func main() {
 		maxN = n
 	}
 
-	templates := []string{"batch.go.tpl", "get_component.go.tpl", "operations.go.tpl", "query.go.tpl", "batch_operations.go.tpl"}
+	templates := []string{"batch_generated.go.tpl", "component_generated.go.tpl", "api_generated.go.tpl", "query_generated.go.tpl"}
 	templateDir := "templates"
 	outputDir := "."
 
@@ -77,11 +77,9 @@ func main() {
 		_, _ = outFile.WriteString("package lazyecs\n\n")
 
 		switch tplFile {
-		case "batch.go.tpl", "get_component.go.tpl", "query.go.tpl":
+		case "query_generated.go.tpl", "component_generated.go.tpl", "api_generated.go.tpl":
 			_, _ = outFile.WriteString("import \"unsafe\"\n")
-		case "operations.go.tpl":
-			_, _ = outFile.WriteString("import \"unsafe\"\n")
-		case "batch_operations.go.tpl":
+		case "batch_generated.go.tpl":
 			_, _ = outFile.WriteString("import (\n\t\"sort\"\n\t\"unsafe\"\n)\n")
 		}
 

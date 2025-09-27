@@ -832,12 +832,10 @@ func BenchmarkQuery(b *testing.B) {
 	lazyecs.RegisterComponent[Velocity]()
 
 	entities := world.CreateEntities(numEntities)
-	for _, e := range entities {
-		lazyecs.AddComponent[Position](world, e)
-		lazyecs.AddComponent[Velocity](world, e)
-	}
+	lazyecs.AddComponentBatch2[Position, Velocity](world, entities)
 
 	query := lazyecs.CreateQuery[Position](world)
+
 	for b.Loop() {
 		query.Reset()
 		for query.Next() {
