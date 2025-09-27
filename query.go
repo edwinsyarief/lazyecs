@@ -5,15 +5,15 @@ import "unsafe"
 // Query is an iterator over entities that have a specific set of components.
 type Query[T any] struct {
 	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	id1           ComponentID
-	archIdx       int
-	index         int
 	currentArch   *Archetype
 	base1         unsafe.Pointer
+	includeMask   maskType
+	excludeMask   maskType
+	archIdx       int
+	index         int
 	stride1       uintptr
 	currentEntity Entity
+	id1           ComponentID
 }
 
 // CreateQuery creates a new query for entities with one specific component type.

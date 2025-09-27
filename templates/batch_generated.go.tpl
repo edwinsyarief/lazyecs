@@ -1,3 +1,124 @@
+// Batch{{.N}} provides a way to create entities with a pre-defined set of components.
+type Batch{{.N}}[{{.Types}}] struct {
+	world *World
+	arch  *Archetype
+	{{range .Components}}id{{.Index}} ComponentID
+	{{end}}
+	{{range .Components}}size{{.Index}} int
+	{{end}}
+}
+
+// CreateBatch{{.N}} creates a new Batch for creating entities with {{.N}} component types.
+func CreateBatch{{.N}}[{{.Types}}](w *World) *Batch{{.N}}[{{.TypeVars}}] {
+	{{range .Components}}id{{.Index}}, ok{{.Index}} := TryGetID[{{.TypeName}}]()
+	{{end}}
+	if {{.OKIDs}} {
+		panic("component in CreateBatch{{.N}} is not registered")
+	}
+	mask := makeMask{{.N}}({{.IDs}})
+	arch := w.getOrCreateArchetype(mask)
+	return &Batch{{.N}}[{{.TypeVars}}]{
+		world: w,
+		arch:  arch,
+		{{range .Components}}id{{.Index}}:   id{{.Index}},
+		{{end}}
+		{{range .Components}}size{{.Index}}: int(componentSizes[id{{.Index}}]),
+		{{end}}
+	}
+}
+
+// CreateEntities creates a specified number of entities with the batch's components.
+func (self *Batch{{.N}}[{{.TypeVars}}]) CreateEntities(count int) []Entity {
+	return self.CreateEntitiesTo(count, nil)
+}
+
+// CreateEntitiesTo creates entities and appends them to the destination slice.
+func (self *Batch{{.N}}[{{.TypeVars}}]) CreateEntitiesTo(count int, dst []Entity) []Entity {
+	if count <= 0 {
+		return dst
+	}
+	w := self.world
+	arch := self.arch
+
+	startLen := len(dst)
+	dst = extendSlice(dst, count)
+	entities := dst[startLen:]
+
+	startIndex := len(arch.entities)
+	arch.entities = extendSlice(arch.entities, count)
+
+	{{range .Components}}arch.componentData[arch.getSlot(self.id{{.Index}})] = extendByteSlice(arch.componentData[arch.getSlot(self.id{{.Index}})], count*self.size{{.Index}})
+	{{end}}
+
+	maxID := uint32(0)
+	for i := 0; i < count; i++ {
+		var id uint32
+		if len(w.freeEntityIDs) > 0 {
+			id = w.freeEntityIDs[len(w.freeEntityIDs)-1]
+			w.freeEntityIDs = w.freeEntityIDs[:len(w.freeEntityIDs)-1]
+		} else {
+			id = w.nextEntityID
+			w.nextEntityID++
+		}
+		if id > maxID {
+			maxID = id
+		}
+		version := uint32(1)
+		if int(id) < len(w.entitiesSlice) {
+			version = w.entitiesSlice[id].Version + 1
+			if version == 0 {
+				version = 1
+			}
+		}
+		e := Entity{ID: id, Version: version}
+		entities[i] = e
+		arch.entities[startIndex+i] = e
+	}
+
+	if int(maxID) >= len(w.entitiesSlice) {
+		w.entitiesSlice = extendSlice(w.entitiesSlice, int(maxID)-len(w.entitiesSlice)+1)
+	}
+
+	for i := 0; i < count; i++ {
+		e := entities[i]
+		idx := startIndex + i
+		w.entitiesSlice[e.ID] = entityMeta{Archetype: arch, Index: idx, Version: e.Version}
+	}
+	return dst
+}
+
+// CreateEntitiesWithComponents creates entities with the specified component values.
+func (self *Batch{{.N}}[{{.TypeVars}}]) CreateEntitiesWithComponents(count int, {{.Vars}}) []Entity {
+	return self.CreateEntitiesWithComponentsTo(count, nil, {{.ReturnVars}})
+}
+
+// CreateEntitiesWithComponentsTo creates entities with components and appends them to the destination slice.
+func (self *Batch{{.N}}[{{.TypeVars}}]) CreateEntitiesWithComponentsTo(count int, dst []Entity, {{.Vars}}) []Entity {
+	startLen := len(dst)
+	dst = self.CreateEntitiesTo(count, dst)
+	entities := dst[startLen:]
+
+	if len(entities) == 0 {
+		return dst
+	}
+	arch := self.arch
+	{{range .Components}}slot{{.Index}} := arch.getSlot(self.id{{.Index}})
+	{{end}}
+	{{range .Components}}data{{.Index}} := arch.componentData[slot{{.Index}}]
+	{{end}}
+	{{range .Components}}src{{.Index}} := unsafe.Slice((*byte)(unsafe.Pointer(&{{.VarName}})), self.size{{.Index}})
+	{{end}}
+
+	{{range .Components}}
+	startIndex{{.Index}} := len(data{{.Index}}) - count*self.size{{.Index}}
+	{{end}}
+	for i := 0; i < count; i++ {
+		{{range .Components}}copy(data{{.Index}}[startIndex{{.Index}}+i*self.size{{.Index}}:], src{{.Index}})
+		{{end}}
+	}
+	return dst
+}
+
 // AddComponentBatch{{.N}} adds {{.N}} components to multiple entities.
 // It returns pointers to the components in order of the input entities.
 func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchRes}}) {
@@ -412,6 +533,5 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }

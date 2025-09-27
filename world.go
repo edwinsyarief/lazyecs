@@ -25,27 +25,26 @@ type CopyOp struct {
 
 // entry is a helper struct for sorting entities by archetype in batch operations.
 type entry struct {
-	idx  int
 	arch *Archetype
+	idx  int
 }
 
 // World manages all entities, components, and systems.
 type World struct {
-	nextEntityID      uint32
+	// Pools for reusing temporary slices in batch operations to avoid allocations.
+	entryPool         sync.Pool
+	removePairPool    sync.Pool
+	archetypes        map[maskType]*Archetype
+	addTransitions    map[*Archetype]map[maskType]Transition
+	removeTransitions map[*Archetype]map[maskType]Transition
+	Resources         sync.Map
 	freeEntityIDs     []uint32
 	entitiesSlice     []entityMeta
-	archetypes        map[maskType]*Archetype
 	archetypesList    []*Archetype
 	toRemove          []Entity
 	removeSet         []Entity
-	Resources         sync.Map
 	initialCapacity   int
-	addTransitions    map[*Archetype]map[maskType]Transition
-	removeTransitions map[*Archetype]map[maskType]Transition
-
-	// Pools for reusing temporary slices in batch operations to avoid allocations.
-	entryPool      sync.Pool
-	removePairPool sync.Pool
+	nextEntityID      uint32
 }
 
 // NewWorld creates a new World with default options.
@@ -121,7 +120,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 	if arch, ok := self.archetypes[mask]; ok {
 		return arch
 	}
-
 	var count int
 	for _, w := range mask {
 		count += bits.OnesCount64(w)
@@ -136,7 +134,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 			}
 		}
 	}
-
 	newArch := &Archetype{
 		mask:          mask,
 		entities:      make([]Entity, 0, self.initialCapacity),
@@ -151,12 +148,10 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 		slots[id] = i
 	}
 	newArch.slots = slots
-
 	for i, id := range compIDs {
 		size := int(componentSizes[id])
 		newArch.componentData[i] = make([]byte, 0, self.initialCapacity*size)
 	}
-
 	self.archetypes[mask] = newArch
 	self.archetypesList = append(self.archetypesList, newArch)
 	return newArch
@@ -175,7 +170,6 @@ func (self *World) CreateEntity() Entity {
 		id = self.nextEntityID
 		self.nextEntityID++
 	}
-
 	version := uint32(1)
 	if int(id) < len(self.entitiesSlice) {
 		meta := self.entitiesSlice[id]
@@ -184,13 +178,11 @@ func (self *World) CreateEntity() Entity {
 			version = 1
 		}
 	}
-
 	e := Entity{ID: id, Version: version}
 	arch := self.getOrCreateArchetype(maskType{})
 	index := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, 1)
 	arch.entities[index] = e
-
 	if int(id) >= len(self.entitiesSlice) {
 		self.entitiesSlice = extendSlice(self.entitiesSlice, int(id)-len(self.entitiesSlice)+1)
 	}
@@ -203,12 +195,10 @@ func (self *World) CreateEntities(count int) []Entity {
 	if count <= 0 {
 		return nil
 	}
-
 	entities := make([]Entity, count)
 	arch := self.getOrCreateArchetype(maskType{})
 	startIndex := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, count)
-
 	maxID := uint32(0)
 	for i := 0; i < count; i++ {
 		var id uint32
@@ -222,11 +212,9 @@ func (self *World) CreateEntities(count int) []Entity {
 			id = self.nextEntityID
 			self.nextEntityID++
 		}
-
 		if id > maxID {
 			maxID = id
 		}
-
 		version := uint32(1)
 		if int(id) < len(self.entitiesSlice) {
 			meta := self.entitiesSlice[id]
@@ -235,22 +223,18 @@ func (self *World) CreateEntities(count int) []Entity {
 				version = 1
 			}
 		}
-
 		e := Entity{ID: id, Version: version}
 		entities[i] = e
 		arch.entities[startIndex+i] = e
 	}
-
 	if int(maxID) >= len(self.entitiesSlice) {
 		self.entitiesSlice = extendSlice(self.entitiesSlice, int(maxID)-len(self.entitiesSlice)+1)
 	}
-
 	for i := 0; i < count; i++ {
 		id := entities[i].ID
 		idx := startIndex + i
 		self.entitiesSlice[id] = entityMeta{Archetype: arch, Index: idx, Version: entities[i].Version}
 	}
-
 	return entities
 }
 
@@ -265,7 +249,6 @@ func (self *World) ProcessRemovals() {
 	if len(self.toRemove) == 0 {
 		return
 	}
-
 	self.removeSet = self.removeSet[:0]
 	for _, e := range self.toRemove {
 		if int(e.ID) < len(self.entitiesSlice) {
@@ -275,10 +258,8 @@ func (self *World) ProcessRemovals() {
 			}
 		}
 	}
-
 	oldFreeLen := len(self.freeEntityIDs)
 	self.freeEntityIDs = extendSlice(self.freeEntityIDs, len(self.removeSet))
-
 	for i, e := range self.removeSet {
 		id := e.ID
 		meta := self.entitiesSlice[id]
@@ -296,16 +277,13 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 		return
 	}
 	lastEntity := arch.entities[lastIndex]
-
 	arch.entities[index] = lastEntity
 	arch.entities = arch.entities[:lastIndex]
-
 	if e.ID != lastEntity.ID {
 		meta := self.entitiesSlice[lastEntity.ID]
 		meta.Index = index
 		self.entitiesSlice[lastEntity.ID] = meta
 	}
-
 	for i := range arch.componentData {
 		id := arch.componentIDs[i]
 		size := int(componentSizes[id])
@@ -320,7 +298,6 @@ func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Arche
 	newIndex := len(newArch.entities)
 	newArch.entities = extendSlice(newArch.entities, 1)
 	newArch.entities[newIndex] = e
-
 	for _, op := range copies {
 		oldBytes := oldArch.componentData[op.from]
 		size := op.size
