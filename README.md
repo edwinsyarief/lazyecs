@@ -146,6 +146,7 @@ world.ProcessRemovals()
 - `ProcessRemovals()`: Processes all pending entity removals.
 - `CreateQuery[T](world, ...)`: Creates a query for entities with a specific component.
 - `CreateQuery2[T1, T2](world, ...)`: Creates a query for entities with two components.
+- TODO: more API
 - ...and so on for up to 5 components.
 
 ## Concurrency
