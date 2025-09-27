@@ -1,4 +1,3 @@
-// Package lazyecs provides a simple and efficient Entity-Component-System (ECS) library.
 package lazyecs
 
 // Entity represents a unique entity in the ECS world.

@@ -362,56 +362,6 @@ func TestGetComponent2(t *testing.T) {
 	}
 }
 
-// go test -run ^TestBatchCreation$ . -count 1
-func TestBatchCreation(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	batch := lazyecs.CreateBatch2[Position, Velocity](world)
-
-	entities := batch.CreateEntities(5)
-	if len(entities) != 5 {
-		t.Fatalf("Expected 5 entities, got %d", len(entities))
-	}
-
-	for _, e := range entities {
-		_, ok := lazyecs.GetComponent[Position](world, e)
-		if !ok {
-			t.Errorf("Entity %d should have a Position component", e.ID)
-		}
-		_, ok = lazyecs.GetComponent[Velocity](world, e)
-		if !ok {
-			t.Errorf("Entity %d should have a Velocity component", e.ID)
-		}
-		_, ok = lazyecs.GetComponent[Health](world, e)
-		if ok {
-			t.Errorf("Entity %d should not have a Health component", e.ID)
-		}
-	}
-}
-
-// go test -run ^TestBatchCreationWithComponents$ . -count 1
-func TestBatchCreationWithComponents(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	batch := lazyecs.CreateBatch2[Position, Velocity](world)
-
-	entities := batch.CreateEntitiesWithComponents(3, Position{X: 10, Y: 20}, Velocity{VX: 1, VY: 2})
-	if len(entities) != 3 {
-		t.Fatalf("Expected 3 entities, got %d", len(entities))
-	}
-
-	for _, e := range entities {
-		p, v, ok := lazyecs.GetComponent2[Position, Velocity](world, e)
-		if !ok {
-			t.Fatal("Failed to get components from batch-created entity")
-		}
-		if p.X != 10 || p.Y != 20 {
-			t.Errorf("Position data incorrect. Got %+v", p)
-		}
-		if v.VX != 1 || v.VY != 2 {
-			t.Errorf("Velocity data incorrect. Got %+v", v)
-		}
-	}
-}
-
 // go test -run ^TestRemoveComponent2$ . -count 1
 func TestRemoveComponent2(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
@@ -495,7 +445,7 @@ func TestSetComponentBatch(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
 	entities := world.CreateEntities(3)
 
-	lazyecs.SetComponentBatch(world, entities, Position{X: 100})
+	lazyecs.SetComponentBatch[Position](world, entities, Position{X: 100})
 
 	for _, e := range entities {
 		p, ok := lazyecs.GetComponent[Position](world, e)
@@ -505,7 +455,7 @@ func TestSetComponentBatch(t *testing.T) {
 	}
 
 	// Update
-	lazyecs.SetComponentBatch(world, entities, Position{X: 200})
+	lazyecs.SetComponentBatch[Position](world, entities, Position{X: 200})
 	for _, e := range entities {
 		p, _ := lazyecs.GetComponent[Position](world, e)
 		if p.X != 200 {
@@ -546,58 +496,53 @@ func TestSetComponentBatch2(t *testing.T) {
 	}
 }
 
-const numEntities = 100000
-const initialCapacity = 100000
+// go test -run ^TestBatchCreationTo$ . -count 1
+func TestBatchCreationTo(t *testing.T) {
+	world, _, _, _ := setupWorld(t)
+	batch := lazyecs.CreateBatch[Position](world)
 
-// go test -benchmem -run=^$ -bench ^BenchmarkGetComponent2$ . -count 1
-func BenchmarkGetComponent2(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-	lazyecs.RegisterComponent[Velocity]()
+	dst := make([]lazyecs.Entity, 0, 10)
+	entities := batch.CreateEntitiesTo(5, dst)
 
-	entities := world.CreateEntities(numEntities)
-	lazyecs.AddComponentBatch2[Position, Velocity](world, entities)
+	if len(entities) != 5 {
+		t.Fatalf("Expected 5 entities, got %d", len(entities))
+	}
+	if cap(entities) != 10 {
+		t.Errorf("Expected capacity 10, got %d", cap(entities))
+	}
 
-	for b.Loop() {
-		for _, e := range entities {
-			_, _, _ = lazyecs.GetComponent2[Position, Velocity](world, e)
+	// Test with a nil slice
+	entities = batch.CreateEntitiesTo(3, nil)
+	if len(entities) != 3 {
+		t.Fatalf("Expected 3 entities from nil slice, got %d", len(entities))
+	}
+}
+
+// go test -run ^TestBatchCreationWithComponentsTo$ . -count 1
+func TestBatchCreationWithComponentsTo(t *testing.T) {
+	world, _, _, _ := setupWorld(t)
+	batch := lazyecs.CreateBatch[Position](world)
+
+	dst := make([]lazyecs.Entity, 0, 5)
+	entities := batch.CreateEntitiesWithComponentsTo(3, dst, Position{X: 10, Y: 20})
+
+	if len(entities) != 3 {
+		t.Fatalf("Expected 3 entities, got %d", len(entities))
+	}
+
+	for _, e := range entities {
+		p, ok := lazyecs.GetComponent[Position](world, e)
+		if !ok {
+			t.Fatal("Failed to get components from batch-created entity")
+		}
+		if p.X != 10 || p.Y != 20 {
+			t.Errorf("Position data incorrect. Got %+v", p)
 		}
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreation$ . -count 1
-func BenchmarkBatchCreation(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-	lazyecs.RegisterComponent[Velocity]()
-	batch := lazyecs.CreateBatch2[Position, Velocity](world)
-
-	b.ResetTimer()
-	for b.Loop() {
-		batch.CreateEntities(numEntities)
-	}
-}
-
-// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreationWithComponent$ . -count 1
-func BenchmarkBatchCreationWithComponent(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-	lazyecs.RegisterComponent[Velocity]()
-	batch := lazyecs.CreateBatch2[Position, Velocity](world)
-
-	for b.Loop() {
-		batch.CreateEntitiesWithComponents(numEntities, Position{X: 1}, Velocity{VX: 2})
-	}
-}
+const numEntities = 100000
+const initialCapacity = 100000
 
 // go test -benchmem -run=^$ -bench ^BenchmarkAddComponent$ . -count 1
 func BenchmarkAddComponent(b *testing.B) {
@@ -743,7 +688,7 @@ func BenchmarkSetComponentBatch(b *testing.B) {
 	entities := world.CreateEntities(numEntities)
 
 	for b.Loop() {
-		lazyecs.SetComponentBatch(world, entities, Position{X: 10})
+		lazyecs.SetComponentBatch[Position](world, entities, Position{X: 10})
 	}
 }
 
@@ -858,12 +803,46 @@ func BenchmarkQuery(b *testing.B) {
 		lazyecs.AddComponent[Velocity](world, e)
 	}
 
-	query := lazyecs.CreateQuery2[Position, Velocity](world)
+	query := lazyecs.CreateQuery[Position](world)
 	for b.Loop() {
 		query.Reset()
 		for query.Next() {
-			pos, vel := query.Get()
-			pos.X += vel.VX
+			pos := query.Get()
+			pos.X += 1
 		}
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreationTo_Preallocated$ . -count 1
+func BenchmarkBatchCreationTo_Preallocated(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: numEntities,
+	})
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	batch := lazyecs.CreateBatch[Position](world)
+	dst := make([]lazyecs.Entity, 0, numEntities)
+
+	for b.Loop() {
+		// In a real scenario, the slice would be cleared, not re-made.
+		dst = dst[:0]
+		_ = batch.CreateEntitiesTo(numEntities, dst)
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreationWithComponentsTo_Preallocated$ . -count 1
+func BenchmarkBatchCreationWithComponentsTo_Preallocated(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: numEntities,
+	})
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	batch := lazyecs.CreateBatch[Position](world)
+	dst := make([]lazyecs.Entity, 0, numEntities)
+	pos := Position{X: 1, Y: 2}
+
+	for b.Loop() {
+		dst = dst[:0]
+		_ = batch.CreateEntitiesWithComponentsTo(numEntities, dst, pos)
 	}
 }
