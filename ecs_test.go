@@ -445,7 +445,7 @@ func TestSetComponentBatch(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
 	entities := world.CreateEntities(3)
 
-	lazyecs.SetComponentBatch[Position](world, entities, Position{X: 100})
+	lazyecs.SetComponentBatch(world, entities, Position{X: 100})
 
 	for _, e := range entities {
 		p, ok := lazyecs.GetComponent[Position](world, e)
@@ -455,7 +455,7 @@ func TestSetComponentBatch(t *testing.T) {
 	}
 
 	// Update
-	lazyecs.SetComponentBatch[Position](world, entities, Position{X: 200})
+	lazyecs.SetComponentBatch(world, entities, Position{X: 200})
 	for _, e := range entities {
 		p, _ := lazyecs.GetComponent[Position](world, e)
 		if p.X != 200 {
@@ -688,7 +688,7 @@ func BenchmarkSetComponentBatch(b *testing.B) {
 	entities := world.CreateEntities(numEntities)
 
 	for b.Loop() {
-		lazyecs.SetComponentBatch[Position](world, entities, Position{X: 10})
+		lazyecs.SetComponentBatch(world, entities, Position{X: 10})
 	}
 }
 
