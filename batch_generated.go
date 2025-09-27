@@ -18,11 +18,10 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 	size1 := int(componentSizes[id1])
 	size2 := int(componentSizes[id2])
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -43,7 +42,6 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 	res1 := make([]*T1, len(entities))
 	res2 := make([]*T2, len(entities))
 	
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -128,8 +126,7 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 		stride2 := uintptr(size2)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -168,6 +165,7 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2
@@ -189,11 +187,10 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 	src1 := unsafe.Slice((*byte)(unsafe.Pointer(&c1)), size1)
 	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&c2)), size2)
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -210,8 +207,6 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -285,8 +280,7 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 		slot2 := newArch.getSlot(id2)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -327,6 +321,7 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -340,11 +335,9 @@ func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
 	}
 	removeMask := makeMask2(id1, id2)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -361,8 +354,6 @@ func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -418,8 +409,7 @@ func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -452,8 +442,10 @@ func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
-}// AddComponentBatch3 adds 3 components to multiple entities.
+}
+// AddComponentBatch3 adds 3 components to multiple entities.
 // It returns pointers to the components in order of the input entities.
 func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3) {
 	id1, ok1 := TryGetID[T1]()
@@ -468,11 +460,10 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 	size2 := int(componentSizes[id2])
 	size3 := int(componentSizes[id3])
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -494,7 +485,6 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 	res2 := make([]*T2, len(entities))
 	res3 := make([]*T3, len(entities))
 	
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -587,8 +577,7 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 		stride3 := uintptr(size3)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -629,6 +618,7 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3
@@ -653,11 +643,10 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 	src2 := unsafe.Slice((*byte)(unsafe.Pointer(&c2)), size2)
 	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&c3)), size3)
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -674,8 +663,6 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -753,8 +740,7 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 		slot3 := newArch.getSlot(id3)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -798,6 +784,7 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -812,11 +799,9 @@ func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) 
 	}
 	removeMask := makeMask3(id1, id2, id3)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -833,8 +818,6 @@ func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) 
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -890,8 +873,7 @@ func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) 
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -924,8 +906,10 @@ func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) 
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
-}// AddComponentBatch4 adds 4 components to multiple entities.
+}
+// AddComponentBatch4 adds 4 components to multiple entities.
 // It returns pointers to the components in order of the input entities.
 func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3, []*T4) {
 	id1, ok1 := TryGetID[T1]()
@@ -942,11 +926,10 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 	size3 := int(componentSizes[id3])
 	size4 := int(componentSizes[id4])
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -969,7 +952,6 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 	res3 := make([]*T3, len(entities))
 	res4 := make([]*T4, len(entities))
 	
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1070,8 +1052,7 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		stride4 := uintptr(size4)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1114,6 +1095,7 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3, res4
@@ -1141,11 +1123,10 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 	src3 := unsafe.Slice((*byte)(unsafe.Pointer(&c3)), size3)
 	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&c4)), size4)
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -1162,8 +1143,6 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1245,8 +1224,7 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		slot4 := newArch.getSlot(id4)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1293,6 +1271,7 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -1308,11 +1287,9 @@ func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []
 	}
 	removeMask := makeMask4(id1, id2, id3, id4)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -1329,8 +1306,6 @@ func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1386,8 +1361,7 @@ func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1420,8 +1394,10 @@ func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
-}// AddComponentBatch5 adds 5 components to multiple entities.
+}
+// AddComponentBatch5 adds 5 components to multiple entities.
 // It returns pointers to the components in order of the input entities.
 func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entities []Entity) ([]*T1, []*T2, []*T3, []*T4, []*T5) {
 	id1, ok1 := TryGetID[T1]()
@@ -1440,11 +1416,10 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 	size4 := int(componentSizes[id4])
 	size5 := int(componentSizes[id5])
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -1468,7 +1443,6 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 	res4 := make([]*T4, len(entities))
 	res5 := make([]*T5, len(entities))
 	
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1577,8 +1551,7 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		stride5 := uintptr(size5)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1623,6 +1596,7 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3, res4, res5
@@ -1653,11 +1627,10 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 	src4 := unsafe.Slice((*byte)(unsafe.Pointer(&c4)), size4)
 	src5 := unsafe.Slice((*byte)(unsafe.Pointer(&c5)), size5)
 	
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -1674,8 +1647,6 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1761,8 +1732,7 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		slot5 := newArch.getSlot(id5)
 		
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1812,6 +1782,7 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -1828,11 +1799,9 @@ func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, ent
 	}
 	removeMask := makeMask5(id1, id2, id3, id4, id5)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -1849,8 +1818,6 @@ func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, ent
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -1906,8 +1873,7 @@ func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, ent
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1940,5 +1906,6 @@ func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, ent
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }

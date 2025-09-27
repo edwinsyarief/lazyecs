@@ -23,19 +23,29 @@ type CopyOp struct {
 	size int // Size of the component in bytes.
 }
 
+// entry is a helper struct for sorting entities by archetype in batch operations.
+type entry struct {
+	idx  int
+	arch *Archetype
+}
+
 // World manages all entities, components, and systems.
 type World struct {
-	nextEntityID      uint32                                 // The next available entity ID.
-	freeEntityIDs     []uint32                               // A list of freed entity IDs to be recycled.
-	entitiesSlice     []entityMeta                           // A slice mapping entity IDs to their metadata.
-	archetypes        map[maskType]*Archetype                // A map of component masks to archetypes.
-	archetypesList    []*Archetype                           // A list of all archetypes.
-	toRemove          []Entity                               // A list of entities to be removed.
-	removeSet         []Entity                               // A set of entities to be removed in the current frame.
-	Resources         sync.Map                               // A map for storing global resources.
-	initialCapacity   int                                    // The initial capacity for new archetypes.
-	addTransitions    map[*Archetype]map[maskType]Transition // Cache for add component transitions with precomputed copies.
-	removeTransitions map[*Archetype]map[maskType]Transition // Cache for remove component transitions with precomputed copies.
+	nextEntityID      uint32
+	freeEntityIDs     []uint32
+	entitiesSlice     []entityMeta
+	archetypes        map[maskType]*Archetype
+	archetypesList    []*Archetype
+	toRemove          []Entity
+	removeSet         []Entity
+	Resources         sync.Map
+	initialCapacity   int
+	addTransitions    map[*Archetype]map[maskType]Transition
+	removeTransitions map[*Archetype]map[maskType]Transition
+
+	// Pools for reusing temporary slices in batch operations to avoid allocations.
+	entryPool      sync.Pool
+	removePairPool sync.Pool
 }
 
 // NewWorld creates a new World with default options.
@@ -59,9 +69,51 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 		initialCapacity:   cap,
 		addTransitions:    make(map[*Archetype]map[maskType]Transition),
 		removeTransitions: make(map[*Archetype]map[maskType]Transition),
+		entryPool: sync.Pool{
+			New: func() interface{} {
+				s := make([]entry, 0, 64)
+				return &s
+			},
+		},
+		removePairPool: sync.Pool{
+			New: func() interface{} {
+				s := make([]removePair, 0, 64)
+				return &s
+			},
+		},
 	}
 	w.getOrCreateArchetype(maskType{})
 	return w
+}
+
+// getEntrySlice gets a temporary []entry slice from the pool.
+func (w *World) getEntrySlice(size int) []entry {
+	s := w.entryPool.Get().(*[]entry)
+	if cap(*s) < size {
+		*s = make([]entry, size)
+	}
+	return (*s)[:size]
+}
+
+// putEntrySlice returns a temporary []entry slice to the pool.
+func (w *World) putEntrySlice(s []entry) {
+	s = s[:0]
+	w.entryPool.Put(&s)
+}
+
+// getRemovePairSlice gets a temporary []removePair slice from the pool.
+func (w *World) getRemovePairSlice(size int) []removePair {
+	s := w.removePairPool.Get().(*[]removePair)
+	if cap(*s) < size {
+		*s = make([]removePair, size)
+	}
+	return (*s)[:size]
+}
+
+// putRemovePairSlice returns a temporary []removePair slice to the pool.
+func (w *World) putRemovePairSlice(s []removePair) {
+	s = s[:0]
+	w.removePairPool.Put(&s)
 }
 
 // getOrCreateArchetype gets an existing archetype or creates a new one for the given component mask.
@@ -84,7 +136,6 @@ func (self *World) getOrCreateArchetype(mask maskType) *Archetype {
 			}
 		}
 	}
-	// No need to sort; IDs are appended in ascending order.
 
 	newArch := &Archetype{
 		mask:          mask,
@@ -210,7 +261,6 @@ func (self *World) RemoveEntity(e Entity) {
 }
 
 // ProcessRemovals processes the entities marked for removal.
-// This should be called once per frame, e.g., at the end of the game loop.
 func (self *World) ProcessRemovals() {
 	if len(self.toRemove) == 0 {
 		return
@@ -266,8 +316,6 @@ func (self *World) removeEntityFromArchetype(e Entity, arch *Archetype, index in
 }
 
 // moveEntityBetweenArchetypes moves an entity from an old archetype to a new one.
-// It copies component data using the precomputed list of copy operations.
-// It returns the new index of the entity in the new archetype.
 func moveEntityBetweenArchetypes(e Entity, oldIndex int, oldArch, newArch *Archetype, copies []CopyOp) int {
 	newIndex := len(newArch.entities)
 	newArch.entities = extendSlice(newArch.entities, 1)

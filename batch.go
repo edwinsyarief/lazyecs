@@ -124,12 +124,10 @@ func AddComponentBatch[T any](w *World, entities []Entity) []*T {
 	addMask := makeMask1(id)
 	size := int(componentSizes[id])
 
-	// Sort to group by archetype without map
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	// Get temporary slices from the world's pools to avoid allocations.
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -148,8 +146,6 @@ func AddComponentBatch[T any](w *World, entities []Entity) []*T {
 	})
 
 	res := make([]*T, len(entities))
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -210,7 +206,6 @@ func AddComponentBatch[T any](w *World, entities []Entity) []*T {
 		startNew := len(newArch.entities)
 		newArch.entities = extendSlice(newArch.entities, num)
 
-		// Pre-extend all component data
 		for _, id := range newArch.componentIDs {
 			csize := int(componentSizes[id])
 			newArch.componentData[newArch.getSlot(id)] = extendByteSlice(newArch.componentData[newArch.getSlot(id)], num*csize)
@@ -220,8 +215,8 @@ func AddComponentBatch[T any](w *World, entities []Entity) []*T {
 		base := unsafe.Pointer(&newArch.componentData[slot][0])
 		stride := uintptr(size)
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num) // pre-allocate with cap
+		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -232,7 +227,6 @@ func AddComponentBatch[T any](w *World, entities []Entity) []*T {
 			newIndex := startNew + j
 			newArch.entities[newIndex] = e
 
-			// Copy existing components
 			for _, op := range transition.copies {
 				oldBytes := oldArch.componentData[op.from]
 				src := oldBytes[oldIndex*op.size : (oldIndex+1)*op.size]
@@ -273,11 +267,9 @@ func SetComponentBatch[T any](w *World, entities []Entity, comp T) {
 	size := int(componentSizes[id])
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&comp)), size)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -294,8 +286,6 @@ func SetComponentBatch[T any](w *World, entities []Entity, comp T) {
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -361,8 +351,8 @@ func SetComponentBatch[T any](w *World, entities []Entity, comp T) {
 
 		slot := newArch.getSlot(id)
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -381,7 +371,6 @@ func SetComponentBatch[T any](w *World, entities []Entity, comp T) {
 				copy(dstBytes[dstStart:dstStart+op.size], srcCopy)
 			}
 
-			// Set the component
 			bytes := newArch.componentData[slot]
 			dstStart := len(bytes) - num*size + j*size
 			copy(bytes[dstStart:dstStart+size], src)
@@ -411,11 +400,9 @@ func RemoveComponentBatch[T any](w *World, entities []Entity) {
 	}
 	removeMask := makeMask1(id)
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -432,8 +419,6 @@ func RemoveComponentBatch[T any](w *World, entities []Entity) {
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -489,8 +474,8 @@ func RemoveComponentBatch[T any](w *World, entities []Entity) {
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {

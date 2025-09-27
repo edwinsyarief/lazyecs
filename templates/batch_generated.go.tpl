@@ -9,11 +9,10 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 	addMask := makeMask{{.N}}({{.IDs}})
 	{{range .Components}}{{.SizeName}} := int(componentSizes[{{.IDName}}])
 	{{end}}
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -33,7 +32,6 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 
 	{{range .Components}}res{{.Index}} := make([]*{{.TypeName}}, len(entities))
 	{{end}}
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -110,8 +108,7 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 		{{range .Components}}{{.StrideName}} := uintptr({{.SizeName}})
 		{{end}}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -148,6 +145,7 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 
 	return {{.ReturnBatchRes}}
@@ -166,11 +164,10 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 	{{end}}
 	{{range .Components}}{{.SrcName}} := unsafe.Slice((*byte)(unsafe.Pointer(&{{.VarName}})), {{.SizeName}})
 	{{end}}
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -187,8 +184,6 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -258,8 +253,7 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 		{{range .Components}}{{.SlotName}} := newArch.getSlot({{.IDName}})
 		{{end}}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -297,6 +291,7 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -309,11 +304,9 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 	}
 	removeMask := makeMask{{.N}}({{.IDs}})
 
-	type entry struct {
-		idx  int
-		arch *Archetype
-	}
-	temp := make([]entry, len(entities))
+	temp := w.getEntrySlice(len(entities))
+	defer w.putEntrySlice(temp)
+
 	numValid := 0
 	for i, e := range entities {
 		if int(e.ID) >= len(w.entitiesSlice) {
@@ -330,8 +323,6 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 	sort.Slice(temp, func(i, j int) bool {
 		return uintptr(unsafe.Pointer(temp[i].arch)) < uintptr(unsafe.Pointer(temp[j].arch))
 	})
-
-	var pairs []removePair
 
 	i := 0
 	for i < numValid {
@@ -387,8 +378,7 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 			newArch.componentData[op.to] = extendByteSlice(newArch.componentData[op.to], num*op.size)
 		}
 
-		pairs = pairs[:0]
-		pairs = extendSlice(pairs, num)
+		pairs := w.getRemovePairSlice(num)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -421,5 +411,6 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
+		w.putRemovePairSlice(pairs)
 	}
 }
