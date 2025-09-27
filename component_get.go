@@ -1,0 +1,210 @@
+// Package lazyecs provides a simple and efficient Entity-Component-System (ECS) library.
+package lazyecs
+
+import (
+	"unsafe"
+)
+
+// GetComponent2 retrieves two components for an entity.
+// It returns the component values directly and a boolean indicating success.
+// This function is designed for high-performance read-only access and is allocation-free.
+func GetComponent2[T1 any, T2 any](w *World, e Entity) (T1, T2, bool) {
+	var c1 T1
+	var c2 T2
+
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return c1, c2, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return c1, c2, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	if !ok1 || !ok2 {
+		return c1, c2, false
+	}
+
+	arch := meta.Archetype
+	mask := makeMask2(id1, id2)
+	if !includesAll(arch.mask, mask) {
+		return c1, c2, false
+	}
+
+	slot1 := arch.getSlot(id1)
+	slot2 := arch.getSlot(id2)
+
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+
+	bytes1 := arch.componentData[slot1]
+	bytes2 := arch.componentData[slot2]
+
+	c1 = *(*T1)(unsafe.Pointer(&bytes1[meta.Index*size1]))
+	c2 = *(*T2)(unsafe.Pointer(&bytes2[meta.Index*size2]))
+
+	return c1, c2, true
+}
+
+// GetComponent3 retrieves three components for an entity.
+// It returns the component values directly and a boolean indicating success.
+// This function is designed for high-performance read-only access and is allocation-free.
+func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (T1, T2, T3, bool) {
+	var c1 T1
+	var c2 T2
+	var c3 T3
+
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return c1, c2, c3, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return c1, c2, c3, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	if !ok1 || !ok2 || !ok3 {
+		return c1, c2, c3, false
+	}
+
+	arch := meta.Archetype
+	mask := makeMask3(id1, id2, id3)
+	if !includesAll(arch.mask, mask) {
+		return c1, c2, c3, false
+	}
+
+	slot1 := arch.getSlot(id1)
+	slot2 := arch.getSlot(id2)
+	slot3 := arch.getSlot(id3)
+
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+
+	bytes1 := arch.componentData[slot1]
+	bytes2 := arch.componentData[slot2]
+	bytes3 := arch.componentData[slot3]
+
+	c1 = *(*T1)(unsafe.Pointer(&bytes1[meta.Index*size1]))
+	c2 = *(*T2)(unsafe.Pointer(&bytes2[meta.Index*size2]))
+	c3 = *(*T3)(unsafe.Pointer(&bytes3[meta.Index*size3]))
+
+	return c1, c2, c3, true
+}
+
+// GetComponent4 retrieves four components for an entity.
+// It returns the component values directly and a boolean indicating success.
+// This function is designed for high-performance read-only access and is allocation-free.
+func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (T1, T2, T3, T4, bool) {
+	var c1 T1
+	var c2 T2
+	var c3 T3
+	var c4 T4
+
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return c1, c2, c3, c4, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return c1, c2, c3, c4, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		return c1, c2, c3, c4, false
+	}
+
+	arch := meta.Archetype
+	mask := makeMask4(id1, id2, id3, id4)
+	if !includesAll(arch.mask, mask) {
+		return c1, c2, c3, c4, false
+	}
+
+	slot1 := arch.getSlot(id1)
+	slot2 := arch.getSlot(id2)
+	slot3 := arch.getSlot(id3)
+	slot4 := arch.getSlot(id4)
+
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+
+	bytes1 := arch.componentData[slot1]
+	bytes2 := arch.componentData[slot2]
+	bytes3 := arch.componentData[slot3]
+	bytes4 := arch.componentData[slot4]
+
+	c1 = *(*T1)(unsafe.Pointer(&bytes1[meta.Index*size1]))
+	c2 = *(*T2)(unsafe.Pointer(&bytes2[meta.Index*size2]))
+	c3 = *(*T3)(unsafe.Pointer(&bytes3[meta.Index*size3]))
+	c4 = *(*T4)(unsafe.Pointer(&bytes4[meta.Index*size4]))
+
+	return c1, c2, c3, c4, true
+}
+
+// GetComponent5 retrieves five components for an entity.
+// It returns the component values directly and a boolean indicating success.
+// This function is designed for high-performance read-only access and is allocation-free.
+func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (T1, T2, T3, T4, T5, bool) {
+	var c1 T1
+	var c2 T2
+	var c3 T3
+	var c4 T4
+	var c5 T5
+
+	if int(e.ID) >= len(w.entitiesSlice) {
+		return c1, c2, c3, c4, c5, false
+	}
+	meta := w.entitiesSlice[e.ID]
+	if meta.Version != e.Version {
+		return c1, c2, c3, c4, c5, false
+	}
+
+	id1, ok1 := TryGetID[T1]()
+	id2, ok2 := TryGetID[T2]()
+	id3, ok3 := TryGetID[T3]()
+	id4, ok4 := TryGetID[T4]()
+	id5, ok5 := TryGetID[T5]()
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+		return c1, c2, c3, c4, c5, false
+	}
+
+	arch := meta.Archetype
+	mask := makeMask5(id1, id2, id3, id4, id5)
+	if !includesAll(arch.mask, mask) {
+		return c1, c2, c3, c4, c5, false
+	}
+
+	slot1 := arch.getSlot(id1)
+	slot2 := arch.getSlot(id2)
+	slot3 := arch.getSlot(id3)
+	slot4 := arch.getSlot(id4)
+	slot5 := arch.getSlot(id5)
+
+	size1 := int(componentSizes[id1])
+	size2 := int(componentSizes[id2])
+	size3 := int(componentSizes[id3])
+	size4 := int(componentSizes[id4])
+	size5 := int(componentSizes[id5])
+
+	bytes1 := arch.componentData[slot1]
+	bytes2 := arch.componentData[slot2]
+	bytes3 := arch.componentData[slot3]
+	bytes4 := arch.componentData[slot4]
+	bytes5 := arch.componentData[slot5]
+
+	c1 = *(*T1)(unsafe.Pointer(&bytes1[meta.Index*size1]))
+	c2 = *(*T2)(unsafe.Pointer(&bytes2[meta.Index*size2]))
+	c3 = *(*T3)(unsafe.Pointer(&bytes3[meta.Index*size3]))
+	c4 = *(*T4)(unsafe.Pointer(&bytes4[meta.Index*size4]))
+	c5 = *(*T5)(unsafe.Pointer(&bytes5[meta.Index*size5]))
+
+	return c1, c2, c3, c4, c5, true
+}

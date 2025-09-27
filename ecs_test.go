@@ -337,6 +337,81 @@ func TestAddComponentBatch(t *testing.T) {
 	}
 }
 
+// go test -run ^TestGetComponent2$ . -count 1
+func TestGetComponent2(t *testing.T) {
+	world, _, _, _ := setupWorld(t)
+	e := world.CreateEntity()
+	lazyecs.SetComponent(world, e, Position{X: 1, Y: 2})
+	lazyecs.SetComponent(world, e, Velocity{VX: 3, VY: 4})
+
+	p, v, ok := lazyecs.GetComponent2[Position, Velocity](world, e)
+	if !ok {
+		t.Fatal("GetComponent2 failed")
+	}
+	if p.X != 1 || p.Y != 2 {
+		t.Errorf("Position data incorrect. Got %+v", p)
+	}
+	if v.VX != 3 || v.VY != 4 {
+		t.Errorf("Velocity data incorrect. Got %+v", v)
+	}
+
+	// Test with missing component
+	_, _, ok = lazyecs.GetComponent2[Position, Health](world, e)
+	if ok {
+		t.Error("GetComponent2 should have failed for missing component")
+	}
+}
+
+// go test -run ^TestBatchCreation$ . -count 1
+func TestBatchCreation(t *testing.T) {
+	world, _, _, _ := setupWorld(t)
+	batch := lazyecs.CreateBatch2[Position, Velocity](world)
+
+	entities := batch.CreateEntities(5)
+	if len(entities) != 5 {
+		t.Fatalf("Expected 5 entities, got %d", len(entities))
+	}
+
+	for _, e := range entities {
+		_, ok := lazyecs.GetComponent[Position](world, e)
+		if !ok {
+			t.Errorf("Entity %d should have a Position component", e.ID)
+		}
+		_, ok = lazyecs.GetComponent[Velocity](world, e)
+		if !ok {
+			t.Errorf("Entity %d should have a Velocity component", e.ID)
+		}
+		_, ok = lazyecs.GetComponent[Health](world, e)
+		if ok {
+			t.Errorf("Entity %d should not have a Health component", e.ID)
+		}
+	}
+}
+
+// go test -run ^TestBatchCreationWithComponents$ . -count 1
+func TestBatchCreationWithComponents(t *testing.T) {
+	world, _, _, _ := setupWorld(t)
+	batch := lazyecs.CreateBatch2[Position, Velocity](world)
+
+	entities := batch.CreateEntitiesWithComponents(3, Position{X: 10, Y: 20}, Velocity{VX: 1, VY: 2})
+	if len(entities) != 3 {
+		t.Fatalf("Expected 3 entities, got %d", len(entities))
+	}
+
+	for _, e := range entities {
+		p, v, ok := lazyecs.GetComponent2[Position, Velocity](world, e)
+		if !ok {
+			t.Fatal("Failed to get components from batch-created entity")
+		}
+		if p.X != 10 || p.Y != 20 {
+			t.Errorf("Position data incorrect. Got %+v", p)
+		}
+		if v.VX != 1 || v.VY != 2 {
+			t.Errorf("Velocity data incorrect. Got %+v", v)
+		}
+	}
+}
+
 // go test -run ^TestRemoveComponent2$ . -count 1
 func TestRemoveComponent2(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
@@ -473,6 +548,56 @@ func TestSetComponentBatch2(t *testing.T) {
 
 const numEntities = 100000
 const initialCapacity = 100000
+
+// go test -benchmem -run=^$ -bench ^BenchmarkGetComponent2$ . -count 1
+func BenchmarkGetComponent2(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: initialCapacity,
+	})
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	lazyecs.RegisterComponent[Velocity]()
+
+	entities := world.CreateEntities(numEntities)
+	lazyecs.AddComponentBatch2[Position, Velocity](world, entities)
+
+	for b.Loop() {
+		for _, e := range entities {
+			_, _, _ = lazyecs.GetComponent2[Position, Velocity](world, e)
+		}
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreation$ . -count 1
+func BenchmarkBatchCreation(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: initialCapacity,
+	})
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	lazyecs.RegisterComponent[Velocity]()
+	batch := lazyecs.CreateBatch2[Position, Velocity](world)
+
+	b.ResetTimer()
+	for b.Loop() {
+		batch.CreateEntities(numEntities)
+	}
+}
+
+// go test -benchmem -run=^$ -bench ^BenchmarkBatchCreationWithComponent$ . -count 1
+func BenchmarkBatchCreationWithComponent(b *testing.B) {
+	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
+		InitialCapacity: initialCapacity,
+	})
+	lazyecs.ResetGlobalRegistry()
+	lazyecs.RegisterComponent[Position]()
+	lazyecs.RegisterComponent[Velocity]()
+	batch := lazyecs.CreateBatch2[Position, Velocity](world)
+
+	for b.Loop() {
+		batch.CreateEntitiesWithComponents(numEntities, Position{X: 1}, Velocity{VX: 2})
+	}
+}
 
 // go test -benchmem -run=^$ -bench ^BenchmarkAddComponent$ . -count 1
 func BenchmarkAddComponent(b *testing.B) {
