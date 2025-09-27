@@ -109,6 +109,7 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 		{{end}}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -145,7 +146,6 @@ func AddComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) ({{.BatchR
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 
 	return {{.ReturnBatchRes}}
@@ -254,6 +254,7 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 		{{end}}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -291,7 +292,6 @@ func SetComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity, {{.Vars}})
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -379,6 +379,7 @@ func RemoveComponentBatch{{.N}}[{{.Types}}](w *World, entities []Entity) {
 		}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {

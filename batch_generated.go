@@ -127,6 +127,7 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -165,7 +166,6 @@ func AddComponentBatch2[T1 any, T2 any](w *World, entities []Entity) ([]*T1, []*
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2
@@ -281,6 +281,7 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -321,7 +322,6 @@ func SetComponentBatch2[T1 any, T2 any](w *World, entities []Entity, c1 T1, c2 T
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -410,6 +410,7 @@ func RemoveComponentBatch2[T1 any, T2 any](w *World, entities []Entity) {
 		}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -578,6 +579,7 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -618,7 +620,6 @@ func AddComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) ([]
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3
@@ -741,6 +742,7 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -784,7 +786,6 @@ func SetComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity, c1 
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -874,6 +875,7 @@ func RemoveComponentBatch3[T1 any, T2 any, T3 any](w *World, entities []Entity) 
 		}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1053,6 +1055,7 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1095,7 +1098,6 @@ func AddComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3, res4
@@ -1225,6 +1227,7 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1271,7 +1274,6 @@ func SetComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []Ent
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -1362,6 +1364,7 @@ func RemoveComponentBatch4[T1 any, T2 any, T3 any, T4 any](w *World, entities []
 		}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1552,6 +1555,7 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1596,7 +1600,6 @@ func AddComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 
 	return res1, res2, res3, res4, res5
@@ -1733,6 +1736,7 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
@@ -1782,7 +1786,6 @@ func SetComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, entiti
 		for _, pair := range pairs {
 			w.removeEntityFromArchetype(pair.e, oldArch, pair.index)
 		}
-		w.putRemovePairSlice(pairs)
 	}
 }
 
@@ -1874,6 +1877,7 @@ func RemoveComponentBatch5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, ent
 		}
 
 		pairs := w.getRemovePairSlice(num)
+		defer w.putRemovePairSlice(pairs)
 
 		j := 0
 		for k := start; k < i; k++ {
