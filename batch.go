@@ -30,21 +30,12 @@ func CreateBatch[T any](w *World) *Batch[T] {
 }
 
 // CreateEntities creates a specified number of entities with the batch's components.
-func (self *Batch[T]) CreateEntities(count int) []Entity {
-	return self.CreateEntitiesTo(count, nil)
-}
-
-// CreateEntitiesTo creates entities and appends them to the destination slice.
-func (self *Batch[T]) CreateEntitiesTo(count int, dst []Entity) []Entity {
+func (self *Batch[T]) CreateEntities(count int) bool {
 	if count <= 0 {
-		return dst
+		return false
 	}
 	w := self.world
 	arch := self.arch
-
-	startLen := len(dst)
-	dst = extendSlice(dst, count)
-	entities := dst[startLen:]
 
 	startIndex := len(arch.entities)
 	arch.entities = extendSlice(arch.entities, count)
@@ -72,7 +63,6 @@ func (self *Batch[T]) CreateEntitiesTo(count int, dst []Entity) []Entity {
 			}
 		}
 		e := Entity{ID: id, Version: version}
-		entities[i] = e
 		arch.entities[startIndex+i] = e
 	}
 
@@ -81,26 +71,17 @@ func (self *Batch[T]) CreateEntitiesTo(count int, dst []Entity) []Entity {
 	}
 
 	for i := 0; i < count; i++ {
-		e := entities[i]
+		id := arch.entities[startIndex+i].ID
 		idx := startIndex + i
-		w.entitiesSlice[e.ID] = entityMeta{Archetype: arch, Index: idx, Version: e.Version}
+		w.entitiesSlice[id] = entityMeta{Archetype: arch, Index: idx, Version: arch.entities[startIndex+i].Version}
 	}
-	return dst
+	return true
 }
 
 // CreateEntitiesWithComponents creates entities with the specified component value.
-func (self *Batch[T]) CreateEntitiesWithComponents(count int, c1 T) []Entity {
-	return self.CreateEntitiesWithComponentsTo(count, nil, c1)
-}
-
-// CreateEntitiesWithComponentsTo creates entities with components and appends them to the destination slice.
-func (self *Batch[T]) CreateEntitiesWithComponentsTo(count int, dst []Entity, c1 T) []Entity {
-	startLen := len(dst)
-	dst = self.CreateEntitiesTo(count, dst)
-	entities := dst[startLen:]
-
-	if len(entities) == 0 {
-		return dst
+func (self *Batch[T]) CreateEntitiesWithComponents(count int, c1 T) bool {
+	if !self.CreateEntities(count) {
+		return false
 	}
 	arch := self.arch
 	slot1 := arch.getSlot(self.id1)
@@ -111,7 +92,7 @@ func (self *Batch[T]) CreateEntitiesWithComponentsTo(count int, dst []Entity, c1
 	for i := 0; i < count; i++ {
 		copy(data1[startIndex+i*self.size1:], src1)
 	}
-	return dst
+	return true
 }
 
 // AddComponentBatch adds a component to multiple entities.

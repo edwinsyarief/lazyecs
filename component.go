@@ -23,6 +23,10 @@ var (
 	componentSizes  [maxComponentTypes]uintptr
 )
 
+func init() {
+	ResetGlobalRegistry()
+}
+
 // ResetGlobalRegistry resets the global component registry.
 // This is useful for tests or applications that need to re-initialize the ECS state.
 func ResetGlobalRegistry() {

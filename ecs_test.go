@@ -496,48 +496,52 @@ func TestSetComponentBatch2(t *testing.T) {
 	}
 }
 
-// go test -run ^TestBatchCreationTo$ . -count 1
-func TestBatchCreationTo(t *testing.T) {
+// go test -run ^TestBatchEntityCreation$ . -count 1
+func TestBatchEntityCreation(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
 	batch := lazyecs.CreateBatch[Position](world)
 
-	dst := make([]lazyecs.Entity, 0, 10)
-	entities := batch.CreateEntitiesTo(5, dst)
-
-	if len(entities) != 5 {
-		t.Fatalf("Expected 5 entities, got %d", len(entities))
-	}
-	if cap(entities) != 10 {
-		t.Errorf("Expected capacity 10, got %d", cap(entities))
+	ok := batch.CreateEntities(5)
+	if !ok {
+		t.Fatalf("Expected true, got %v", ok)
 	}
 
-	// Test with a nil slice
-	entities = batch.CreateEntitiesTo(3, nil)
-	if len(entities) != 3 {
-		t.Fatalf("Expected 3 entities from nil slice, got %d", len(entities))
+	query := lazyecs.CreateQuery[Position](world)
+	count := 0
+	for query.Next() {
+		count++
+	}
+
+	if count != 5 {
+		t.Fatalf("Expected 5 entities from nil slice, got %d", count)
 	}
 }
 
-// go test -run ^TestBatchCreationWithComponentsTo$ . -count 1
-func TestBatchCreationWithComponentsTo(t *testing.T) {
+// go test -run ^TestBatchEntityCreationWithComponents$ . -count 1
+func TestBatchEntityCreationWithComponents(t *testing.T) {
 	world, _, _, _ := setupWorld(t)
 	batch := lazyecs.CreateBatch[Position](world)
 
-	dst := make([]lazyecs.Entity, 0, 5)
-	entities := batch.CreateEntitiesWithComponentsTo(3, dst, Position{X: 10, Y: 20})
-
-	if len(entities) != 3 {
-		t.Fatalf("Expected 3 entities, got %d", len(entities))
+	ok := batch.CreateEntitiesWithComponents(3, Position{X: 10, Y: 20})
+	if !ok {
+		t.Fatalf("Expected true, got %v", ok)
 	}
 
-	for _, e := range entities {
-		p, ok := lazyecs.GetComponent[Position](world, e)
+	query := lazyecs.CreateQuery[Position](world)
+	count := 0
+	for query.Next() {
+		count++
+		p, ok := lazyecs.GetComponent[Position](world, query.Entity())
 		if !ok {
 			t.Fatal("Failed to get components from batch-created entity")
 		}
 		if p.X != 10 || p.Y != 20 {
 			t.Errorf("Position data incorrect. Got %+v", p)
 		}
+	}
+
+	if count != 3 {
+		t.Fatalf("Expected 3 entities, got %d", count)
 	}
 }
 
@@ -800,7 +804,7 @@ func BenchmarkBatchCreationTo_Preallocated(b *testing.B) {
 	for b.Loop() {
 		// In a real scenario, the slice would be cleared, not re-made.
 		dst = dst[:0]
-		_ = batch.CreateEntitiesTo(numEntities, dst)
+		_ = batch.CreateEntities(numEntities)
 	}
 }
 
@@ -817,7 +821,7 @@ func BenchmarkBatchCreationWithComponentsTo_Preallocated(b *testing.B) {
 
 	for b.Loop() {
 		dst = dst[:0]
-		_ = batch.CreateEntitiesWithComponentsTo(numEntities, dst, pos)
+		_ = batch.CreateEntitiesWithComponents(numEntities, pos)
 	}
 }
 

@@ -244,6 +244,12 @@ func (self *World) RemoveEntity(e Entity) {
 	self.toRemove[len(self.toRemove)-1] = e
 }
 
+// RemoveEntities marks multiple entities for removal. The actual removal is processed by ProcessRemovals.
+func (self *World) RemoveEntities(es []Entity) {
+	self.toRemove = extendSlice(self.toRemove, len(es))
+	copy(self.toRemove[len(self.toRemove)-len(es):], es)
+}
+
 // ProcessRemovals processes the entities marked for removal.
 func (self *World) ProcessRemovals() {
 	if len(self.toRemove) == 0 {
