@@ -13,6 +13,11 @@ type Batch[T any] struct {
 	size1 int
 }
 
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch[T]) New(w *World) *Batch[T] {
+	return CreateBatch[T](w)
+}
+
 // CreateBatch creates a new Batch for creating entities with one component type.
 func CreateBatch[T any](w *World) *Batch[T] {
 	id1, ok := TryGetID[T]()

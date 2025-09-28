@@ -84,3 +84,9 @@ func CreateQuery{{.N}}[{{.Types}}](w *World, excludes ...ComponentID) *Query{{.N
 		index:       -1,
 	}
 }
+
+// New creates a new query for entities with {{.N}} specific component type(s).
+// It allows specifying component types to exclude from the query results.
+func (self *Query{{.N}}[{{.TypeVars}}]) New(w *World, excludes ...ComponentID) *Query{{.N}}[{{.TypeVars}}] {
+	return CreateQuery{{.N}}[{{.TypeVars}}](w, excludes...)
+}

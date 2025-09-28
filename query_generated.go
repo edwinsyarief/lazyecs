@@ -100,6 +100,12 @@ func CreateQuery2[T1 any, T2 any](w *World, excludes ...ComponentID) *Query2[T1,
 		archIdx:     0,
 		index:       -1,
 	}
+}
+
+// New creates a new query for entities with 2 specific component type(s).
+// It allows specifying component types to exclude from the query results.
+func (self *Query2[T1, T2]) New(w *World, excludes ...ComponentID) *Query2[T1, T2] {
+	return CreateQuery2[T1, T2](w, excludes...)
 }// Query3 is an iterator over entities that have a specific set of components.
 // This query is for entities with 3 component type(s).
 type Query3[T1 any, T2 any, T3 any] struct {
@@ -211,6 +217,12 @@ func CreateQuery3[T1 any, T2 any, T3 any](w *World, excludes ...ComponentID) *Qu
 		archIdx:     0,
 		index:       -1,
 	}
+}
+
+// New creates a new query for entities with 3 specific component type(s).
+// It allows specifying component types to exclude from the query results.
+func (self *Query3[T1, T2, T3]) New(w *World, excludes ...ComponentID) *Query3[T1, T2, T3] {
+	return CreateQuery3[T1, T2, T3](w, excludes...)
 }// Query4 is an iterator over entities that have a specific set of components.
 // This query is for entities with 4 component type(s).
 type Query4[T1 any, T2 any, T3 any, T4 any] struct {
@@ -335,6 +347,12 @@ func CreateQuery4[T1 any, T2 any, T3 any, T4 any](w *World, excludes ...Componen
 		archIdx:     0,
 		index:       -1,
 	}
+}
+
+// New creates a new query for entities with 4 specific component type(s).
+// It allows specifying component types to exclude from the query results.
+func (self *Query4[T1, T2, T3, T4]) New(w *World, excludes ...ComponentID) *Query4[T1, T2, T3, T4] {
+	return CreateQuery4[T1, T2, T3, T4](w, excludes...)
 }// Query5 is an iterator over entities that have a specific set of components.
 // This query is for entities with 5 component type(s).
 type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
@@ -472,4 +490,10 @@ func CreateQuery5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, excludes ...
 		archIdx:     0,
 		index:       -1,
 	}
+}
+
+// New creates a new query for entities with 5 specific component type(s).
+// It allows specifying component types to exclude from the query results.
+func (self *Query5[T1, T2, T3, T4, T5]) New(w *World, excludes ...ComponentID) *Query5[T1, T2, T3, T4, T5] {
+	return CreateQuery5[T1, T2, T3, T4, T5](w, excludes...)
 }

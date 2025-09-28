@@ -8,6 +8,11 @@ type Batch{{.N}}[{{.Types}}] struct {
 	{{end}}
 }
 
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch{{.N}}[{{.TypeVars}}]) New(w *World) *Batch{{.N}}[{{.TypeVars}}] {
+	return CreateBatch{{.N}}[{{.TypeVars}}](w)
+}
+
 // CreateBatch{{.N}} creates a new Batch for creating entities with {{.N}} component types.
 func CreateBatch{{.N}}[{{.Types}}](w *World) *Batch{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}id{{.Index}}, ok{{.Index}} := TryGetID[{{.TypeName}}]()

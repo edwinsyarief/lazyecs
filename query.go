@@ -17,9 +17,9 @@ type Query[T any] struct {
 }
 
 // CreateQuery creates a new query for entities with one specific component type.
-func CreateQuery[T any](w *World, excludes ...ComponentID) Query[T] {
+func CreateQuery[T any](w *World, excludes ...ComponentID) *Query[T] {
 	id1 := GetID[T]()
-	return Query[T]{
+	return &Query[T]{
 		world:       w,
 		includeMask: makeMask1(id1),
 		excludeMask: makeMask(excludes),
@@ -27,6 +27,11 @@ func CreateQuery[T any](w *World, excludes ...ComponentID) Query[T] {
 		archIdx:     0,
 		index:       -1,
 	}
+}
+
+// New creates a new query for entities with one specific component type.
+func (self *Query[T]) New(w *World, excludes ...ComponentID) *Query[T] {
+	return CreateQuery[T](w, excludes...)
 }
 
 // Reset resets the query for reuse.

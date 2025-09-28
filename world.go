@@ -81,7 +81,6 @@ func NewWorldWithOptions(opts WorldOptions) *World {
 			},
 		},
 	}
-	w.getOrCreateArchetype(maskType{})
 	return w
 }
 

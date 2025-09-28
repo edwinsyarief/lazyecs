@@ -17,6 +17,11 @@ type Batch2[T1 any, T2 any] struct {
 	
 }
 
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch2[T1, T2]) New(w *World) *Batch2[T1, T2] {
+	return CreateBatch2[T1, T2](w)
+}
+
 // CreateBatch2 creates a new Batch for creating entities with 2 component types.
 func CreateBatch2[T1 any, T2 any](w *World) *Batch2[T1, T2] {
 	id1, ok1 := TryGetID[T1]()
@@ -570,6 +575,11 @@ type Batch3[T1 any, T2 any, T3 any] struct {
 	size2 int
 	size3 int
 	
+}
+
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch3[T1, T2, T3]) New(w *World) *Batch3[T1, T2, T3] {
+	return CreateBatch3[T1, T2, T3](w)
 }
 
 // CreateBatch3 creates a new Batch for creating entities with 3 component types.
@@ -1161,6 +1171,11 @@ type Batch4[T1 any, T2 any, T3 any, T4 any] struct {
 	size3 int
 	size4 int
 	
+}
+
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch4[T1, T2, T3, T4]) New(w *World) *Batch4[T1, T2, T3, T4] {
+	return CreateBatch4[T1, T2, T3, T4](w)
 }
 
 // CreateBatch4 creates a new Batch for creating entities with 4 component types.
@@ -1788,6 +1803,11 @@ type Batch5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	size4 int
 	size5 int
 	
+}
+
+// New creates a new Batch for creating entities with one component type.
+func (self *Batch5[T1, T2, T3, T4, T5]) New(w *World) *Batch5[T1, T2, T3, T4, T5] {
+	return CreateBatch5[T1, T2, T3, T4, T5](w)
 }
 
 // CreateBatch5 creates a new Batch for creating entities with 5 component types.
