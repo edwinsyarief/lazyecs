@@ -37,11 +37,9 @@ func SetComponents{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	}
 	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
-
 	var setMask bitmask256
 	{{range .Components}}setMask.set(id{{.Index}})
 	{{end}}
-
 	if a.mask.contains(setMask) {
 		// already has all, just set
 		{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
@@ -49,35 +47,32 @@ func SetComponents{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 		{{end}}
 		return
 	}
-
 	newMask := a.mask
 	{{range .Components}}newMask.set(id{{.Index}})
 	{{end}}
-
 	var tempSpecs [MaxComponentTypes]compSpec
 	count := 0
-	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
-		var bm bitmask256
-		bm.set(i)
-		if newMask.contains(bm) {
-			typ := w.compIDToType[i]
-			tempSpecs[count] = compSpec{i, typ, typ.Size()}
+	for wi := 0; wi < 4; wi++ {
+		word := newMask[wi]
+		for word != 0 {
+			bit := bits.TrailingZeros64(word)
+			cid := uint8(wi*64 + bit)
+			typ := w.compIDToType[cid]
+			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
 			count++
+			word &= word - 1 // clear lowest set bit
 		}
 	}
 	specs := tempSpecs[:count]
 	targetA := w.getOrCreateArchetype(newMask, specs)
-
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
 	targetA.size++
-
 	for _, cid := range a.compOrder {
 		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-
 	{{range .Components}}
 	{
 		var singleMask bitmask256
@@ -88,9 +83,7 @@ func SetComponents{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 		}
 	}
 	{{end}}
-
 	w.removeFromArchetype(a, meta)
-
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
@@ -109,37 +102,33 @@ func RemoveComponents{{.N}}[{{.Types}}](w *World, e Entity) {
 	}
 	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
-
 	var removeMask bitmask256
 	{{range .Components}}removeMask.set(id{{.Index}})
 	{{end}}
-
 	if !a.mask.intersects(removeMask) {
 		return
 	}
-
 	newMask := a.mask
 	{{range .Components}}newMask.unset(id{{.Index}})
 	{{end}}
-
 	var tempSpecs [MaxComponentTypes]compSpec
 	count := 0
-	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
-		var bm bitmask256
-		bm.set(i)
-		if newMask.contains(bm) {
-			typ := w.compIDToType[i]
-			tempSpecs[count] = compSpec{i, typ, typ.Size()}
+	for wi := 0; wi < 4; wi++ {
+		word := newMask[wi]
+		for word != 0 {
+			bit := bits.TrailingZeros64(word)
+			cid := uint8(wi*64 + bit)
+			typ := w.compIDToType[cid]
+			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
 			count++
+			word &= word - 1 // clear lowest set bit
 		}
 	}
 	specs := tempSpecs[:count]
 	targetA := w.getOrCreateArchetype(newMask, specs)
-
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
 	targetA.size++
-
 	for _, cid := range a.compOrder {
 		var bm bitmask256
 		bm.set(cid)
@@ -150,9 +139,7 @@ func RemoveComponents{{.N}}[{{.Types}}](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-
 	w.removeFromArchetype(a, meta)
-
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }

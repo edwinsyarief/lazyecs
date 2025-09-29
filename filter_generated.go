@@ -90,6 +90,25 @@ func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
 	
 	return (*T1)(p1), (*T2)(p2)
+}
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter2[T1, T2]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
 }// Filter3 provides a fast iterator over entities with components T1, T2, T3.
 type Filter3[T1 any, T2 any, T3 any] struct {
 	world          *World
@@ -179,6 +198,25 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
 	
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
+}
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter3[T1, T2, T3]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
 }// Filter4 provides a fast iterator over entities with components T1, T2, T3, T4.
 type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 	world          *World
@@ -273,6 +311,25 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 	p4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
 	
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
+}
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
 }// Filter5 provides a fast iterator over entities with components T1, T2, T3, T4, T5.
 type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	world          *World
@@ -372,4 +429,23 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 	p5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
 	
 	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
+}
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
 }

@@ -78,3 +78,22 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
 	{{end}}
 	return {{.ReturnPtrs}}
 }
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
+}
