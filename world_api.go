@@ -1,6 +1,7 @@
 package lazyecs
 
 import (
+	"math/bits"
 	"reflect"
 	"unsafe"
 )
@@ -43,20 +44,27 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	// add new
 	newMask := a.mask
 	newMask.set(id)
-	// build specs for newMask
-	var tempSpecs [MaxComponentTypes]compSpec
-	count := 0
-	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
-		var bm bitmask256
-		bm.set(i)
-		if newMask.contains(bm) {
-			typ := w.compIDToType[i]
-			tempSpecs[count] = compSpec{i, typ, typ.Size()}
-			count++
+	var targetA *archetype
+	if idx, ok := w.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes[idx]
+	} else {
+		// build specs only when creating new archetype
+		var tempSpecs [MaxComponentTypes]compSpec
+		count := 0
+		for wi := 0; wi < 4; wi++ {
+			word := newMask[wi]
+			for word != 0 {
+				bit := bits.TrailingZeros64(word)
+				cid := uint8(wi*64 + bit)
+				typ := w.compIDToType[cid]
+				tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+				count++
+				word &= word - 1 // clear lowest set bit
+			}
 		}
+		specs := tempSpecs[:count]
+		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
-	specs := tempSpecs[:count]
-	targetA := w.getOrCreateArchetype(newMask, specs)
 	// move to target
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -94,20 +102,27 @@ func RemoveComponent[T any](w *World, e Entity) {
 	// remove
 	newMask := a.mask
 	newMask.unset(id)
-	// build specs for newMask
-	var tempSpecs [MaxComponentTypes]compSpec
-	count := 0
-	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
-		var bm bitmask256
-		bm.set(i)
-		if newMask.contains(bm) {
-			typ := w.compIDToType[i]
-			tempSpecs[count] = compSpec{i, typ, typ.Size()}
-			count++
+	var targetA *archetype
+	if idx, ok := w.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes[idx]
+	} else {
+		// build specs only when creating new archetype
+		var tempSpecs [MaxComponentTypes]compSpec
+		count := 0
+		for wi := 0; wi < 4; wi++ {
+			word := newMask[wi]
+			for word != 0 {
+				bit := bits.TrailingZeros64(word)
+				cid := uint8(wi*64 + bit)
+				typ := w.compIDToType[cid]
+				tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+				count++
+				word &= word - 1 // clear lowest set bit
+			}
 		}
+		specs := tempSpecs[:count]
+		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
-	specs := tempSpecs[:count]
-	targetA := w.getOrCreateArchetype(newMask, specs)
 	// move to target
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
