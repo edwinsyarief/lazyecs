@@ -57,7 +57,7 @@ func SetComponent[T any](w *World, e Entity, val T) {
 				bit := bits.TrailingZeros64(word)
 				cid := uint8(wi*64 + bit)
 				typ := w.compIDToType[cid]
-				tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+				tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 				count++
 				word &= word - 1 // clear lowest set bit
 			}
@@ -115,7 +115,7 @@ func RemoveComponent[T any](w *World, e Entity) {
 				bit := bits.TrailingZeros64(word)
 				cid := uint8(wi*64 + bit)
 				typ := w.compIDToType[cid]
-				tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+				tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 				count++
 				word &= word - 1 // clear lowest set bit
 			}

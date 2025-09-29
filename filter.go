@@ -5,20 +5,19 @@ import (
 	"unsafe"
 )
 
-//----------------------------------------
+// ----------------------------------------
 // Filter for 1 component
-//----------------------------------------
-
+// ----------------------------------------
 // Filter provides a fast iterator over entities with component T.
 type Filter[T any] struct {
 	world          *World
-	mask           bitmask256
-	compID         uint8
 	matchingArches []*archetype
-	lastVersion    uint32
+	mask           bitmask256
 	curMatchIdx    int
 	curIdx         int
 	curEnt         Entity
+	lastVersion    uint32
+	compID         uint8
 }
 
 // NewFilter creates a filter for entities with component T.

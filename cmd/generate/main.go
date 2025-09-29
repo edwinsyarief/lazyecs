@@ -73,7 +73,7 @@ func main() {
 		_, _ = outFile.WriteString("package lazyecs\n\n")
 		switch tplFile {
 		case "world_api_generated.go.tpl":
-			_, _ = outFile.WriteString("import (\n\t\"math/bits\"\n\n\t\"reflect\"\n\t\"unsafe\"\n)\n\n")
+			_, _ = outFile.WriteString("import (\n\t\"math/bits\"\n\t\"reflect\"\n\t\"unsafe\"\n)\n\n")
 		case "filter_generated.go.tpl", "builder_generated.go.tpl":
 			_, _ = outFile.WriteString("import (\n\t\"reflect\"\n\t\"unsafe\"\n)\n\n")
 		}

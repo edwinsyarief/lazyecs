@@ -1,5 +1,3 @@
-//go:generate go run ./cmd/generate
-
 // Package lazyecs implements a high-performance, zero-allocation,
 // archetype-based Entity Component System for Go.
 //
@@ -10,7 +8,8 @@
 // - Preallocated pools for entities and component arrays.
 // - Simple, generic Builder and Filter APIs for 1 or 2 components.
 // - Zero allocations (B/op and allocs/op = 0) during Create, Get, Query.
-
+//
+//go:generate go run ./cmd/generate
 package lazyecs
 
 import (
@@ -18,10 +17,9 @@ import (
 	"unsafe"
 )
 
-//----------------------------------------
+// ----------------------------------------
 // Constants and Types
-//----------------------------------------
-
+// ----------------------------------------
 const MaxComponentTypes = 256
 
 // Entity is a unique ID + version tag.
@@ -39,9 +37,9 @@ type entityMeta struct {
 
 // compSpec bundles a component type’s ID and reflect.Type.
 type compSpec struct {
-	id   uint8
 	typ  reflect.Type
 	size uintptr
+	id   uint8
 }
 
 // bitmask256 represents up to 256 component bits.
@@ -52,7 +50,6 @@ func (m *bitmask256) set(bit uint8) {
 	o := bit % 64
 	m[i] |= 1 << o
 }
-
 func (m *bitmask256) unset(bit uint8) {
 	i := bit / 64
 	o := bit % 64
@@ -77,30 +74,29 @@ func (m bitmask256) intersects(other bitmask256) bool {
 
 // archetype holds storage for one unique component-set mask.
 type archetype struct {
-	index        int        // position in world.archetypes
-	mask         bitmask256 // which component bits this arch uses
-	size         int        // current entity count
-	entityIDs    []Entity   // prealloc len=cap
 	compPointers [MaxComponentTypes]unsafe.Pointer
+	entityIDs    []Entity // prealloc len=cap
+	compOrder    []uint8  // list of component IDs in this arch
 	compSizes    [MaxComponentTypes]uintptr
-	compOrder    []uint8 // list of component IDs in this arch
+	mask         bitmask256 // which component bits this arch uses
+	index        int        // position in world.archetypes
+	size         int        // current entity count
 }
 
-//----------------------------------------
+// ----------------------------------------
 // World
-//----------------------------------------
-
+// ----------------------------------------
 type World struct {
-	capacity         int
-	freeIDs          []uint32           // stack of free entity IDs
-	metas            []entityMeta       // len = capacity
-	archetypes       []*archetype       // all archetypes
+	compIDToType     [MaxComponentTypes]reflect.Type
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	compTypeMap      map[reflect.Type]uint8
-	compIDToType     [MaxComponentTypes]reflect.Type
-	nextCompTypeID   uint16
+	freeIDs          []uint32     // stack of free entity IDs
+	metas            []entityMeta // len = capacity
+	archetypes       []*archetype // all archetypes
+	capacity         int
 	nextEntityVer    uint32
 	archetypeVersion uint32
+	nextCompTypeID   uint16
 }
 
 // NewWorld preallocates pools for up to cap entities.
@@ -178,13 +174,11 @@ func (w *World) createEntity(a *archetype) Entity {
 	last := len(w.freeIDs) - 1
 	id := w.freeIDs[last]
 	w.freeIDs = w.freeIDs[:last]
-
 	meta := &w.metas[id]
 	meta.archetypeIndex = a.index
 	meta.index = a.size
 	meta.version = w.nextEntityVer
 	ent := Entity{ID: id, Version: meta.version}
-
 	// place into archetype
 	a.entityIDs[a.size] = ent
 	a.size++
@@ -202,7 +196,6 @@ func (w *World) RemoveEntity(e Entity) {
 	a := w.archetypes[meta.archetypeIndex]
 	idx := meta.index
 	lastIdx := a.size - 1
-
 	// swap last into idx
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]

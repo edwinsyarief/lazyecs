@@ -3,7 +3,6 @@ package lazyecs
 
 import (
 	"math/bits"
-
 	"reflect"
 	"unsafe"
 )
@@ -78,7 +77,7 @@ func SetComponents2[T1 any, T2 any](w *World, e Entity, c1 T1, c2 T2) {
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -152,7 +151,7 @@ func RemoveComponents2[T1 any, T2 any](w *World, e Entity) {
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -255,7 +254,7 @@ func SetComponents3[T1 any, T2 any, T3 any](w *World, e Entity, c1 T1, c2 T2, c3
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -342,7 +341,7 @@ func RemoveComponents3[T1 any, T2 any, T3 any](w *World, e Entity) {
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -455,7 +454,7 @@ func SetComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, c1 T1, c
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -555,7 +554,7 @@ func RemoveComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -678,7 +677,7 @@ func SetComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, 
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
@@ -791,7 +790,7 @@ func RemoveComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entit
 			bit := bits.TrailingZeros64(word)
 			cid := uint8(wi*64 + bit)
 			typ := w.compIDToType[cid]
-			tempSpecs[count] = compSpec{cid, typ, typ.Size()}
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
 			count++
 			word &= word - 1 // clear lowest set bit
 		}
