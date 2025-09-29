@@ -14,6 +14,7 @@ package lazyecs
 
 import (
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
@@ -87,6 +88,7 @@ type archetype struct {
 // World
 // ----------------------------------------
 type World struct {
+	Resources        sync.Map
 	compIDToType     [MaxComponentTypes]reflect.Type
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	compTypeMap      map[reflect.Type]uint8
