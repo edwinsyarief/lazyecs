@@ -30,15 +30,12 @@ func main() {
 
 func run(rounds, iters, numEntities int) {
 	for range rounds {
-		lazyecs.RegisterComponent[comp1]()
-		lazyecs.RegisterComponent[comp2]()
-
-		w := lazyecs.NewWorld()
-		query := lazyecs.CreateQuery2[comp1, comp2](w)
-		batch := lazyecs.CreateBatch2[comp1, comp2](w)
+		w := lazyecs.NewWorld(numEntities)
+		query := lazyecs.NewFilter2[comp1, comp2](w)
+		batch := lazyecs.NewBuilder2[comp1, comp2](w)
 
 		for range iters {
-			batch.CreateEntities(numEntities)
+			batch.NewEntities(numEntities)
 			entities := []lazyecs.Entity{}
 			query.Reset()
 			for query.Next() {
@@ -47,8 +44,9 @@ func run(rounds, iters, numEntities int) {
 				comp1.V += comp2.V
 				comp1.W += comp2.W
 			}
-			w.RemoveEntities(entities)
-			w.ProcessRemovals()
+			for _, e := range entities {
+				w.RemoveEntity(e)
+			}
 		}
 	}
 }

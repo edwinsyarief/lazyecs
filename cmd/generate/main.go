@@ -57,7 +57,7 @@ func main() {
 		}
 		maxN = n
 	}
-	templates := []string{"batch_generated.go.tpl", "component_generated.go.tpl", "api_generated.go.tpl", "query_generated.go.tpl"}
+	templates := []string{"builder_generated.go.tpl", "world_api_generated.go.tpl", "filter_generated.go.tpl"}
 	templateDir := "templates"
 	outputDir := "."
 	fmt.Printf("Generating code for N=1 to %d...\n", maxN)

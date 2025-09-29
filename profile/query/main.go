@@ -30,13 +30,10 @@ func main() {
 
 func run(rounds, iters, numEntities int) {
 	for range rounds {
-		lazyecs.RegisterComponent[comp1]()
-		lazyecs.RegisterComponent[comp2]()
-
-		w := lazyecs.NewWorld()
-		query := lazyecs.CreateQuery2[comp1, comp2](w)
-		batch := lazyecs.CreateBatch2[comp1, comp2](w)
-		batch.CreateEntities(numEntities)
+		w := lazyecs.NewWorld(numEntities)
+		query := lazyecs.NewFilter2[comp1, comp2](w)
+		batch := lazyecs.NewBuilder2[comp1, comp2](w)
+		batch.NewEntities(numEntities)
 
 		for range iters {
 			query.Reset()
