@@ -213,6 +213,7 @@ Filters are available for iterating over entities with 1 to 5 components (`NewFi
 | `(f *Filter[T]) Entity() Entity`       | Returns the current `Entity` in the iteration.            |
 | `(f *Filter[T]) Get() *T`              | Returns the component `T` for the current entity.         |
 | `(f *Filter[T]) Reset()`               | Resets the iterator to the beginning.                   |
+| `(f *Filter[T]) RemoveEntities()`      | Removes entities.                   |
 
 ## Concurrency
 
