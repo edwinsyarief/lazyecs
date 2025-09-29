@@ -1,402 +1,734 @@
-package lazyecs_test
+package lazyecs
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
-
-	"github.com/edwinsyarief/lazyecs"
+	"unsafe"
 )
 
-// --- Test Components ---
-type Position struct{ X, Y float32 }
-type Velocity struct{ VX, VY float32 }
-type Health struct{ Current, Max int }
-type Tag struct{}
-type UnregisteredComponent struct{}
+// Define constants for configurability
+const (
+	TestCap      = 100000 // Capacity for world in tests
+	TestEntities = 100000 // Number of entities for data integrity tests
+)
 
-// --- Test Suite Setup ---
-func setupWorld(_ *testing.T) (*lazyecs.World, lazyecs.ComponentID, lazyecs.ComponentID, lazyecs.ComponentID) {
-	lazyecs.ResetGlobalRegistry()
-	posID := lazyecs.RegisterComponent[Position]()
-	velID := lazyecs.RegisterComponent[Velocity]()
-	healthID := lazyecs.RegisterComponent[Health]()
-	lazyecs.RegisterComponent[Tag]()
-	return lazyecs.NewWorld(), posID, velID, healthID
+// Define some test components
+type Position struct {
+	X, Y float32
 }
 
-// --- Tests ---
+type Velocity struct {
+	DX, DY float32
+}
 
-// go test -run ^TestCreateEntity$ . -count 1
+type Health struct {
+	HP int
+}
+
+type WithPointer struct {
+	Data *int
+}
+
+func TestNewWorld(t *testing.T) {
+	w := NewWorld(TestCap)
+	if w.capacity != TestCap {
+		t.Errorf("expected capacity %d, got %d", TestCap, w.capacity)
+	}
+	if len(w.freeIDs) != TestCap {
+		t.Errorf("expected %d free IDs, got %d", TestCap, len(w.freeIDs))
+	}
+	if len(w.metas) != TestCap {
+		t.Errorf("expected %d metas, got %d", TestCap, len(w.metas))
+	}
+	if len(w.archetypes) != 0 {
+		t.Errorf("expected 0 archetypes, got %d", len(w.archetypes))
+	}
+}
+
+func TestGetCompTypeID(t *testing.T) {
+	w := NewWorld(TestCap)
+	id1 := w.getCompTypeID(reflect.TypeFor[Position]())
+	id2 := w.getCompTypeID(reflect.TypeFor[Velocity]())
+	id3 := w.getCompTypeID(reflect.TypeFor[Position]())
+	if id1 != id3 {
+		t.Errorf("expected same ID for same type, got %d and %d", id1, id3)
+	}
+	if id1 == id2 {
+		t.Errorf("expected different IDs for different types, got %d", id1)
+	}
+	if w.nextCompTypeID != 2 {
+		t.Errorf("expected nextCompTypeID 2, got %d", w.nextCompTypeID)
+	}
+}
+
+func TestGetOrCreateArchetype(t *testing.T) {
+	w := NewWorld(TestCap)
+	var mask bitmask256
+	mask.set(0)
+	specs := []compSpec{{id: 0, typ: reflect.TypeFor[Position](), size: unsafe.Sizeof(Position{})}}
+	a1 := w.getOrCreateArchetype(mask, specs)
+	if a1 == nil {
+		t.Fatal("archetype not created")
+	}
+	if len(w.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	}
+	a2 := w.getOrCreateArchetype(mask, specs)
+	if a1 != a2 {
+		t.Errorf("expected same archetype, got different")
+	}
+}
+
 func TestCreateEntity(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	e1 := world.CreateEntity()
-	e2 := world.CreateEntity()
-
-	if e1.ID != 0 {
-		t.Errorf("Expected first entity ID to be 0, got %d", e1.ID)
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ent := builder.NewEntity()
+	if !w.IsValid(ent) {
+		t.Error("entity should be valid")
 	}
-	if e1.Version != 1 {
-		t.Errorf("Expected first entity version to be 1, got %d", e1.Version)
+	if w.metas[ent.ID].archetypeIndex == -1 {
+		t.Error("archetypeIndex not set")
 	}
-	if e2.ID != 1 {
-		t.Errorf("Expected second entity ID to be 1, got %d", e2.ID)
+	if w.metas[ent.ID].index != 0 {
+		t.Errorf("expected index 0, got %d", w.metas[ent.ID].index)
 	}
-}
-
-// go test -run ^TestAddComponent$ . -count 1
-func TestAddComponent(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	e := world.CreateEntity()
-
-	p, ok := lazyecs.AddComponent[Position](world, e)
-	if !ok {
-		t.Fatal("Failed to add component")
+	if w.metas[ent.ID].version != ent.Version {
+		t.Error("version mismatch")
 	}
-	if p == nil {
-		t.Fatal("AddComponent returned a nil pointer")
+	a := w.archetypes[w.metas[ent.ID].archetypeIndex]
+	if a.size != 1 {
+		t.Errorf("expected size 1, got %d", a.size)
 	}
-
-	p.X = 10
-	p.Y = 20
-
-	retrievedP, ok := lazyecs.GetComponent[Position](world, e)
-	if !ok {
-		t.Fatal("GetComponent failed to find the component")
-	}
-	if retrievedP.X != 10 || retrievedP.Y != 20 {
-		t.Errorf("Component data is incorrect after adding. Got %+v", retrievedP)
+	if a.entityIDs[0] != ent {
+		t.Error("entity not in archetype")
 	}
 }
 
-// go test -run ^TestSetComponent$ . -count 1
+func TestNewEntitiesBatch(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	builder.NewEntities(5)
+	a := builder.arch
+	if a.size != 5 {
+		t.Errorf("expected size 5, got %d", a.size)
+	}
+	for i := 0; i < 5; i++ {
+		ent := a.entityIDs[i]
+		if !w.IsValid(ent) {
+			t.Errorf("entity %d invalid", i)
+		}
+	}
+}
+
+func TestGetComponent(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ent := builder.NewEntity()
+	pos := builder.Get(ent)
+	if pos == nil {
+		t.Fatal("Get returned nil")
+	}
+	*pos = Position{1, 2}
+	got := builder.Get(ent)
+	if got.X != 1 || got.Y != 2 {
+		t.Error("component not set correctly")
+	}
+	// invalid entity
+	invalid := Entity{ID: 999, Version: 1}
+	if builder.Get(invalid) != nil {
+		t.Error("expected nil for invalid entity")
+	}
+	// wrong component
+	velBuilder := NewBuilder[Velocity](w)
+	if velBuilder.Get(ent) != nil {
+		t.Error("expected nil for missing component")
+	}
+}
+
 func TestSetComponent(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	e := world.CreateEntity()
-
-	// --- SCENARIO 1: ADD A NEW COMPONENT ---
-	t.Run("AddNewComponent", func(t *testing.T) {
-		ok := lazyecs.SetComponent(world, e, Position{X: 100, Y: 200})
-		if !ok {
-			t.Fatal("SetComponent failed to add a new component")
-		}
-
-		p, ok := lazyecs.GetComponent[Position](world, e)
-		if !ok {
-			t.Fatal("GetComponent failed after SetComponent added a component")
-		}
-		if p.X != 100 || p.Y != 200 {
-			t.Errorf("Component data incorrect after SetComponent add. Expected {100, 200}, got %+v", p)
-		}
-	})
-
-	// --- SCENARIO 2: UPDATE AN EXISTING COMPONENT ---
-	t.Run("UpdateExistingComponent", func(t *testing.T) {
-		// Add a velocity component to ensure it's not affected by the update.
-		lazyecs.SetComponent(world, e, Velocity{VX: 1, VY: 2})
-
-		ok := lazyecs.SetComponent(world, e, Position{X: 555, Y: 777})
-		if !ok {
-			t.Fatal("SetComponent failed to update an existing component")
-		}
-
-		p, ok := lazyecs.GetComponent[Position](world, e)
-		if !ok {
-			t.Fatal("GetComponent failed after SetComponent updated a component")
-		}
-		if p.X != 555 || p.Y != 777 {
-			t.Errorf("Component data incorrect after SetComponent update. Expected {555, 777}, got %+v", p)
-		}
-
-		// Verify other components are untouched
-		v, ok := lazyecs.GetComponent[Velocity](world, e)
-		if !ok {
-			t.Fatal("Velocity component was lost after updating Position")
-		}
-		if v.VX != 1 || v.VY != 2 {
-			t.Errorf("Velocity component data was corrupted. Got %+v", v)
-		}
-	})
-
-	// --- SCENARIO 3: ATTEMPT TO SET UNREGISTERED COMPONENT ---
-	t.Run("SetUnregisteredComponent", func(t *testing.T) {
-		ok := lazyecs.SetComponent(world, e, UnregisteredComponent{})
-		if ok {
-			t.Fatal("SetComponent should return false for an unregistered component, but it returned true")
-		}
-	})
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ent := builder.NewEntity()
+	SetComponent(w, ent, Velocity{DX: 3, DY: 4})
+	if !w.IsValid(ent) {
+		t.Error("entity invalid after set")
+	}
+	vel := GetComponent[Velocity](w, ent)
+	if vel == nil {
+		t.Fatal("velocity not set")
+	}
+	if vel.DX != 3 || vel.DY != 4 {
+		t.Error("velocity values incorrect")
+	}
+	pos := GetComponent[Position](w, ent)
+	if pos == nil {
+		t.Error("position lost after set")
+	}
+	// set existing
+	SetComponent(w, ent, Position{X: 5, Y: 6})
+	pos = GetComponent[Position](w, ent)
+	if pos.X != 5 || pos.Y != 6 {
+		t.Error("position not updated")
+	}
 }
 
-// go test -run ^TestRemoveComponent$ . -count 1
 func TestRemoveComponent(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	e := world.CreateEntity()
-	lazyecs.AddComponent[Position](world, e)
-	lazyecs.AddComponent[Velocity](world, e)
-
-	removed := lazyecs.RemoveComponent[Position](world, e)
-	if !removed {
-		t.Fatal("RemoveComponent returned false")
+	w := NewWorld(TestCap)
+	builder2 := NewBuilder2[Position, Velocity](w)
+	ent := builder2.NewEntity()
+	RemoveComponent[Velocity](w, ent)
+	if GetComponent[Velocity](w, ent) != nil {
+		t.Error("velocity not removed")
 	}
-
-	_, ok := lazyecs.GetComponent[Position](world, e)
-	if ok {
-		t.Fatal("Component was not actually removed")
+	if GetComponent[Position](w, ent) == nil {
+		t.Error("position lost")
 	}
-
-	_, ok = lazyecs.GetComponent[Velocity](world, e)
-	if !ok {
-		t.Fatal("There is a component that not removed but removed")
+	// remove non-existing
+	RemoveComponent[Health](w, ent)
+	if !w.IsValid(ent) {
+		t.Error("entity invalid after removing non-existing")
 	}
 }
 
-// go test -run ^TestEntityRemoval$ . -count 1
-func TestEntityRemoval(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-	e1 := world.CreateEntity()
-	lazyecs.AddComponent[Position](world, e1)
-	e2 := world.CreateEntity()
-	p2, _ := lazyecs.AddComponent[Position](world, e2)
-	p2.X = 100
-
-	world.RemoveEntity(e1)
-	world.ProcessRemovals()
-
-	// Check if e1 is gone
-	_, ok := lazyecs.GetComponent[Position](world, e1)
-	if ok {
-		t.Fatal("GetComponent should fail for a removed entity")
+func TestRemoveEntity(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ent1 := builder.NewEntity()
+	ent2 := builder.NewEntity()
+	w.RemoveEntity(ent1)
+	if w.IsValid(ent1) {
+		t.Error("ent1 still valid after remove")
 	}
-
-	// Check if e2 is still there and correct
-	p2Retrieved, ok := lazyecs.GetComponent[Position](world, e2)
-	if !ok {
-		t.Fatal("Entity e2 was removed incorrectly")
+	if !w.IsValid(ent2) {
+		t.Error("ent2 invalid after removing ent1")
 	}
-	if p2Retrieved.X != 100 {
-		t.Errorf("Data for entity e2 was corrupted. Got %+v", p2Retrieved)
+	a := builder.arch
+	if a.size != 1 {
+		t.Errorf("expected size 1, got %d", a.size)
 	}
+	if a.entityIDs[0] != ent2 {
+		t.Error("ent2 not swapped")
+	}
+	if w.metas[ent2.ID].index != 0 {
+		t.Error("ent2 index not updated")
+	}
+	// remove stale
+	w.RemoveEntity(ent1)
+	if a.size != 1 {
+		t.Error("size changed on stale remove")
+	}
+}
 
-	// Check if query is correct
-	query := lazyecs.CreateQuery[Position](world)
+func TestFilter(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	builder.NewEntities(3)
+	builder2 := NewBuilder2[Position, Velocity](w)
+	builder2.NewEntities(2)
+	filter := NewFilter[Position](w)
 	count := 0
-	for query.Next() {
+	for filter.Next() {
+		count++
+		ent := filter.Entity()
+		if !w.IsValid(ent) {
+			t.Error("invalid entity in filter")
+		}
+		pos := filter.Get()
+		if pos == nil {
+			t.Error("nil component in filter")
+		}
+	}
+	if count != 5 {
+		t.Errorf("expected 5 entities, got %d", count)
+	}
+	filter.Reset()
+	count = 0
+	for filter.Next() {
 		count++
 	}
-	if count != 1 {
-		t.Errorf("Query returned %d entities, expected 1", count)
+	if count != 5 {
+		t.Error("reset failed")
 	}
 }
 
-// go test -run ^TestQuery$ . -count 1
-func TestQuery(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
+func TestFilter2(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	builder.NewEntities(3)
+	builder2 := NewBuilder2[Position, Velocity](w)
+	builder2.NewEntities(2)
+	filter2 := NewFilter2[Position, Velocity](w)
+	count := 0
+	for filter2.Next() {
+		count++
+		pos, vel := filter2.Get()
+		if pos == nil || vel == nil {
+			t.Error("nil components in filter2")
+		}
+	}
+	if count != 2 {
+		t.Errorf("expected 2 entities, got %d", count)
+	}
+}
 
-	// Entity with Position and Velocity
-	e1 := world.CreateEntity()
-	p1, _ := lazyecs.AddComponent[Position](world, e1)
-	p1.X = 10
-	lazyecs.AddComponent[Velocity](world, e1)
+func TestDataIntegrityAfterRemoveEntity(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder.NewEntity()
+		pos := builder.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+	}
+	// Remove every other entity
+	for i := 0; i < TestEntities; i += 2 {
+		w.RemoveEntity(ents[i])
+	}
+	// Check remaining entities' data
+	for i := 1; i < TestEntities; i += 2 {
+		if !w.IsValid(ents[i]) {
+			t.Errorf("entity %d should be valid", i)
+		}
+		pos := GetComponent[Position](w, ents[i])
+		if pos == nil {
+			t.Errorf("position nil for entity %d", i)
+		} else if pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("data corrupted for entity %d: got (%f,%f), expected (%f,%f)", i, pos.X, pos.Y, float32(i), float32(i*2))
+		}
+	}
+}
 
-	// Entity with only Position
-	e2 := world.CreateEntity()
-	p2, _ := lazyecs.AddComponent[Position](world, e2)
-	p2.X = 20
+func TestDataIntegrityAfterSetComponentNew(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder.NewEntity()
+		pos := builder.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+	}
+	// Add velocity to every entity
+	for i := 0; i < TestEntities; i++ {
+		SetComponent(w, ents[i], Velocity{DX: float32(i * 3), DY: float32(i * 4)})
+	}
+	// Check data
+	for i := 0; i < TestEntities; i++ {
+		pos := GetComponent[Position](w, ents[i])
+		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("position corrupted for entity %d", i)
+		}
+		vel := GetComponent[Velocity](w, ents[i])
+		if vel == nil || vel.DX != float32(i*3) || vel.DY != float32(i*4) {
+			t.Errorf("velocity incorrect for entity %d", i)
+		}
+	}
+}
 
-	// Query for entities with both Position and Velocity
-	queryBoth := lazyecs.CreateQuery2[Position, Velocity](world)
-	countBoth := 0
-	foundE1 := false
-	for queryBoth.Next() {
-		pos, _ := queryBoth.Get()
-		e := queryBoth.Entity()
-		countBoth++
-		if e.ID == e1.ID {
-			foundE1 = true
-			if pos.X != 10 {
-				t.Errorf("Incorrect component data in query slice for e1")
+func TestDataIntegrityAfterRemoveComponent(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder2 := NewBuilder2[Position, Velocity](w)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder2.NewEntity()
+		pos, vel := builder2.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+		*vel = Velocity{DX: float32(i * 3), DY: float32(i * 4)}
+	}
+	// Remove velocity from every entity
+	for i := 0; i < TestEntities; i++ {
+		RemoveComponent[Velocity](w, ents[i])
+	}
+	// Check data
+	for i := 0; i < TestEntities; i++ {
+		pos := GetComponent[Position](w, ents[i])
+		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("position corrupted for entity %d", i)
+		}
+		vel := GetComponent[Velocity](w, ents[i])
+		if vel != nil {
+			t.Errorf("velocity not removed for entity %d", i)
+		}
+	}
+}
+
+func TestComponentWithPointer(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[WithPointer](w)
+	ent := builder.NewEntity()
+	data := 42
+	comp := builder.Get(ent)
+	comp.Data = &data
+	got := builder.Get(ent)
+	if *got.Data != 42 {
+		t.Error("pointer data not preserved")
+	}
+	// Add another component
+	SetComponent(w, ent, Position{X: 1, Y: 2})
+	got = GetComponent[WithPointer](w, ent)
+	if got == nil || *got.Data != 42 {
+		t.Error("pointer data lost after archetype move")
+	}
+}
+
+func TestFilterRemoveEntities(t *testing.T) {
+	w := NewWorld(10)
+	initialFree := len(w.freeIDs)
+	builderPos := NewBuilder[Position](w)
+	posEnts := make([]Entity, 3)
+	for i := 0; i < 3; i++ {
+		posEnts[i] = builderPos.NewEntity()
+	}
+	builderVel := NewBuilder[Velocity](w)
+	velEnts := make([]Entity, 2)
+	for i := 0; i < 2; i++ {
+		velEnts[i] = builderVel.NewEntity()
+	}
+	filter := NewFilter[Position](w)
+	filter.RemoveEntities()
+	if builderPos.arch.size != 0 {
+		t.Errorf("expected pos arch size 0, got %d", builderPos.arch.size)
+	}
+	if builderVel.arch.size != 2 {
+		t.Errorf("expected vel arch size 2, got %d", builderVel.arch.size)
+	}
+	for _, ent := range posEnts {
+		if w.IsValid(ent) {
+			t.Error("pos entity still valid after remove")
+		}
+	}
+	for _, ent := range velEnts {
+		if !w.IsValid(ent) {
+			t.Error("vel entity invalid after remove")
+		}
+	}
+	if len(w.freeIDs) != initialFree-2 {
+		t.Errorf("expected freeIDs %d, got %d", initialFree-2, len(w.freeIDs))
+	}
+	// Check filter after remove
+	count := 0
+	for filter.Next() {
+		count++
+	}
+	if count != 0 {
+		t.Errorf("expected 0 after remove, got %d", count)
+	}
+}
+
+func TestFilter2RemoveEntities(t *testing.T) {
+	w := NewWorld(10)
+	initialFree := len(w.freeIDs)
+	builderPV := NewBuilder2[Position, Velocity](w)
+	pvEnts := make([]Entity, 2)
+	for i := 0; i < 2; i++ {
+		pvEnts[i] = builderPV.NewEntity()
+	}
+	builderPos := NewBuilder[Position](w)
+	posEnts := make([]Entity, 3)
+	for i := 0; i < 3; i++ {
+		posEnts[i] = builderPos.NewEntity()
+	}
+	filter2 := NewFilter2[Position, Velocity](w)
+	filter2.RemoveEntities()
+	if builderPV.arch.size != 0 {
+		t.Errorf("expected pv arch size 0, got %d", builderPV.arch.size)
+	}
+	if builderPos.arch.size != 3 {
+		t.Errorf("expected pos arch size 3, got %d", builderPos.arch.size)
+	}
+	for _, ent := range pvEnts {
+		if w.IsValid(ent) {
+			t.Error("pv entity still valid after remove")
+		}
+	}
+	for _, ent := range posEnts {
+		if !w.IsValid(ent) {
+			t.Error("pos entity invalid after remove")
+		}
+	}
+	if len(w.freeIDs) != initialFree-3 {
+		t.Errorf("expected freeIDs %d, got %d", initialFree-3, len(w.freeIDs))
+	}
+	// Check filter after remove
+	count := 0
+	for filter2.Next() {
+		count++
+	}
+	if count != 0 {
+		t.Errorf("expected 0 after remove, got %d", count)
+	}
+}
+
+// Assuming Position, Velocity, Entity, NewWorld, NewBuilder, NewBuilder2, NewFilter, NewFilter2, SetComponent, RemoveComponent are defined elsewhere.
+
+func BenchmarkCreateWorld(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = NewWorld(size)
 			}
-		}
-	}
-	if countBoth != 1 {
-		t.Errorf("Expected query for Pos+Vel to find 1 entity, found %d", countBoth)
-	}
-	if !foundE1 {
-		t.Errorf("Query for Pos+Vel did not find entity e1")
-	}
-
-	// Query for entities with at least Position
-	queryPos := lazyecs.CreateQuery[Position](world)
-	countPos := 0
-	for queryPos.Next() {
-		countPos++
-	}
-	if countPos != 2 {
-		t.Errorf("Expected query for Pos to find 2 entities, found %d", countPos)
+		})
 	}
 }
 
-// go test -run ^TestComponentDataIntegrityAfterSwapAndPop$ . -count 1
-func TestComponentDataIntegrityAfterSwapAndPop(t *testing.T) {
-	world, _, _, _ := setupWorld(t)
-
-	entities := make([]lazyecs.Entity, 11)
-	for i := 0; i < 10; i++ {
-		entities[i] = world.CreateEntity()
-		p, _ := lazyecs.AddComponent[Position](world, entities[i])
-		p.X = float32(i)
-	}
-
-	// Remove an entity from the middle
-	entityToRemove := entities[5]
-	world.RemoveEntity(entityToRemove)
-
-	lastEnt := world.CreateEntity()
-	p, _ := lazyecs.AddComponent[Position](world, lastEnt)
-	p.X = 10
-
-	entities[10] = lastEnt
-
-	world.ProcessRemovals()
-
-	// Check that the removed entity is gone
-	_, ok := lazyecs.GetComponent[Position](world, entityToRemove)
-	if ok {
-		t.Fatalf("Entity %d was not removed", entityToRemove.ID)
-	}
-
-	// Check that all other entities have their correct data
-	for i, e := range entities {
-		if i == 5 { // Skip the removed one
-			continue
+func BenchmarkCreateEntity(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
-		p, ok := lazyecs.GetComponent[Position](world, e)
-		if !ok {
-			t.Errorf("Entity %d lost its component after removal", e.ID)
-			continue
-		}
-		if p.X != float32(i) {
-			t.Errorf("Data for entity %d is incorrect. Expected X=%d, got X=%.f", e.ID, i, p.X)
-		}
-	}
-
-	// Check query count
-	query := lazyecs.CreateQuery[Position](world)
-	count := 0
-	for query.Next() {
-		count++
-	}
-	if count != 10 {
-		t.Errorf("Query returned %d entities after removal, expected 10", count)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					builder.NewEntity()
+				}
+			}
+		})
 	}
 }
 
-const numEntities = 100000
-const initialCapacity = 100000
-
-// go test -benchmem -run=^$ -bench ^BenchmarkAddComponent$ . -count 1
-func BenchmarkAddComponent(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-
-	entities := world.CreateEntities(numEntities)
-
-	for b.Loop() {
-		for _, e := range entities {
-			lazyecs.AddComponent[Position](world, e)
+func BenchmarkNewEntitiesBatch(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				b.StartTimer()
+				builder.NewEntities(size)
+			}
+		})
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkSetComponent$ . -count 1
-func BenchmarkSetComponent(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-
-	entities := world.CreateEntities(numEntities)
-
-	for b.Loop() {
-		for _, e := range entities {
-			lazyecs.SetComponent(world, e, Position{X: 10, Y: 10})
+func BenchmarkGetComponent(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				builder.Get(ents[i%size])
+			}
+		})
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkRemoveComponent$ . -count 1
+func BenchmarkSetComponentExisting(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			val := Position{1, 2}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				SetComponent(w, ents[i%size], val)
+			}
+		})
+	}
+}
+
+func BenchmarkSetComponentNew(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			val := Velocity{3, 4}
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				dummyBuilder := NewBuilder2[Position, Velocity](w)
+				dummy := dummyBuilder.NewEntity()
+				w.RemoveEntity(dummy)
+				builder.NewEntities(size)
+				ents := builder.arch.entityIDs[:size]
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					SetComponent(w, ents[j], val)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkRemoveComponent(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-
-	entities := world.CreateEntities(numEntities)
-	for _, e := range entities {
-		lazyecs.AddComponent[Position](world, e)
-	}
-
-	for b.Loop() {
-		for _, e := range entities {
-			lazyecs.RemoveComponent[Position](world, e)
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder2 := NewBuilder2[Position, Velocity](w)
+				dummyBuilder := NewBuilder[Position](w)
+				dummy := dummyBuilder.NewEntity()
+				w.RemoveEntity(dummy)
+				builder2.NewEntities(size)
+				ents := builder2.arch.entityIDs[:size]
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					RemoveComponent[Velocity](w, ents[j])
+				}
+			}
+		})
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkAddEntities$ . -count 1
-func BenchmarkAddEntities(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	for b.Loop() {
-		world.CreateEntities(numEntities)
+func BenchmarkRemoveEntity(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				builder.NewEntities(size)
+				ents := make([]Entity, size)
+				copy(ents, builder.arch.entityIDs[:size])
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					w.RemoveEntity(ents[j])
+				}
+			}
+		})
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkRemoveEntities$ . -count 1
-func BenchmarkRemoveEntities(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	entities := world.CreateEntities(numEntities)
-	for b.Loop() {
-		for _, e := range entities {
-			world.RemoveEntity(e)
+func BenchmarkFilterRemoveEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
-		world.ProcessRemovals()
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				builder.NewEntities(size)
+				filter := NewFilter[Position](w)
+				b.StartTimer()
+				filter.RemoveEntities()
+			}
+		})
 	}
 }
 
-// go test -benchmem -run=^$ -bench ^BenchmarkQuery$ . -count 1
-func BenchmarkQuery(b *testing.B) {
-	world := lazyecs.NewWorldWithOptions(lazyecs.WorldOptions{
-		InitialCapacity: initialCapacity,
-	})
-
-	lazyecs.ResetGlobalRegistry()
-	lazyecs.RegisterComponent[Position]()
-	lazyecs.RegisterComponent[Velocity]()
-
-	entities := world.CreateEntities(numEntities)
-	for _, e := range entities {
-		lazyecs.AddComponent[Position](world, e)
-		lazyecs.AddComponent[Velocity](world, e)
-	}
-
-	query := lazyecs.CreateQuery2[Position, Velocity](world)
-	for b.Loop() {
-		query.Reset()
-		for query.Next() {
-			pos, vel := query.Get()
-			pos.X += vel.VX
+func BenchmarkFilter2RemoveEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
 		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder2 := NewBuilder2[Position, Velocity](w)
+				builder2.NewEntities(size)
+				filter2 := NewFilter2[Position, Velocity](w)
+				b.StartTimer()
+				filter2.RemoveEntities()
+			}
+		})
+	}
+}
+func BenchmarkFilterIterate(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](w)
+			builder.NewEntities(size)
+			filter := NewFilter[Position](w)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				filter.Reset()
+				for filter.Next() {
+					_ = filter.Get()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkFilter2Iterate(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder2 := NewBuilder2[Position, Velocity](w)
+			builder2.NewEntities(size)
+			filter2 := NewFilter2[Position, Velocity](w)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				filter2.Reset()
+				for filter2.Next() {
+					_, _ = filter2.Get()
+				}
+			}
+		})
 	}
 }
