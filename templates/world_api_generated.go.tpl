@@ -1,254 +1,158 @@
-// AddComponent{{.N}} adds {{.N}} components to an entity if not already present.
-// It returns pointers to the components (existing or new) and a boolean indicating success.
-func AddComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnSinglePtrs}}, bool) {
-	if int(e.ID) >= len(w.entitiesSlice) {
+// GetComponents{{.N}} returns pointers to the components of type {{.TypeVars}} for the entity, or nil if not present or invalid.
+func GetComponents{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}, bool) {
+	if !w.IsValid(e) {
 		return {{.ReturnNil}}, false
 	}
-	meta := w.entitiesSlice[e.ID]
-	if meta.Version != e.Version {
+	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
+	{{end}}
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{end}}
+	if {{.DuplicateIDs}} {
+		panic("ecs: duplicate component types in GetComponents{{.N}}")
+	}
+	meta := w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	var m bitmask256
+	{{range .Components}}m.set(id{{.Index}})
+	{{end}}
+	if !a.mask.contains(m) {
 		return {{.ReturnNil}}, false
 	}
-
-	{{range .Components}}{{.IDName}}, {{.OKName}} := TryGetID[{{.TypeName}}]()
+	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
 	{{end}}
-	if {{.OKIDs}} {
-		return {{.ReturnNil}}, false
-	}
-	{{range .Components}}{{.SizeName}} := int(componentSizes[{{.IDName}}])
-	{{end}}
-	oldArch := meta.Archetype
-	addMask := makeMask{{.N}}({{.IDs}})
-	if includesAll(oldArch.mask, addMask) {
-		{{range .Components}}{{.SlotName}} := oldArch.getSlot({{.IDName}})
-		{{end}}
-		if {{.SlotCheckCondition}} {
-			return {{$.ReturnNil}}, false
-		}
-		{{range .Components}}{{.BytesName}} := oldArch.componentData[{{.SlotName}}]
-		if meta.Index*{{.SizeName}} >= len({{.BytesName}}) {
-			return {{$.ReturnNil}}, false
-		}
-		{{end}}
-		return {{$.ReturnPtrsFromBytes}}, true
-	}
-
-	newMask := orMask(oldArch.mask, addMask)
-
-	var transition Transition
-	addMap, ok := w.addTransitions[oldArch]
-	if ok {
-		if tr, ok := addMap[addMask]; ok {
-			transition = tr
-		}
-	}
-	var newArch *Archetype
-	if transition.target == nil {
-		newArch = w.getOrCreateArchetype(newMask)
-		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
-		for from, id := range oldArch.componentIDs {
-			to := newArch.getSlot(id)
-			if to >= 0 {
-				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
-			}
-		}
-		transition = Transition{target: newArch, copies: copies}
-		if _, ok := w.addTransitions[oldArch]; !ok {
-			w.addTransitions[oldArch] = make(map[maskType]Transition)
-		}
-		w.addTransitions[oldArch][addMask] = transition
-	} else {
-		newArch = transition.target
-	}
-
-	oldIndex := meta.Index
-	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
-
-	ids := []ComponentID{ {{.IDs}} }
-	for _, id := range ids {
-		if !oldArch.mask.has(id) {
-			idx := newArch.getSlot(id)
-			if idx == -1 {
-				return {{$.ReturnNil}}, false
-			}
-			bytes := newArch.componentData[idx]
-			bytes = extendByteSlice(bytes, int(componentSizes[id]))
-			newArch.componentData[idx] = bytes
-		}
-	}
-
-	meta.Archetype = newArch
-	meta.Index = newIndex
-	w.entitiesSlice[e.ID] = meta
-
-	w.removeEntityFromArchetype(e, oldArch, oldIndex)
-
-	{{range .Components}}{{.SlotName}} := newArch.getSlot({{.IDName}})
-	{{end}}
-	if {{.SlotCheckCondition}} {
-		return {{.ReturnNil}}, false
-	}
-	{{range .Components}}{{.BytesName}} := newArch.componentData[{{.SlotName}}]
-	{{end}}
-	return {{range .Components}}(*{{.TypeName}})(unsafe.Pointer(&{{.BytesName}}[newIndex*{{.SizeName}}])), {{end}}true
+	return {{.ReturnPtrs}}, true
 }
 
-// SetComponent{{.N}} sets {{.N}} components for an entity.
-// If any component is missing, it adds them; otherwise, updates existing ones.
-// It returns a boolean indicating success.
-func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) bool {
-	if int(e.ID) >= len(w.entitiesSlice) {
-		return false
+// SetComponents{{.N}} sets the components of type {{.TypeVars}} on the entity, adding them if not present.
+func SetComponents{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
+	if !w.IsValid(e) {
+		return
 	}
-	meta := w.entitiesSlice[e.ID]
-	if meta.Version != e.Version {
-		return false
+	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
+	{{end}}
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{end}}
+	if {{.DuplicateIDs}} {
+		panic("ecs: duplicate component types in SetComponents{{.N}}")
 	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
 
-	{{range .Components}}{{.IDName}}, {{.OKName}} := TryGetID[{{.TypeName}}]()
+	var setMask bitmask256
+	{{range .Components}}setMask.set(id{{.Index}})
 	{{end}}
-	if {{.OKIDs}} {
-		return false
-	}
-	{{range .Components}}{{.SizeName}} := int(componentSizes[{{.IDName}}])
-	{{end}}
-	{{range .Components}}{{.SrcName}} := unsafe.Slice((*byte)(unsafe.Pointer(&{{.VarName}})), {{.SizeName}})
-	{{end}}
-	oldArch := meta.Archetype
-	setMask := makeMask{{.N}}({{.IDs}})
-	if includesAll(oldArch.mask, setMask) {
-		{{range .Components}}{{.SlotName}} := oldArch.getSlot({{.IDName}})
+
+	if a.mask.contains(setMask) {
+		// already has all, just set
+		{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
+		*(*{{.TypeName}})({{.PtrName}}) = {{.VarName}}
 		{{end}}
-		if {{.SlotCheckCondition}} {
-			return false
-		}
-		{{range .Components}}{{.BytesName}} := oldArch.componentData[{{.SlotName}}]
-		if meta.Index*{{.SizeName}} >= len({{.BytesName}}) {
-			return false
-		}
-		copy({{.BytesName}}[meta.Index*{{.SizeName}}:(meta.Index+1)*{{.SizeName}}], {{.SrcName}})
-		{{end}}
-		return true
-	} else {
-		newMask := orMask(oldArch.mask, setMask)
-		var transition Transition
-		addMap, ok := w.addTransitions[oldArch]
-		if ok {
-			if tr, ok := addMap[setMask]; ok {
-				transition = tr
-			}
-		}
-		var newArch *Archetype
-		if transition.target == nil {
-			newArch = w.getOrCreateArchetype(newMask)
-			copies := make([]CopyOp, 0, len(oldArch.componentIDs))
-			for from, id := range oldArch.componentIDs {
-				to := newArch.getSlot(id)
-				if to >= 0 {
-					copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
-				}
-			}
-			transition = Transition{target: newArch, copies: copies}
-			if _, ok := w.addTransitions[oldArch]; !ok {
-				w.addTransitions[oldArch] = make(map[maskType]Transition)
-			}
-			w.addTransitions[oldArch][setMask] = transition
-		} else {
-			newArch = transition.target
-		}
-
-		oldIndex := meta.Index
-		newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
-
-		ids := []ComponentID{ {{.IDs}} }
-		srcs := [][]byte{ {{range .Components}}{{.SrcName}}{{if ne .Index $.N}}, {{end}}{{end}} }
-		sizes := []int{ {{range .Components}}{{.SizeName}}{{if ne .Index $.N}}, {{end}}{{end}} }
-		for i, id := range ids {
-			idx := newArch.getSlot(id)
-			if idx == -1 {
-				return false
-			}
-			bytes := newArch.componentData[idx]
-			if oldArch.mask.has(id) {
-				copy(bytes[newIndex*sizes[i]:(newIndex+1)*sizes[i]], srcs[i])
-			} else {
-				bytes = extendByteSlice(bytes, sizes[i])
-				copy(bytes[len(bytes)-sizes[i]:], srcs[i])
-				newArch.componentData[idx] = bytes
-			}
-		}
-
-		meta.Archetype = newArch
-		meta.Index = newIndex
-		w.entitiesSlice[e.ID] = meta
-
-		w.removeEntityFromArchetype(e, oldArch, oldIndex)
-		return true
+		return
 	}
+
+	newMask := a.mask
+	{{range .Components}}newMask.set(id{{.Index}})
+	{{end}}
+
+	var tempSpecs [MaxComponentTypes]compSpec
+	count := 0
+	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
+		var bm bitmask256
+		bm.set(i)
+		if newMask.contains(bm) {
+			typ := w.compIDToType[i]
+			tempSpecs[count] = compSpec{i, typ, typ.Size()}
+			count++
+		}
+	}
+	specs := tempSpecs[:count]
+	targetA := w.getOrCreateArchetype(newMask, specs)
+
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+
+	for _, cid := range a.compOrder {
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
+	}
+
+	{{range .Components}}
+	{
+		var singleMask bitmask256
+		singleMask.set(id{{.Index}})
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
+			*(*{{.TypeName}})(dst) = {{.VarName}}
+		}
+	}
+	{{end}}
+
+	w.removeFromArchetype(a, meta)
+
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
 }
 
-// RemoveComponent{{.N}} removes {{.N}} components from an entity if present.
-// It returns a boolean indicating success.
-func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) bool {
-	if int(e.ID) >= len(w.entitiesSlice) {
-		return false
+// RemoveComponents{{.N}} removes the components of type {{.TypeVars}} from the entity if present.
+func RemoveComponents{{.N}}[{{.Types}}](w *World, e Entity) {
+	if !w.IsValid(e) {
+		return
 	}
-	meta := w.entitiesSlice[e.ID]
-	if meta.Version != e.Version {
-		return false
-	}
-
-	{{range .Components}}{{.IDName}}, {{.OKName}} := TryGetID[{{.TypeName}}]()
+	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
-	if {{.OKIDs}} {
-		return false
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{end}}
+	if {{.DuplicateIDs}} {
+		panic("ecs: duplicate component types in RemoveComponents{{.N}}")
+	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+
+	var removeMask bitmask256
+	{{range .Components}}removeMask.set(id{{.Index}})
+	{{end}}
+
+	if !a.mask.intersects(removeMask) {
+		return
 	}
 
-	oldArch := meta.Archetype
-	removeMask := makeMask{{.N}}({{.IDs}})
-	if !intersects(oldArch.mask, removeMask) {
-		return true
-	}
+	newMask := a.mask
+	{{range .Components}}newMask.unset(id{{.Index}})
+	{{end}}
 
-	oldIndex := meta.Index
-
-	newMask := andNotMask(oldArch.mask, removeMask)
-
-	var transition Transition
-	removeMap, ok := w.removeTransitions[oldArch]
-	if ok {
-		if tr, ok := removeMap[removeMask]; ok {
-			transition = tr
+	var tempSpecs [MaxComponentTypes]compSpec
+	count := 0
+	for i := uint8(0); i < uint8(w.nextCompTypeID); i++ {
+		var bm bitmask256
+		bm.set(i)
+		if newMask.contains(bm) {
+			typ := w.compIDToType[i]
+			tempSpecs[count] = compSpec{i, typ, typ.Size()}
+			count++
 		}
 	}
-	var newArch *Archetype
-	if transition.target == nil {
-		newArch = w.getOrCreateArchetype(newMask)
-		copies := make([]CopyOp, 0, len(oldArch.componentIDs))
-		for from, id := range oldArch.componentIDs {
-			if removeMask.has(id) {
-				continue
-			}
-			to := newArch.getSlot(id)
-			if to >= 0 {
-				copies = append(copies, CopyOp{from: from, to: to, size: int(componentSizes[id])})
-			}
+	specs := tempSpecs[:count]
+	targetA := w.getOrCreateArchetype(newMask, specs)
+
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+
+	for _, cid := range a.compOrder {
+		var bm bitmask256
+		bm.set(cid)
+		if removeMask.contains(bm) {
+			continue
 		}
-		transition = Transition{target: newArch, copies: copies}
-		if _, ok := w.removeTransitions[oldArch]; !ok {
-			w.removeTransitions[oldArch] = make(map[maskType]Transition)
-		}
-		w.removeTransitions[oldArch][removeMask] = transition
-	} else {
-		newArch = transition.target
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
 	}
 
-	newIndex := moveEntityBetweenArchetypes(e, oldIndex, oldArch, newArch, transition.copies)
+	w.removeFromArchetype(a, meta)
 
-	meta.Archetype = newArch
-	meta.Index = newIndex
-	w.entitiesSlice[e.ID] = meta
-
-	w.removeEntityFromArchetype(e, oldArch, oldIndex)
-
-	return true
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
 }

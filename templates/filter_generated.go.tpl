@@ -1,92 +1,80 @@
-// Query{{.N}} is an iterator over entities that have a specific set of components.
-// This query is for entities with {{.N}} component type(s).
-type Query{{.N}}[{{.Types}}] struct {
-	world         *World
-	includeMask   maskType
-	excludeMask   maskType
-	{{range .Components}}{{.IDName}}          ComponentID
+// Filter{{.N}} provides a fast iterator over entities with components {{.TypeVars}}.
+type Filter{{.N}}[{{.Types}}] struct {
+	world          *World
+	mask           bitmask256
+	{{range .Components}}id{{.Index}}            uint8
 	{{end}}
-	archIdx       int
-	index         int
-	currentArch   *Archetype
-	{{range .Components}}{{.BaseName}}   unsafe.Pointer
-	{{end}}
-	{{range .Components}}{{.StrideName}} uintptr
-	{{end}}
-	currentEntity Entity
+	matchingArches []*archetype
+	lastVersion    uint32
+	curMatchIdx    int
+	curIdx         int
+	curEnt         Entity
 }
 
-// Reset resets the query for reuse.
-func (self *Query{{.N}}[{{.TypeVars}}]) Reset() {
-	self.archIdx = 0
-	self.index = -1
-	self.currentArch = nil
-}
-
-// Next advances to the next entity. Returns false if no more entities.
-func (self *Query{{.N}}[{{.TypeVars}}]) Next() bool {
-	self.index++
-	if self.currentArch != nil && self.index < len(self.currentArch.entities) {
-		self.currentEntity = self.currentArch.entities[self.index]
-		return true
+// NewFilter{{.N}} creates a filter for entities with components {{.TypeVars}}.
+func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
+	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
+	{{end}}
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{end}}
+	if {{.DuplicateIDs}} {
+		panic("ecs: duplicate component types in Filter{{.N}}")
 	}
+	var m bitmask256
+	{{range .Components}}m.set(id{{.Index}})
+	{{end}}
+	f := &Filter{{.N}}[{{.TypeVars}}]{world: w, mask: m, {{range .Components}}id{{.Index}}: id{{.Index}},{{end}} curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
+	f.updateMatching()
+	return f
+}
 
-	for self.archIdx < len(self.world.archetypesList) {
-		arch := self.world.archetypesList[self.archIdx]
-		self.archIdx++
-		if len(arch.entities) == 0 || !includesAll(arch.mask, self.includeMask) || intersects(arch.mask, self.excludeMask) {
+// updateMatching updates the list of matching archetypes.
+func (f *Filter{{.N}}[{{.TypeVars}}]) updateMatching() {
+	f.matchingArches = f.matchingArches[:0]
+	for _, a := range f.world.archetypes {
+		if a.mask.contains(f.mask) {
+			f.matchingArches = append(f.matchingArches, a)
+		}
+	}
+	f.lastVersion = f.world.archetypeVersion
+}
+
+// Reset resets the filter iterator.
+func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	f.curMatchIdx = 0
+	f.curIdx = -1
+}
+
+// Next advances to the next entity with the components, returning true if found.
+func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
+	for {
+		f.curIdx++
+		if f.curMatchIdx >= len(f.matchingArches) {
+			return false
+		}
+		a := f.matchingArches[f.curMatchIdx]
+		if f.curIdx >= a.size {
+			f.curMatchIdx++
+			f.curIdx = -1
 			continue
 		}
-		self.currentArch = arch
-		{{range .Components}}{{.SlotName}} := arch.getSlot(self.{{.IDName}})
-		{{end}}
-		if {{.SlotCheckCondition}} {
-			panic("missing component in matching archetype")
-		}
-		{{range .Components}}if len(arch.componentData[{{.SlotName}}]) > 0 {
-			self.{{.BaseName}} = unsafe.Pointer(&arch.componentData[{{.SlotName}}][0])
-		} else {
-			self.{{.BaseName}} = nil
-		}
-		self.{{.StrideName}} = componentSizes[self.{{.IDName}}]
-		{{end}}
-		self.index = 0
-		self.currentEntity = arch.entities[0]
+		f.curEnt = a.entityIDs[f.curIdx]
 		return true
 	}
-	return false
-}
-
-// Get returns pointers to the components for the current entity.
-func (self *Query{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(self.{{.BaseName}}) + uintptr(self.index)*self.{{.StrideName}})
-	{{end}}
-	return {{.ReturnPtrs}}
 }
 
 // Entity returns the current entity.
-func (self *Query{{.N}}[{{.TypeVars}}]) Entity() Entity {
-	return self.currentEntity
+func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
+	return f.curEnt
 }
 
-// CreateQuery{{.N}} creates a new query for entities with {{.N}} specific component type(s).
-// It allows specifying component types to exclude from the query results.
-func CreateQuery{{.N}}[{{.Types}}](w *World, excludes ...ComponentID) *Query{{.N}}[{{.TypeVars}}] {
-	{{range .Components}}{{.IDName}} := GetID[{{.TypeName}}]()
+// Get returns pointers to the current components {{.TypeVars}}.
+func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
+	a := f.matchingArches[f.curMatchIdx]
+	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[f.id{{.Index}}]) + uintptr(f.curIdx)*a.compSizes[f.id{{.Index}}])
 	{{end}}
-	return &Query{{.N}}[{{.TypeVars}}]{
-		world:       w,
-		includeMask: makeMask{{.N}}({{.IDs}}),
-		excludeMask: makeMask(excludes),
-		{{range .Components}}{{.IDName}}:          {{.IDName}},
-		{{end}}
-		archIdx:     0,
-		index:       -1,
-	}
-}
-
-// New creates a new query for entities with {{.N}} specific component type(s).
-// It allows specifying component types to exclude from the query results.
-func (self *Query{{.N}}[{{.TypeVars}}]) New(w *World, excludes ...ComponentID) *Query{{.N}}[{{.TypeVars}}] {
-	return CreateQuery{{.N}}[{{.TypeVars}}](w, excludes...)
+	return {{.ReturnPtrs}}
 }
