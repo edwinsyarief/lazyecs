@@ -14,7 +14,6 @@ package lazyecs
 
 import (
 	"reflect"
-	"sync"
 	"unsafe"
 )
 
@@ -43,68 +42,40 @@ type compSpec struct {
 	id   uint8
 }
 
-// bitmask256 represents up to 256 component bits.
-type bitmask256 [4]uint64
-
-func (m *bitmask256) set(bit uint8) {
-	i := bit / 64
-	o := bit % 64
-	m[i] |= 1 << o
-}
-func (m *bitmask256) unset(bit uint8) {
-	i := bit / 64
-	o := bit % 64
-	m[i] &= ^(1 << o)
-}
-
-// check if all bits in sub are set in m
-func (m bitmask256) contains(sub bitmask256) bool {
-	return (m[0]&sub[0]) == sub[0] &&
-		(m[1]&sub[1]) == sub[1] &&
-		(m[2]&sub[2]) == sub[2] &&
-		(m[3]&sub[3]) == sub[3]
-}
-
-// intersects checks if this bitmask has any bits in common with another bitmask.
-func (m bitmask256) intersects(other bitmask256) bool {
-	return (m[0]&other[0] != 0) ||
-		(m[1]&other[1] != 0) ||
-		(m[2]&other[2] != 0) ||
-		(m[3]&other[3] != 0)
-}
-
 // archetype holds storage for one unique component-set mask.
 type archetype struct {
-	compPointers [MaxComponentTypes]unsafe.Pointer
-	entityIDs    []Entity // prealloc len=cap
-	compOrder    []uint8  // list of component IDs in this arch
-	compSizes    [MaxComponentTypes]uintptr
-	mask         bitmask256 // which component bits this arch uses
 	index        int        // position in world.archetypes
+	mask         bitmask256 // which component bits this arch uses
 	size         int        // current entity count
+	entityIDs    []Entity   // prealloc len=cap
+	compPointers [MaxComponentTypes]unsafe.Pointer
+	compSizes    [MaxComponentTypes]uintptr
+	compOrder    []uint8 // list of component IDs in this arch
 }
 
-// ----------------------------------------
+//----------------------------------------
 // World
-// ----------------------------------------
+//----------------------------------------
+
 type World struct {
-	Resources        sync.Map
-	compIDToType     [MaxComponentTypes]reflect.Type
+	capacity         int
+	initialCapacity  int
+	freeIDs          []uint32           // stack of free entity IDs
+	metas            []entityMeta       // len = capacity
+	archetypes       []*archetype       // all archetypes
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	compTypeMap      map[reflect.Type]uint8
-	freeIDs          []uint32     // stack of free entity IDs
-	metas            []entityMeta // len = capacity
-	archetypes       []*archetype // all archetypes
-	capacity         int
+	compIDToType     [MaxComponentTypes]reflect.Type
+	nextCompTypeID   uint16
 	nextEntityVer    uint32
 	archetypeVersion uint32
-	nextCompTypeID   uint16
 }
 
 // NewWorld preallocates pools for up to cap entities.
 func NewWorld(cap int) *World {
 	w := &World{
 		capacity:         cap,
+		initialCapacity:  cap,
 		freeIDs:          make([]uint32, cap),
 		metas:            make([]entityMeta, cap),
 		archetypes:       make([]*archetype, 0),
@@ -166,21 +137,74 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 	return a
 }
 
+// expand automatically increases capacity by initialCapacity when full.
+func (w *World) expand() {
+	oldCap := w.capacity
+	newCap := oldCap * 2
+	if newCap == 0 {
+		newCap = 1
+	}
+	delta := newCap - oldCap
+	// extend metas
+	newMetas := make([]entityMeta, delta)
+	for i := range newMetas {
+		newMetas[i].archetypeIndex = -1
+		newMetas[i].version = 0
+	}
+	w.metas = append(w.metas, newMetas...)
+	// extend freeIDs with new IDs in reverse order
+	newFree := make([]uint32, delta)
+	for i := 0; i < delta; i++ {
+		newFree[i] = uint32(newCap - 1 - i)
+	}
+	w.freeIDs = append(w.freeIDs, newFree...)
+	w.capacity = newCap
+	// resize all archetypes
+	for _, a := range w.archetypes {
+		a.resizeTo(newCap, w)
+	}
+}
+
+// resizeTo resizes the archetype's storage to newCap, copying existing data.
+func (a *archetype) resizeTo(newCap int, w *World) {
+	if cap(a.entityIDs) >= newCap {
+		return
+	}
+	// resize entityIDs
+	newEnts := make([]Entity, newCap)
+	copy(newEnts[:a.size], a.entityIDs[:a.size])
+	a.entityIDs = newEnts
+	// resize comps
+	for _, cid := range a.compOrder {
+		typ := w.compIDToType[cid]
+		newSlice := reflect.MakeSlice(reflect.SliceOf(typ), newCap, newCap)
+		newPtr := newSlice.UnsafePointer()
+		oldPtr := a.compPointers[cid]
+		bytes := uintptr(a.size) * a.compSizes[cid]
+		if bytes > 0 {
+			memCopy(newPtr, oldPtr, bytes)
+		}
+		a.compPointers[cid] = newPtr
+	}
+}
+
 // createEntity bumps an entity into the given archetype.
 // Zero allocations on hot path.
 func (w *World) createEntity(a *archetype) Entity {
 	if len(w.freeIDs) == 0 {
-		panic("ecs: entity capacity exhausted")
+		w.expand()
 	}
 	// pop an ID
 	last := len(w.freeIDs) - 1
 	id := w.freeIDs[last]
 	w.freeIDs = w.freeIDs[:last]
+
 	meta := &w.metas[id]
 	meta.archetypeIndex = a.index
 	meta.index = a.size
 	meta.version = w.nextEntityVer
 	ent := Entity{ID: id, Version: meta.version}
+
 	// place into archetype
 	a.entityIDs[a.size] = ent
 	a.size++
@@ -198,6 +222,7 @@ func (w *World) RemoveEntity(e Entity) {
 	a := w.archetypes[meta.archetypeIndex]
 	idx := meta.index
 	lastIdx := a.size - 1
+
 	// swap last into idx
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]
