@@ -14,6 +14,7 @@ package lazyecs
 
 import (
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
@@ -44,31 +45,31 @@ type compSpec struct {
 
 // archetype holds storage for one unique component-set mask.
 type archetype struct {
-	index        int        // position in world.archetypes
-	mask         bitmask256 // which component bits this arch uses
-	size         int        // current entity count
-	entityIDs    []Entity   // prealloc len=cap
 	compPointers [MaxComponentTypes]unsafe.Pointer
+	entityIDs    []Entity // prealloc len=cap
+	compOrder    []uint8  // list of component IDs in this arch
 	compSizes    [MaxComponentTypes]uintptr
-	compOrder    []uint8 // list of component IDs in this arch
+	mask         bitmask256 // which component bits this arch uses
+	index        int        // position in world.archetypes
+	size         int        // current entity count
 }
 
-//----------------------------------------
+// ----------------------------------------
 // World
-//----------------------------------------
-
+// ----------------------------------------
 type World struct {
-	capacity         int
-	initialCapacity  int
-	freeIDs          []uint32           // stack of free entity IDs
-	metas            []entityMeta       // len = capacity
-	archetypes       []*archetype       // all archetypes
+	compIDToType     [MaxComponentTypes]reflect.Type
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	compTypeMap      map[reflect.Type]uint8
-	compIDToType     [MaxComponentTypes]reflect.Type
-	nextCompTypeID   uint16
+	Resources        sync.Map
+	freeIDs          []uint32     // stack of free entity IDs
+	metas            []entityMeta // len = capacity
+	archetypes       []*archetype // all archetypes
+	capacity         int
+	initialCapacity  int
 	nextEntityVer    uint32
 	archetypeVersion uint32
+	nextCompTypeID   uint16
 }
 
 // NewWorld preallocates pools for up to cap entities.
@@ -198,13 +199,11 @@ func (w *World) createEntity(a *archetype) Entity {
 	last := len(w.freeIDs) - 1
 	id := w.freeIDs[last]
 	w.freeIDs = w.freeIDs[:last]
-
 	meta := &w.metas[id]
 	meta.archetypeIndex = a.index
 	meta.index = a.size
 	meta.version = w.nextEntityVer
 	ent := Entity{ID: id, Version: meta.version}
-
 	// place into archetype
 	a.entityIDs[a.size] = ent
 	a.size++
@@ -222,7 +221,6 @@ func (w *World) RemoveEntity(e Entity) {
 	a := w.archetypes[meta.archetypeIndex]
 	idx := meta.index
 	lastIdx := a.size - 1
-
 	// swap last into idx
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]
