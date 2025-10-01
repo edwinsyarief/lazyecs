@@ -1,23 +1,24 @@
 package lazyecs
 
 import (
-	"math/bits"
 	"reflect"
 	"unsafe"
 )
 
 // GetComponent returns a pointer to the component of type T for the entity, or nil if not present or invalid.
 func GetComponent[T any](w *World, e Entity) *T {
-	if !w.IsValid(e) {
+	if int(e.ID) >= len(w.metas) {
 		return nil
 	}
-	t := reflect.TypeFor[T]()
-	id := w.getCompTypeID(t)
 	meta := w.metas[e.ID]
+	if meta.version == 0 || meta.version != e.Version {
+		return nil
+	}
+	id := w.getCompTypeID(reflect.TypeFor[T]())
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(id)
-	if !a.mask.contains(m) {
+	i := id >> 6
+	o := id & 63
+	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
 	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
@@ -26,16 +27,19 @@ func GetComponent[T any](w *World, e Entity) *T {
 
 // SetComponent sets the component of type T on the entity, adding it if not present.
 func SetComponent[T any](w *World, e Entity, val T) {
-	if !w.IsValid(e) {
+	if int(e.ID) >= len(w.metas) {
+		return
+	}
+	meta := &w.metas[e.ID]
+	if meta.version == 0 || meta.version != e.Version {
 		return
 	}
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
-	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
-	var singleMask bitmask256
-	singleMask.set(id)
-	if a.mask.contains(singleMask) {
+	i := id >> 6
+	o := id & 63
+	if (a.mask[i] & (uint64(1) << uint64(o))) != 0 {
 		// already has, just set
 		ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 		*(*T)(ptr) = val
@@ -51,17 +55,20 @@ func SetComponent[T any](w *World, e Entity, val T) {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
-		for wi := 0; wi < 4; wi++ {
-			word := newMask[wi]
-			for word != 0 {
-				bit := bits.TrailingZeros64(word)
-				cid := uint8(wi*64 + bit)
-				typ := w.compIDToType[cid]
-				tempSpecs[count] = compSpec{typ, typ.Size(), cid}
-				count++
-				word &= word - 1 // clear lowest set bit
+		for _, cid := range a.compOrder {
+			tempSpecs[count] = compSpec{
+				id:   cid,
+				typ:  w.compIDToType[cid],
+				size: w.compIDToSize[cid],
 			}
+			count++
 		}
+		tempSpecs[count] = compSpec{
+			id:   id,
+			typ:  w.compIDToType[id],
+			size: w.compIDToSize[id],
+		}
+		count++
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -87,16 +94,19 @@ func SetComponent[T any](w *World, e Entity, val T) {
 
 // RemoveComponent removes the component of type T from the entity if present.
 func RemoveComponent[T any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	if int(e.ID) >= len(w.metas) {
+		return
+	}
+	meta := &w.metas[e.ID]
+	if meta.version == 0 || meta.version != e.Version {
 		return
 	}
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
-	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
-	var singleMask bitmask256
-	singleMask.set(id)
-	if !a.mask.contains(singleMask) {
+	i := id >> 6
+	o := id & 63
+	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return
 	}
 	// remove
@@ -109,16 +119,16 @@ func RemoveComponent[T any](w *World, e Entity) {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
-		for wi := 0; wi < 4; wi++ {
-			word := newMask[wi]
-			for word != 0 {
-				bit := bits.TrailingZeros64(word)
-				cid := uint8(wi*64 + bit)
-				typ := w.compIDToType[cid]
-				tempSpecs[count] = compSpec{typ, typ.Size(), cid}
-				count++
-				word &= word - 1 // clear lowest set bit
+		for _, cid := range a.compOrder {
+			if cid == id {
+				continue
 			}
+			tempSpecs[count] = compSpec{
+				id:   cid,
+				typ:  w.compIDToType[cid],
+				size: w.compIDToSize[cid],
+			}
+			count++
 		}
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)

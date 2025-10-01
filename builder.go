@@ -5,10 +5,9 @@ import (
 	"unsafe"
 )
 
-//----------------------------------------
+// ----------------------------------------
 // Builder for 1 component
-//----------------------------------------
-
+// ----------------------------------------
 // Builder provides a simple API to create entities with a specific component.
 type Builder[T any] struct {
 	world  *World
@@ -22,12 +21,11 @@ func NewBuilder[T any](w *World) *Builder[T] {
 	id := w.getCompTypeID(t)
 	var mask bitmask256
 	mask.set(id)
-	sp := compSpec{id: id, typ: t, size: t.Size()}
+	sp := compSpec{id: id, typ: t, size: w.compIDToSize[id]}
 	arch := w.getOrCreateArchetype(mask, []compSpec{sp})
 	return &Builder[T]{world: w, arch: arch, compID: id}
 }
 
-// New create a builder for entities with component T, pre-creating the archetype
 func (b *Builder[T]) New(w *World) *Builder[T] {
 	return NewBuilder[T](w)
 }
@@ -94,16 +92,20 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 // Get returns a pointer to the component T for the entity, or nil if not present or invalid.
 func (b *Builder[T]) Get(e Entity) *T {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.compID)
-	if !a.mask.contains(m) {
+	id := b.compID
+	i := id >> 6
+	o := id & 63
+	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[b.compID]) + uintptr(meta.index)*a.compSizes[b.compID])
+	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 	return (*T)(ptr)
 }

@@ -54,6 +54,29 @@ type archetype struct {
 	size         int        // current entity count
 }
 
+// resizeTo resizes the archetype's storage to newCap, copying existing data.
+func (a *archetype) resizeTo(newCap int, w *World) {
+	if cap(a.entityIDs) >= newCap {
+		return
+	}
+	// resize entityIDs
+	newEnts := make([]Entity, newCap)
+	copy(newEnts[:a.size], a.entityIDs[:a.size])
+	a.entityIDs = newEnts
+	// resize comps
+	for _, cid := range a.compOrder {
+		typ := w.compIDToType[cid]
+		newSlice := reflect.MakeSlice(reflect.SliceOf(typ), newCap, newCap)
+		newPtr := newSlice.UnsafePointer()
+		oldPtr := a.compPointers[cid]
+		bytes := uintptr(a.size) * a.compSizes[cid]
+		if bytes > 0 {
+			memCopy(newPtr, oldPtr, bytes)
+		}
+		a.compPointers[cid] = newPtr
+	}
+}
+
 // ----------------------------------------
 // World
 // ----------------------------------------
@@ -65,6 +88,7 @@ type World struct {
 	freeIDs          []uint32     // stack of free entity IDs
 	metas            []entityMeta // len = capacity
 	archetypes       []*archetype // all archetypes
+	compIDToSize     [MaxComponentTypes]uintptr
 	capacity         int
 	initialCapacity  int
 	nextEntityVer    uint32
@@ -108,6 +132,7 @@ func (w *World) getCompTypeID(t reflect.Type) uint8 {
 	id := uint8(w.nextCompTypeID)
 	w.compTypeMap[t] = id
 	w.compIDToType[id] = t
+	w.compIDToSize[id] = t.Size()
 	w.nextCompTypeID++
 	return id
 }
@@ -124,6 +149,7 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 		mask:      mask,
 		size:      0,
 		entityIDs: make([]Entity, w.capacity),
+		compOrder: make([]uint8, 0, len(specs)),
 	}
 	for _, sp := range specs {
 		// allocate []T of length=cap
@@ -163,29 +189,6 @@ func (w *World) expand() {
 	// resize all archetypes
 	for _, a := range w.archetypes {
 		a.resizeTo(newCap, w)
-	}
-}
-
-// resizeTo resizes the archetype's storage to newCap, copying existing data.
-func (a *archetype) resizeTo(newCap int, w *World) {
-	if cap(a.entityIDs) >= newCap {
-		return
-	}
-	// resize entityIDs
-	newEnts := make([]Entity, newCap)
-	copy(newEnts[:a.size], a.entityIDs[:a.size])
-	a.entityIDs = newEnts
-	// resize comps
-	for _, cid := range a.compOrder {
-		typ := w.compIDToType[cid]
-		newSlice := reflect.MakeSlice(reflect.SliceOf(typ), newCap, newCap)
-		newPtr := newSlice.UnsafePointer()
-		oldPtr := a.compPointers[cid]
-		bytes := uintptr(a.size) * a.compSizes[cid]
-		if bytes > 0 {
-			memCopy(newPtr, oldPtr, bytes)
-		}
-		a.compPointers[cid] = newPtr
 	}
 }
 
