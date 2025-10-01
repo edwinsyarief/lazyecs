@@ -91,11 +91,13 @@ func main() {
 				panic(fmt.Sprintf("Error executing template %s for N=%d: %v", tplFile, i, err))
 			}
 			_, _ = outFile.Write(buf.Bytes())
+			_, _ = outFile.WriteString("\n\n")
 		}
 		outFile.Close()
 	}
 	fmt.Println("Code generation complete.")
 }
+
 func buildTemplateData(n int) TemplateData {
 	components := make([]ComponentInfo, n)
 	var types, typeVars, vars, builderVars, ids, okIDs, returnTypes, returnSinglePtrs, returnPtrs, returnVars, returnNil, slotCheck, batchRes, returnBatchRes, returnFromBytes []string
@@ -143,6 +145,7 @@ func buildTemplateData(n int) TemplateData {
 			duplicateIDs = append(duplicateIDs, "id"+is+" == id"+js)
 		}
 	}
+
 	return TemplateData{
 		N:                   n,
 		Components:          components,

@@ -6,21 +6,29 @@ import (
 	"unsafe"
 )
 
-// GetComponent2 returns pointers to the components of type T1, T2 for the entity, or nil if not present or invalid.
+// GetComponent2 retrieves pointers to the 2 components of type
+// (T1, T2) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data (*T1, *T2), or nils if not found.
 func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil, nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil, nil
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
-	
+
 	if id2 == id1 {
 		panic("ecs: duplicate component types in GetComponent2")
 	}
@@ -29,31 +37,39 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 	o1 := id1 & 63
 	i2 := id2 >> 6
 	o2 := id2 & 63
-	
+
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 {
 		return nil, nil
 	}
 	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
-// SetComponent2 sets the components of type T1, T2 on the entity, adding them if not present.
+// SetComponent2 adds or updates the 2 components (T1, T2) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - v1: The component data of type T1 to set.
+//   - v2: The component data of type T2 to set.
 func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
-	
+
 	if id2 == id1 {
 		panic("ecs: duplicate component types in SetComponent2")
 	}
@@ -62,16 +78,16 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	o1 := id1 & 63
 	i2 := id2 >> 6
 	o2 := id2 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
-	
+
 	if has1 && has2 {
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 		*(*T1)(ptr1) = v1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 		*(*T2)(ptr2) = v2
-		
+
 		return
 	}
 	newMask := a.mask
@@ -81,7 +97,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	if !has2 {
 		newMask.set(id2)
 	}
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -100,7 +116,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
 			count++
 		}
-		
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -116,27 +132,33 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	*(*T1)(ptr1) = v1
 	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[id2]) + uintptr(newIdx)*targetA.compSizes[id2])
 	*(*T2)(ptr2) = v2
-	
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
-// RemoveComponent2 removes the components of type T1, T2 from the entity if present.
+// RemoveComponent2 removes the 2 components (T1, T2) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
-	
+
 	if id2 == id1 {
 		panic("ecs: duplicate component types in RemoveComponent2")
 	}
@@ -145,17 +167,17 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	o1 := id1 & 63
 	i2 := id2 >> 6
 	o2 := id2 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
-	
+
 	if !has1 && !has2 {
 		return
 	}
 	newMask := a.mask
 	newMask.unset(id1)
 	newMask.unset(id2)
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -186,23 +208,33 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
-}// GetComponent3 returns pointers to the components of type T1, T2, T3 for the entity, or nil if not present or invalid.
+}
+
+// GetComponent3 retrieves pointers to the 3 components of type
+// (T1, T2, T3) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data (*T1, *T2, *T3), or nils if not found.
 func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil, nil, nil
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in GetComponent3")
 	}
@@ -213,34 +245,43 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 	o2 := id2 & 63
 	i3 := id3 >> 6
 	o3 := id3 & 63
-	
+
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 {
 		return nil, nil, nil
 	}
 	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
-// SetComponent3 sets the components of type T1, T2, T3 on the entity, adding them if not present.
+// SetComponent3 adds or updates the 3 components (T1, T2, T3) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - v1: The component data of type T1 to set.
+//   - v2: The component data of type T2 to set.
+//   - v3: The component data of type T3 to set.
 func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 T3) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in SetComponent3")
 	}
@@ -251,11 +292,11 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	o2 := id2 & 63
 	i3 := id3 >> 6
 	o3 := id3 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
-	
+
 	if has1 && has2 && has3 {
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 		*(*T1)(ptr1) = v1
@@ -263,7 +304,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 		*(*T2)(ptr2) = v2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 		*(*T3)(ptr3) = v3
-		
+
 		return
 	}
 	newMask := a.mask
@@ -276,7 +317,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	if !has3 {
 		newMask.set(id3)
 	}
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -299,7 +340,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
 			count++
 		}
-		
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -317,29 +358,35 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	*(*T2)(ptr2) = v2
 	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[id3]) + uintptr(newIdx)*targetA.compSizes[id3])
 	*(*T3)(ptr3) = v3
-	
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
-// RemoveComponent3 removes the components of type T1, T2, T3 from the entity if present.
+// RemoveComponent3 removes the 3 components (T1, T2, T3) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in RemoveComponent3")
 	}
@@ -350,11 +397,11 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	o2 := id2 & 63
 	i3 := id3 >> 6
 	o3 := id3 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
-	
+
 	if !has1 && !has2 && !has3 {
 		return
 	}
@@ -362,7 +409,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	newMask.unset(id1)
 	newMask.unset(id2)
 	newMask.unset(id3)
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -393,25 +440,35 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
-}// GetComponent4 returns pointers to the components of type T1, T2, T3, T4 for the entity, or nil if not present or invalid.
+}
+
+// GetComponent4 retrieves pointers to the 4 components of type
+// (T1, T2, T3, T4) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data (*T1, *T2, *T3, *T4), or nils if not found.
 func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2, *T3, *T4) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil, nil, nil, nil
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in GetComponent4")
 	}
@@ -424,7 +481,7 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 	o3 := id3 & 63
 	i4 := id4 >> 6
 	o4 := id4 & 63
-	
+
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 {
 		return nil, nil, nil, nil
 	}
@@ -432,29 +489,39 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
-// SetComponent4 sets the components of type T1, T2, T3, T4 on the entity, adding them if not present.
+// SetComponent4 adds or updates the 4 components (T1, T2, T3, T4) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - v1: The component data of type T1 to set.
+//   - v2: The component data of type T2 to set.
+//   - v3: The component data of type T3 to set.
+//   - v4: The component data of type T4 to set.
 func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in SetComponent4")
 	}
@@ -467,12 +534,12 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	o3 := id3 & 63
 	i4 := id4 >> 6
 	o4 := id4 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
-	
+
 	if has1 && has2 && has3 && has4 {
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 		*(*T1)(ptr1) = v1
@@ -482,7 +549,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 		*(*T3)(ptr3) = v3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 		*(*T4)(ptr4) = v4
-		
+
 		return
 	}
 	newMask := a.mask
@@ -498,7 +565,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	if !has4 {
 		newMask.set(id4)
 	}
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -525,7 +592,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 			tempSpecs[count] = compSpec{id: id4, typ: w.compIDToType[id4], size: w.compIDToSize[id4]}
 			count++
 		}
-		
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -545,31 +612,37 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	*(*T3)(ptr3) = v3
 	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[id4]) + uintptr(newIdx)*targetA.compSizes[id4])
 	*(*T4)(ptr4) = v4
-	
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
-// RemoveComponent4 removes the components of type T1, T2, T3, T4 from the entity if present.
+// RemoveComponent4 removes the 4 components (T1, T2, T3, T4) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in RemoveComponent4")
 	}
@@ -582,12 +655,12 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	o3 := id3 & 63
 	i4 := id4 >> 6
 	o4 := id4 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
-	
+
 	if !has1 && !has2 && !has3 && !has4 {
 		return
 	}
@@ -596,7 +669,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	newMask.unset(id2)
 	newMask.unset(id3)
 	newMask.unset(id4)
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -627,27 +700,37 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
-}// GetComponent5 returns pointers to the components of type T1, T2, T3, T4, T5 for the entity, or nil if not present or invalid.
+}
+
+// GetComponent5 retrieves pointers to the 5 components of type
+// (T1, T2, T3, T4, T5) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5), or nils if not found.
 func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil, nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil, nil, nil, nil, nil
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in GetComponent5")
 	}
@@ -662,7 +745,7 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 	o4 := id4 & 63
 	i5 := id5 >> 6
 	o5 := id5 & 63
-	
+
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 {
 		return nil, nil, nil, nil, nil
 	}
@@ -671,31 +754,42 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
-// SetComponent5 sets the components of type T1, T2, T3, T4, T5 on the entity, adding them if not present.
+// SetComponent5 adds or updates the 5 components (T1, T2, T3, T4, T5) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - v1: The component data of type T1 to set.
+//   - v2: The component data of type T2 to set.
+//   - v3: The component data of type T3 to set.
+//   - v4: The component data of type T4 to set.
+//   - v5: The component data of type T5 to set.
 func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in SetComponent5")
 	}
@@ -710,13 +804,13 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	o4 := id4 & 63
 	i5 := id5 >> 6
 	o5 := id5 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
 	has5 := (a.mask[i5] & (uint64(1) << uint64(o5))) != 0
-	
+
 	if has1 && has2 && has3 && has4 && has5 {
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 		*(*T1)(ptr1) = v1
@@ -728,7 +822,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 		*(*T4)(ptr4) = v4
 		ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
 		*(*T5)(ptr5) = v5
-		
+
 		return
 	}
 	newMask := a.mask
@@ -747,7 +841,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	if !has5 {
 		newMask.set(id5)
 	}
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -778,7 +872,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 			tempSpecs[count] = compSpec{id: id5, typ: w.compIDToType[id5], size: w.compIDToSize[id5]}
 			count++
 		}
-		
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -800,33 +894,39 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	*(*T4)(ptr4) = v4
 	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[id5]) + uintptr(newIdx)*targetA.compSizes[id5])
 	*(*T5)(ptr5) = v5
-	
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
-// RemoveComponent5 removes the components of type T1, T2, T3, T4, T5 from the entity if present.
+// RemoveComponent5 removes the 5 components (T1, T2, T3, T4, T5) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in RemoveComponent5")
 	}
@@ -841,13 +941,13 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	o4 := id4 & 63
 	i5 := id5 >> 6
 	o5 := id5 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
 	has5 := (a.mask[i5] & (uint64(1) << uint64(o5))) != 0
-	
+
 	if !has1 && !has2 && !has3 && !has4 && !has5 {
 		return
 	}
@@ -857,7 +957,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	newMask.unset(id3)
 	newMask.unset(id4)
 	newMask.unset(id5)
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -888,29 +988,39 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
-}// GetComponent6 returns pointers to the components of type T1, T2, T3, T4, T5, T6 for the entity, or nil if not present or invalid.
+}
+
+// GetComponent6 retrieves pointers to the 6 components of type
+// (T1, T2, T3, T4, T5, T6) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5, *T6), or nils if not found.
 func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5, *T6) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil, nil, nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil, nil, nil, nil, nil, nil
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
 	id6 := w.getCompTypeID(t6)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in GetComponent6")
 	}
@@ -927,7 +1037,7 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	o5 := id5 & 63
 	i6 := id6 >> 6
 	o6 := id6 & 63
-	
+
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 || (a.mask[i6]&(uint64(1)<<uint64(o6))) == 0 {
 		return nil, nil, nil, nil, nil, nil
 	}
@@ -937,33 +1047,45 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
 	ptr6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }
 
-// SetComponent6 sets the components of type T1, T2, T3, T4, T5, T6 on the entity, adding them if not present.
+// SetComponent6 adds or updates the 6 components (T1, T2, T3, T4, T5, T6) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - v1: The component data of type T1 to set.
+//   - v2: The component data of type T2 to set.
+//   - v3: The component data of type T3 to set.
+//   - v4: The component data of type T4 to set.
+//   - v5: The component data of type T5 to set.
+//   - v6: The component data of type T6 to set.
 func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
 	id6 := w.getCompTypeID(t6)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in SetComponent6")
 	}
@@ -980,14 +1102,14 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	o5 := id5 & 63
 	i6 := id6 >> 6
 	o6 := id6 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
 	has5 := (a.mask[i5] & (uint64(1) << uint64(o5))) != 0
 	has6 := (a.mask[i6] & (uint64(1) << uint64(o6))) != 0
-	
+
 	if has1 && has2 && has3 && has4 && has5 && has6 {
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 		*(*T1)(ptr1) = v1
@@ -1001,7 +1123,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 		*(*T5)(ptr5) = v5
 		ptr6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
 		*(*T6)(ptr6) = v6
-		
+
 		return
 	}
 	newMask := a.mask
@@ -1023,7 +1145,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if !has6 {
 		newMask.set(id6)
 	}
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]
@@ -1058,7 +1180,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 			tempSpecs[count] = compSpec{id: id6, typ: w.compIDToType[id6], size: w.compIDToSize[id6]}
 			count++
 		}
-		
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -1082,35 +1204,41 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	*(*T5)(ptr5) = v5
 	ptr6 := unsafe.Pointer(uintptr(targetA.compPointers[id6]) + uintptr(newIdx)*targetA.compSizes[id6])
 	*(*T6)(ptr6) = v6
-	
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
-// RemoveComponent6 removes the components of type T1, T2, T3, T4, T5, T6 from the entity if present.
+// RemoveComponent6 removes the 6 components (T1, T2, T3, T4, T5, T6) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
 	id6 := w.getCompTypeID(t6)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in RemoveComponent6")
 	}
@@ -1127,14 +1255,14 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	o5 := id5 & 63
 	i6 := id6 >> 6
 	o6 := id6 & 63
-	
+
 	has1 := (a.mask[i1] & (uint64(1) << uint64(o1))) != 0
 	has2 := (a.mask[i2] & (uint64(1) << uint64(o2))) != 0
 	has3 := (a.mask[i3] & (uint64(1) << uint64(o3))) != 0
 	has4 := (a.mask[i4] & (uint64(1) << uint64(o4))) != 0
 	has5 := (a.mask[i5] & (uint64(1) << uint64(o5))) != 0
 	has6 := (a.mask[i6] & (uint64(1) << uint64(o6))) != 0
-	
+
 	if !has1 && !has2 && !has3 && !has4 && !has5 && !has6 {
 		return
 	}
@@ -1145,7 +1273,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	newMask.unset(id4)
 	newMask.unset(id5)
 	newMask.unset(id6)
-	
+
 	var targetA *archetype
 	if idx, ok := w.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes[idx]

@@ -1,4 +1,5 @@
-// Builder{{.N}} provides a simple API to create entities with {{.N}} specific components.
+// Builder{{.N}} provides a highly efficient, type-safe API for creating entities
+// with a predefined set of {{.N}} components: {{.TypeVars}}.
 type Builder{{.N}}[{{.Types}}] struct {
 	world *World
 	arch  *archetype
@@ -6,7 +7,15 @@ type Builder{{.N}}[{{.Types}}] struct {
 	{{end}}
 }
 
-// NewBuilder{{.N}} creates a builder for entities with components {{.TypeVars}}, pre-creating the archetype.
+// NewBuilder{{.N}} creates a new `Builder` for entities with the {{.N}} components
+// {{.TypeVars}}. It pre-calculates and caches the archetype for peak
+// performance.
+//
+// Parameters:
+//   - w: The World in which to create entities.
+//
+// Returns:
+//   - A pointer to the configured `Builder{{.N}}`.
 func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
@@ -26,17 +35,26 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range .Components}}id{{.Index}}: id{{.Index}},{{end}}}
 }
 
-// New creates a builder for entities with components {{.TypeVars}}, pre-creating the archetype.
+// New is a convenience function that creates a new builder instance.
 func (b *Builder{{.N}}[{{.TypeVars}}]) New(w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	return NewBuilder{{.N}}[{{.TypeVars}}](w)
 }
 
-// NewEntity creates a new entity with components {{.TypeVars}}.
+// NewEntity creates a single new entity with the {{.N}} components defined by the
+// builder: {{.TypeVars}}.
+//
+// Returns:
+//   - The newly created Entity.
 func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntity() Entity {
 	return b.world.createEntity(b.arch)
 }
 
-// NewEntities creates count entities with components {{.TypeVars}} (void return to avoid allocations).
+// NewEntities creates a batch of `count` entities with the {{.N}} components
+// defined by the builder. This is the most performant method for creating many
+// entities at once.
+//
+// Parameters:
+//   - count: The number of entities to create.
 func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	if count == 0 {
 		return
@@ -62,7 +80,13 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+// NewEntitiesWithValueSet creates a batch of `count` entities and initializes
+// their components to the provided values.
+//
+// Parameters:
+//   - count: The number of entities to create.
+{{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
+{{end}}
 func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.BuilderVars}}) {
 	if count == 0 {
 		return
@@ -91,16 +115,23 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 	}
 }
 
-// Get returns pointers to components {{.TypeVars}} for the entity, or nil if not present or invalid.
+// Get retrieves pointers to the {{.N}} components ({{.TypeVars}}) for the
+// given entity.
+//
+// If the entity is invalid or does not have all the required components, this
+// returns nil for all pointers.
+//
+// Parameters:
+//   - e: The entity to get the components from.
+//
+// Returns:
+//   - Pointers to the component data ({{.ReturnTypes}}), or nils if not found.
 func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	w := b.world
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return {{.ReturnNil}}
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return {{.ReturnNil}}
-	}
 	a := w.archetypes[meta.archetypeIndex]
 	{{range .Components}}id{{.Index}} := b.id{{.Index}}
 	i{{.Index}} := id{{.Index}} >> 6

@@ -5,9 +5,20 @@ import (
 	"unsafe"
 )
 
-// GetComponent returns a pointer to the component of type T for the entity, or nil if not present or invalid.
+// GetComponent retrieves a pointer to the component of type `T` for the given
+// entity. It provides a direct, type-safe way to access component data.
+//
+// If the entity is invalid, does not have the component, or if the entity ID is
+// out of bounds, this function returns nil.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the component.
+//
+// Returns:
+//   - A pointer to the component data (*T), or nil if not found.
 func GetComponent[T any](w *World, e Entity) *T {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return nil
 	}
 	meta := w.metas[e.ID]
@@ -25,15 +36,23 @@ func GetComponent[T any](w *World, e Entity) *T {
 	return (*T)(ptr)
 }
 
-// SetComponent sets the component of type T on the entity, adding it if not present.
+// SetComponent adds a component of type `T` with the given value to an entity,
+// or updates it if the component already exists.
+//
+// If the entity does not already have the component, adding it will cause the
+// entity to move to a different archetype. This is a relatively expensive
+// operation compared to updating an existing component. If the entity is
+// invalid, this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+//   - val: The component data of type `T` to set.
 func SetComponent[T any](w *World, e Entity, val T) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
 	a := w.archetypes[meta.archetypeIndex]
@@ -92,15 +111,20 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	meta.index = newIdx
 }
 
-// RemoveComponent removes the component of type T from the entity if present.
+// RemoveComponent removes the component of type `T` from the specified entity.
+//
+// This operation will cause the entity to move to a new archetype that does not
+// include the removed component. This can be an expensive operation. If the
+// entity is invalid or does not have the component, this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent[T any](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
 	a := w.archetypes[meta.archetypeIndex]

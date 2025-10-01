@@ -1,13 +1,22 @@
-// Package lazyecs implements a high-performance, zero-allocation,
-// archetype-based Entity Component System for Go.
+// Package lazyecs implements a high-performance, archetype-based Entity
+// Component System (ECS) for Go. It is designed for performance-critical
+// applications like games and simulations, offering a simple, generic API that
+// minimizes garbage collection overhead.
 //
-// Features:
-// - Archetype-based storage with max 256 component types.
-// - Bitmask for fast archetype lookup.
-// - Unsafe pointers for zero-GC overhead on transactions.
-// - Preallocated pools for entities and component arrays.
-// - Simple, generic Builder and Filter APIs for 1 or 2 components.
-// - Zero allocations (B/op and allocs/op = 0) during Create, Get, Query.
+// The core of lazyecs is its archetype-based architecture. Entities with the
+// same component layout are stored in contiguous memory blocks, enabling
+// extremely fast iteration. This design, combined with the use of Go generics
+// and unsafe pointers, provides a high-performance, type-safe, and intuitive
+// developer experience.
+//
+// Key features include:
+//   - Archetype-Based Storage: Maximizes cache efficiency by grouping entities
+//     with identical component sets.
+//   - Generic API: Leverages Go generics for a clean, type-safe interface.
+//   - High Performance: Optimized for speed with minimal GC overhead during
+//     entity creation, querying, and component access.
+//   - Code Generation: Uses `go generate` to create boilerplate code for
+//     handling different numbers of components, keeping the public API simple.
 //
 //go:generate go run ./cmd/generate
 package lazyecs
@@ -18,22 +27,26 @@ import (
 	"unsafe"
 )
 
-// ----------------------------------------
-// Constants and Types
-// ----------------------------------------
+// MaxComponentTypes defines the maximum number of unique component types that can be
+// registered in a World. This value is fixed at 256.
 const MaxComponentTypes = 256
 
-// Entity is a unique ID + version tag.
+// Entity represents a unique identifier for an object in the World. It combines
+// a 32-bit ID with a 32-bit version to ensure that recycled IDs are not confused
+// with new entities.
 type Entity struct {
-	ID      uint32
+	// ID is the unique, recyclable identifier for the entity.
+	ID uint32
+	// Version is a generation counter to protect against stale entity references.
+	// It is incremented each time an entity ID is reused.
 	Version uint32
 }
 
-// entityMeta holds where an entity lives.
+// entityMeta holds the internal location and state of an entity.
 type entityMeta struct {
 	archetypeIndex int    // index in World.archetypes
-	index          int    // position inside archetype
-	version        uint32 // current version
+	index          int    // position inside the archetype's component arrays
+	version        uint32 // current version, 0 if the entity is dead
 }
 
 // compSpec bundles a component type’s ID and reflect.Type.
@@ -77,32 +90,47 @@ func (a *archetype) resizeTo(newCap int, w *World) {
 	}
 }
 
-// ----------------------------------------
-// World
-// ----------------------------------------
+// World is the central container for all entities, components, and archetypes.
+// It manages the entire state of the ECS, including entity creation, deletion,
+// and component management. All operations are performed within the context of a
+// World. The World is not thread-safe and should not be accessed from
+// multiple goroutines concurrently.
 type World struct {
+	// Resources provides a thread-safe, generic key-value store for global data
+	// that needs to be accessible from anywhere in the application, such as
+	// configuration objects, resource managers, or event buses.
+	Resources sync.Map
+
 	compIDToType     [MaxComponentTypes]reflect.Type
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	compTypeMap      map[reflect.Type]uint8
-	Resources        sync.Map
-	freeIDs          []uint32     // stack of free entity IDs
-	metas            []entityMeta // len = capacity
-	archetypes       []*archetype // all archetypes
+	freeIDs          []uint32     // stack of recycled entity IDs
+	metas            []entityMeta // stores metadata for each entity, indexed by entity ID
+	archetypes       []*archetype // list of all archetypes in the world
 	compIDToSize     [MaxComponentTypes]uintptr
-	capacity         int
-	initialCapacity  int
-	nextEntityVer    uint32
-	archetypeVersion uint32
-	nextCompTypeID   uint16
+	capacity         int    // current maximum number of entities
+	initialCapacity  int    // initial capacity, used for expansion
+	nextEntityVer    uint32 // version for the next created entity
+	archetypeVersion uint32 // incremented when a new archetype is created
+	nextCompTypeID   uint16 // counter for assigning new component type IDs
 }
 
-// NewWorld preallocates pools for up to cap entities.
-func NewWorld(cap int) *World {
+// NewWorld creates and initializes a new World with a specified initial
+// capacity for entities. It pre-allocates memory for the entity metadata and
+// free ID list to optimize performance.
+//
+// Parameters:
+//   - initialCapacity: The number of entities to pre-allocate memory for.
+//     Choosing a suitable capacity can prevent re-allocations during runtime.
+//
+// Returns:
+//   - A pointer to the newly created World.
+func NewWorld(initialCapacity int) *World {
 	w := &World{
-		capacity:         cap,
-		initialCapacity:  cap,
-		freeIDs:          make([]uint32, cap),
-		metas:            make([]entityMeta, cap),
+		capacity:         initialCapacity,
+		initialCapacity:  initialCapacity,
+		freeIDs:          make([]uint32, initialCapacity),
+		metas:            make([]entityMeta, initialCapacity),
 		archetypes:       make([]*archetype, 0),
 		maskToArcIndex:   make(map[bitmask256]int),
 		compTypeMap:      make(map[reflect.Type]uint8, 16),
@@ -110,9 +138,13 @@ func NewWorld(cap int) *World {
 		nextEntityVer:    1,
 		archetypeVersion: 0,
 	}
-	for i := 0; i < cap; i++ {
+	for i := 0; i < initialCapacity; i++ {
 		// fill freeIDs with [cap-1 .. 0]
-		w.freeIDs[i] = uint32(cap - 1 - i)
+		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
+	}
+	for i := 0; i < initialCapacity; i++ {
+		// fill freeIDs with [cap-1 .. 0]
+		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
 	}
 	for i := range w.metas {
 		w.metas[i].archetypeIndex = -1
@@ -214,35 +246,57 @@ func (w *World) createEntity(a *archetype) Entity {
 	return ent
 }
 
-// RemoveEntity deletes e from its archetype, swaps last element in.
-// Zero allocations on hot path.
+// RemoveEntity deactivates an entity and recycles its ID for future use.
+// It removes the entity from its archetype by swapping it with the last element,
+// ensuring component arrays remain tightly packed. This operation is highly
+// efficient and incurs zero allocations.
+//
+// If the provided entity is invalid (e.g., already removed or has a stale
+// version), the function does nothing.
+//
+// Parameters:
+//   - e: The Entity to remove.
 func (w *World) RemoveEntity(e Entity) {
-	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
+	if !w.IsValid(e) {
 		return // already deleted or stale
 	}
+
+	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
 	idx := meta.index
 	lastIdx := a.size - 1
-	// swap last into idx
+
+	// Swap the entity to be removed with the last entity in the archetype.
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]
 		a.entityIDs[idx] = lastEnt
+		// Move component data.
 		for _, id := range a.compOrder {
 			src := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(lastIdx)*a.compSizes[id])
 			dst := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(idx)*a.compSizes[id])
 			memCopy(dst, src, a.compSizes[id])
 		}
+		// Update the metadata of the moved entity.
 		w.metas[lastEnt.ID].index = idx
 	}
+
+	// Invalidate the removed entity's metadata and recycle its ID.
 	a.size--
 	w.freeIDs = append(w.freeIDs, e.ID)
 	meta.archetypeIndex = -1
 	meta.index = -1
-	meta.version = 0
+	meta.version = 0 // Mark as dead
 }
 
-// IsValid checks if the entity is still valid.
+// IsValid checks if an entity reference is still valid (i.e., it has not been
+// removed). It verifies that the entity's ID is within bounds and that its
+// version matches the current version stored in the world's metadata.
+//
+// Parameters:
+//   - e: The Entity to validate.
+//
+// Returns:
+//   - true if the entity is valid, false otherwise.
 func (w *World) IsValid(e Entity) bool {
 	if int(e.ID) >= len(w.metas) {
 		return false

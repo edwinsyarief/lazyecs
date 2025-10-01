@@ -1,12 +1,20 @@
-// GetComponent{{.N}} returns pointers to the components of type {{.TypeVars}} for the entity, or nil if not present or invalid.
+// GetComponent{{.N}} retrieves pointers to the {{.N}} components of type
+// ({{.TypeVars}}) for the given entity.
+//
+// If the entity is invalid or does not have all the requested components, this
+// function returns nil for all pointers.
+//
+// Parameters:
+//   - w: The World containing the entity.
+//   - e: The Entity from which to retrieve the components.
+//
+// Returns:
+//   - Pointers to the component data ({{.ReturnTypes}}), or nils if not found.
 func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return {{.ReturnNil}}
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return {{.ReturnNil}}
-	}
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
@@ -26,15 +34,23 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 	return {{.ReturnPtrs}}
 }
 
-// SetComponent{{.N}} sets the components of type {{.TypeVars}} on the entity, adding them if not present.
+// SetComponent{{.N}} adds or updates the {{.N}} components ({{.TypeVars}}) on the
+// specified entity.
+//
+// If the entity does not already have all the components, this operation will
+// cause the entity to move to a different archetype. If the entity is invalid,
+// this function does nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
+{{range .Components}}//   - v{{.Index}}: The component data of type {{.TypeName}} to set.
+{{end}}
 func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
@@ -93,15 +109,21 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	meta.index = newIdx
 }
 
-// RemoveComponent{{.N}} removes the components of type {{.TypeVars}} from the entity if present.
+// RemoveComponent{{.N}} removes the {{.N}} components ({{.TypeVars}}) from the
+// specified entity.
+//
+// This operation will cause the entity to move to a new archetype. If the
+// entity is invalid or does not have all the components, this function does
+// nothing.
+//
+// Parameters:
+//   - w: The World where the entity resides.
+//   - e: The Entity to modify.
 func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
-	if int(e.ID) >= len(w.metas) {
+	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return
-	}
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
