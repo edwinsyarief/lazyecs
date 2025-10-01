@@ -219,6 +219,76 @@ Filters are available for iterating over entities with 1 to 5 components (`NewFi
 
 The `World` object is **not** thread-safe. All operations that modify the world state (e.g., creating/removing entities, adding/removing components) should be performed from a single goroutine.
 
+## Benchmark Results
+
+```
+goos: linux
+goarch: amd64
+pkg: github.com/edwinsyarief/lazyecs
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkCreateWorld/1K-4             	  176977	      6036 ns/op	   29608 B/op	       5 allocs/op
+BenchmarkCreateWorld/10K-4            	   24045	     48726 ns/op	  287658 B/op	       5 allocs/op
+BenchmarkCreateWorld/100K-4           	    3114	    468926 ns/op	 2802609 B/op	       5 allocs/op
+BenchmarkCreateWorld/1M-4             	     308	   3847333 ns/op	28009395 B/op	       5 allocs/op
+BenchmarkAutoExpand/1K_init_x2-4      	   44229	     26721 ns/op	  127001 B/op	       6 allocs/op
+BenchmarkAutoExpand/10K_init_x2-4     	    3807	    274281 ns/op	 1105945 B/op	       6 allocs/op
+BenchmarkAutoExpand/100K_init_x2-4    	     302	   4034151 ns/op	11903024 B/op	       6 allocs/op
+BenchmarkCreateEntity/1K-4            	  186903	      6548 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCreateEntity/10K-4           	   16485	     73208 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCreateEntity/100K-4          	    2059	    615932 ns/op	       4 B/op	       0 allocs/op
+BenchmarkCreateEntity/1M-4            	     217	   5518963 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesBatch/1K-4        	  441910	      2729 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesBatch/10K-4       	   44210	     26990 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesBatch/100K-4      	    4659	    282403 ns/op	       2 B/op	       0 allocs/op
+BenchmarkNewEntitiesBatch/1M-4        	     490	   2469399 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetComponent/1K-4            	94178534	        12.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetComponent/10K-4           	93488174	        12.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetComponent/100K-4          	93599734	        12.72 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetComponent/1M-4            	94421305	        12.75 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentExisting/1K-4    	39301866	        30.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentExisting/10K-4   	39114544	        30.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentExisting/100K-4  	38847579	        30.79 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentExisting/1M-4    	38958819	        30.79 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentNew/1K-4         	   13791	     86559 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentNew/10K-4        	    1402	    851996 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentNew/100K-4       	     141	   8421829 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSetComponentNew/1M-4         	      13	  84154257 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet/1K-4 	  261081	      4585 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet/10K-4         	   25215	     47748 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet/100K-4        	    2779	    439465 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet/1M-4          	     282	   4249562 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet2/1K-4         	  194618	      6195 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet2/10K-4        	   18286	     65748 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet2/100K-4       	    1676	    659006 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNewEntitiesWithValueSet2/1M-4         	     205	   6026165 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveComponent/1K-4                  	   13387	     89385 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveComponent/10K-4                 	    1371	    869315 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveComponent/100K-4                	     139	   8569709 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveComponent/1M-4                  	      13	  85785122 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveEntity/1K-4                     	   89785	     13196 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveEntity/10K-4                    	    9222	    133189 ns/op	       1 B/op	       0 allocs/op
+BenchmarkRemoveEntity/100K-4                   	    1052	   1125884 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRemoveEntity/1M-4                     	      94	  10971168 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1K-4             	  241581	      4923 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/10K-4            	   25821	     46602 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/100K-4           	    2862	    420144 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1M-4             	     285	   4188014 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1K-4            	  245383	      4964 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/10K-4           	   26204	     45360 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/100K-4          	    2846	    422381 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1M-4            	     285	   4196001 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1K-4                    	  499658	      2344 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/10K-4                   	   51602	     23357 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/100K-4                  	    5136	    235341 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1M-4                    	     511	   2351143 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/1K-4                   	  503848	      2353 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/10K-4                  	   51441	     23392 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/100K-4                 	    5046	    234303 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/1M-4                   	     511	   2350547 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/edwinsyarief/lazyecs	235.565s
+```
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
