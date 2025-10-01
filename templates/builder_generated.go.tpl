@@ -26,6 +26,11 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range .Components}}id{{.Index}}: id{{.Index}},{{end}}}
 }
 
+// New create a builder for entities with components {{.TypeVars}}, pre-creating the archetype
+func (b *Builder{{.N}}[{{.TypeVars}}]) New(w *World) *Builder{{.N}}[{{.TypeVars}}] {
+	return NewBuilder{{.N}}[{{.TypeVars}}](w)
+}
+
 // NewEntity creates a new entity with components {{.TypeVars}}.
 func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntity() Entity {
 	return b.world.createEntity(b.arch)
@@ -33,8 +38,56 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntity() Entity {
 
 // NewEntities creates count entities with components {{.TypeVars}} (void return to avoid allocations).
 func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
-	for i := 0; i < count; i++ {
-		b.world.createEntity(b.arch)
+	if count == 0 {
+		return
+	}
+	w := b.world
+	a := b.arch
+	for len(w.freeIDs) < count {
+		w.expand()
+	}
+	startSize := a.size
+	a.size += count
+	popped := w.freeIDs[len(w.freeIDs)-count:]
+	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	for k := 0; k < count; k++ {
+		id := popped[k]
+		meta := &w.metas[id]
+		meta.archetypeIndex = a.index
+		meta.index = startSize + k
+		meta.version = w.nextEntityVer
+		ent := Entity{ID: id, Version: meta.version}
+		a.entityIDs[startSize+k] = ent
+		w.nextEntityVer++
+	}
+}
+
+// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
+func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Vars}}) {
+	if count == 0 {
+		return
+	}
+	w := b.world
+	a := b.arch
+	for len(w.freeIDs) < count {
+		w.expand()
+	}
+	startSize := a.size
+	a.size += count
+	popped := w.freeIDs[len(w.freeIDs)-count:]
+	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	for k := 0; k < count; k++ {
+		id := popped[k]
+		meta := &w.metas[id]
+		meta.archetypeIndex = a.index
+		meta.index = startSize + k
+		meta.version = w.nextEntityVer
+		ent := Entity{ID: id, Version: meta.version}
+		a.entityIDs[startSize+k] = ent
+		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])
+		*(*{{.TypeName}})(ptr{{.Index}}) = c{{.Index}}
+		{{end}}
+		w.nextEntityVer++
 	}
 }
 

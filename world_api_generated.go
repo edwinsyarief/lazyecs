@@ -8,9 +8,9 @@ import (
 )
 
 // GetComponents2 returns pointers to the components of type T1, T2 for the entity, or nil if not present or invalid.
-func GetComponents2[T1 any, T2 any](w *World, e Entity) (*T1, *T2, bool) {
+func GetComponents2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 	if !w.IsValid(e) {
-		return nil, nil, false
+		return nil, nil
 	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
@@ -28,12 +28,12 @@ func GetComponents2[T1 any, T2 any](w *World, e Entity) (*T1, *T2, bool) {
 	m.set(id2)
 	
 	if !a.mask.contains(m) {
-		return nil, nil, false
+		return nil, nil
 	}
 	p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	
-	return (*T1)(p1), (*T2)(p2), true
+	return (*T1)(p1), (*T2)(p2)
 }
 
 // SetComponents2 sets the components of type T1, T2 on the entity, adding them if not present.
@@ -175,9 +175,9 @@ func RemoveComponents2[T1 any, T2 any](w *World, e Entity) {
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }// GetComponents3 returns pointers to the components of type T1, T2, T3 for the entity, or nil if not present or invalid.
-func GetComponents3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3, bool) {
+func GetComponents3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 	if !w.IsValid(e) {
-		return nil, nil, nil, false
+		return nil, nil, nil
 	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
@@ -198,13 +198,13 @@ func GetComponents3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3, 
 	m.set(id3)
 	
 	if !a.mask.contains(m) {
-		return nil, nil, nil, false
+		return nil, nil, nil
 	}
 	p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	p3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), true
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
 }
 
 // SetComponents3 sets the components of type T1, T2, T3 on the entity, adding them if not present.
@@ -365,9 +365,9 @@ func RemoveComponents3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }// GetComponents4 returns pointers to the components of type T1, T2, T3, T4 for the entity, or nil if not present or invalid.
-func GetComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2, *T3, *T4, bool) {
+func GetComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2, *T3, *T4) {
 	if !w.IsValid(e) {
-		return nil, nil, nil, nil, false
+		return nil, nil, nil, nil
 	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
@@ -391,14 +391,14 @@ func GetComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T
 	m.set(id4)
 	
 	if !a.mask.contains(m) {
-		return nil, nil, nil, nil, false
+		return nil, nil, nil, nil
 	}
 	p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	p3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 	p4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), true
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
 }
 
 // SetComponents4 sets the components of type T1, T2, T3, T4 on the entity, adding them if not present.
@@ -578,9 +578,9 @@ func RemoveComponents4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }// GetComponents5 returns pointers to the components of type T1, T2, T3, T4, T5 for the entity, or nil if not present or invalid.
-func GetComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5, bool) {
+func GetComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5) {
 	if !w.IsValid(e) {
-		return nil, nil, nil, nil, nil, false
+		return nil, nil, nil, nil, nil
 	}
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
@@ -607,7 +607,7 @@ func GetComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) 
 	m.set(id5)
 	
 	if !a.mask.contains(m) {
-		return nil, nil, nil, nil, nil, false
+		return nil, nil, nil, nil, nil
 	}
 	p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
 	p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
@@ -615,7 +615,7 @@ func GetComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) 
 	p4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 	p5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5), true
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
 }
 
 // SetComponents5 sets the components of type T1, T2, T3, T4, T5 on the entity, adding them if not present.
@@ -781,6 +781,265 @@ func RemoveComponents5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entit
 	newMask.unset(id3)
 	newMask.unset(id4)
 	newMask.unset(id5)
+	
+	var tempSpecs [MaxComponentTypes]compSpec
+	count := 0
+	for wi := 0; wi < 4; wi++ {
+		word := newMask[wi]
+		for word != 0 {
+			bit := bits.TrailingZeros64(word)
+			cid := uint8(wi*64 + bit)
+			typ := w.compIDToType[cid]
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
+			count++
+			word &= word - 1 // clear lowest set bit
+		}
+	}
+	specs := tempSpecs[:count]
+	targetA := w.getOrCreateArchetype(newMask, specs)
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+	for _, cid := range a.compOrder {
+		var bm bitmask256
+		bm.set(cid)
+		if removeMask.contains(bm) {
+			continue
+		}
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
+	}
+	w.removeFromArchetype(a, meta)
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
+}// GetComponents6 returns pointers to the components of type T1, T2, T3, T4, T5, T6 for the entity, or nil if not present or invalid.
+func GetComponents6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5, *T6) {
+	if !w.IsValid(e) {
+		return nil, nil, nil, nil, nil, nil
+	}
+	t1 := reflect.TypeFor[T1]()
+	t2 := reflect.TypeFor[T2]()
+	t3 := reflect.TypeFor[T3]()
+	t4 := reflect.TypeFor[T4]()
+	t5 := reflect.TypeFor[T5]()
+	t6 := reflect.TypeFor[T6]()
+	
+	id1 := w.getCompTypeID(t1)
+	id2 := w.getCompTypeID(t2)
+	id3 := w.getCompTypeID(t3)
+	id4 := w.getCompTypeID(t4)
+	id5 := w.getCompTypeID(t5)
+	id6 := w.getCompTypeID(t6)
+	
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
+		panic("ecs: duplicate component types in GetComponents6")
+	}
+	meta := w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	var m bitmask256
+	m.set(id1)
+	m.set(id2)
+	m.set(id3)
+	m.set(id4)
+	m.set(id5)
+	m.set(id6)
+	
+	if !a.mask.contains(m) {
+		return nil, nil, nil, nil, nil, nil
+	}
+	p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+	p3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
+	p4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
+	p5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
+	p6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
+	
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5), (*T6)(p6)
+}
+
+// SetComponents6 sets the components of type T1, T2, T3, T4, T5, T6 on the entity, adding them if not present.
+func SetComponents6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity, c1 T1, c2 T2, c3 T3, c4 T4, c5 T5, c6 T6) {
+	if !w.IsValid(e) {
+		return
+	}
+	t1 := reflect.TypeFor[T1]()
+	t2 := reflect.TypeFor[T2]()
+	t3 := reflect.TypeFor[T3]()
+	t4 := reflect.TypeFor[T4]()
+	t5 := reflect.TypeFor[T5]()
+	t6 := reflect.TypeFor[T6]()
+	
+	id1 := w.getCompTypeID(t1)
+	id2 := w.getCompTypeID(t2)
+	id3 := w.getCompTypeID(t3)
+	id4 := w.getCompTypeID(t4)
+	id5 := w.getCompTypeID(t5)
+	id6 := w.getCompTypeID(t6)
+	
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
+		panic("ecs: duplicate component types in SetComponents6")
+	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	var setMask bitmask256
+	setMask.set(id1)
+	setMask.set(id2)
+	setMask.set(id3)
+	setMask.set(id4)
+	setMask.set(id5)
+	setMask.set(id6)
+	
+	if a.mask.contains(setMask) {
+		// already has all, just set
+		p1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+		*(*T1)(p1) = c1
+		p2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+		*(*T2)(p2) = c2
+		p3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
+		*(*T3)(p3) = c3
+		p4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
+		*(*T4)(p4) = c4
+		p5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
+		*(*T5)(p5) = c5
+		p6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
+		*(*T6)(p6) = c6
+		
+		return
+	}
+	newMask := a.mask
+	newMask.set(id1)
+	newMask.set(id2)
+	newMask.set(id3)
+	newMask.set(id4)
+	newMask.set(id5)
+	newMask.set(id6)
+	
+	var tempSpecs [MaxComponentTypes]compSpec
+	count := 0
+	for wi := 0; wi < 4; wi++ {
+		word := newMask[wi]
+		for word != 0 {
+			bit := bits.TrailingZeros64(word)
+			cid := uint8(wi*64 + bit)
+			typ := w.compIDToType[cid]
+			tempSpecs[count] = compSpec{typ, typ.Size(), cid}
+			count++
+			word &= word - 1 // clear lowest set bit
+		}
+	}
+	specs := tempSpecs[:count]
+	targetA := w.getOrCreateArchetype(newMask, specs)
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+	for _, cid := range a.compOrder {
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id1)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id1]) + uintptr(newIdx)*targetA.compSizes[id1])
+			*(*T1)(dst) = c1
+		}
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id2)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id2]) + uintptr(newIdx)*targetA.compSizes[id2])
+			*(*T2)(dst) = c2
+		}
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id3)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id3]) + uintptr(newIdx)*targetA.compSizes[id3])
+			*(*T3)(dst) = c3
+		}
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id4)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id4]) + uintptr(newIdx)*targetA.compSizes[id4])
+			*(*T4)(dst) = c4
+		}
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id5)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id5]) + uintptr(newIdx)*targetA.compSizes[id5])
+			*(*T5)(dst) = c5
+		}
+	}
+	
+	{
+		var singleMask bitmask256
+		singleMask.set(id6)
+		if !a.mask.contains(singleMask) {
+			dst := unsafe.Pointer(uintptr(targetA.compPointers[id6]) + uintptr(newIdx)*targetA.compSizes[id6])
+			*(*T6)(dst) = c6
+		}
+	}
+	
+	w.removeFromArchetype(a, meta)
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
+}
+
+// RemoveComponents6 removes the components of type T1, T2, T3, T4, T5, T6 from the entity if present.
+func RemoveComponents6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) {
+	if !w.IsValid(e) {
+		return
+	}
+	t1 := reflect.TypeFor[T1]()
+	t2 := reflect.TypeFor[T2]()
+	t3 := reflect.TypeFor[T3]()
+	t4 := reflect.TypeFor[T4]()
+	t5 := reflect.TypeFor[T5]()
+	t6 := reflect.TypeFor[T6]()
+	
+	id1 := w.getCompTypeID(t1)
+	id2 := w.getCompTypeID(t2)
+	id3 := w.getCompTypeID(t3)
+	id4 := w.getCompTypeID(t4)
+	id5 := w.getCompTypeID(t5)
+	id6 := w.getCompTypeID(t6)
+	
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
+		panic("ecs: duplicate component types in RemoveComponents6")
+	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	var removeMask bitmask256
+	removeMask.set(id1)
+	removeMask.set(id2)
+	removeMask.set(id3)
+	removeMask.set(id4)
+	removeMask.set(id5)
+	removeMask.set(id6)
+	
+	if !a.mask.intersects(removeMask) {
+		return
+	}
+	newMask := a.mask
+	newMask.unset(id1)
+	newMask.unset(id2)
+	newMask.unset(id3)
+	newMask.unset(id4)
+	newMask.unset(id5)
+	newMask.unset(id6)
 	
 	var tempSpecs [MaxComponentTypes]compSpec
 	count := 0

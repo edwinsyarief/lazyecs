@@ -40,6 +40,11 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 	return f
 }
 
+// New creates a filter for entities with components T1, T2.
+func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
+	return NewFilter2[T1, T2](w)
+}
+
 // updateMatching updates the list of matching archetypes.
 func (f *Filter2[T1, T2]) updateMatching() {
 	f.matchingArches = f.matchingArches[:0]
@@ -145,6 +150,11 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	f := &Filter3[T1, T2, T3]{world: w, mask: m, id1: id1,id2: id2,id3: id3, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
+}
+
+// New creates a filter for entities with components T1, T2, T3.
+func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
+	return NewFilter3[T1, T2, T3](w)
 }
 
 // updateMatching updates the list of matching archetypes.
@@ -257,6 +267,11 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	f := &Filter4[T1, T2, T3, T4]{world: w, mask: m, id1: id1,id2: id2,id3: id3,id4: id4, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
+}
+
+// New creates a filter for entities with components T1, T2, T3, T4.
+func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
+	return NewFilter4[T1, T2, T3, T4](w)
 }
 
 // updateMatching updates the list of matching archetypes.
@@ -376,6 +391,11 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	return f
 }
 
+// New creates a filter for entities with components T1, T2, T3, T4, T5.
+func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5] {
+	return NewFilter5[T1, T2, T3, T4, T5](w)
+}
+
 // updateMatching updates the list of matching archetypes.
 func (f *Filter5[T1, T2, T3, T4, T5]) updateMatching() {
 	f.matchingArches = f.matchingArches[:0]
@@ -433,6 +453,134 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
 func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
+			meta := &f.world.metas[ent.ID]
+			meta.archetypeIndex = -1
+			meta.index = -1
+			meta.version = 0
+			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+		}
+		a.size = 0
+	}
+	f.Reset()
+}// Filter6 provides a fast iterator over entities with components T1, T2, T3, T4, T5, T6.
+type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
+	world          *World
+	mask           bitmask256
+	id1            uint8
+	id2            uint8
+	id3            uint8
+	id4            uint8
+	id5            uint8
+	id6            uint8
+	
+	matchingArches []*archetype
+	lastVersion    uint32
+	curMatchIdx    int
+	curIdx         int
+	curEnt         Entity
+}
+
+// NewFilter6 creates a filter for entities with components T1, T2, T3, T4, T5, T6.
+func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filter6[T1, T2, T3, T4, T5, T6] {
+	t1 := reflect.TypeFor[T1]()
+	t2 := reflect.TypeFor[T2]()
+	t3 := reflect.TypeFor[T3]()
+	t4 := reflect.TypeFor[T4]()
+	t5 := reflect.TypeFor[T5]()
+	t6 := reflect.TypeFor[T6]()
+	
+	id1 := w.getCompTypeID(t1)
+	id2 := w.getCompTypeID(t2)
+	id3 := w.getCompTypeID(t3)
+	id4 := w.getCompTypeID(t4)
+	id5 := w.getCompTypeID(t5)
+	id6 := w.getCompTypeID(t6)
+	
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
+		panic("ecs: duplicate component types in Filter6")
+	}
+	var m bitmask256
+	m.set(id1)
+	m.set(id2)
+	m.set(id3)
+	m.set(id4)
+	m.set(id5)
+	m.set(id6)
+	
+	f := &Filter6[T1, T2, T3, T4, T5, T6]{world: w, mask: m, id1: id1,id2: id2,id3: id3,id4: id4,id5: id5,id6: id6, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
+	f.updateMatching()
+	return f
+}
+
+// New creates a filter for entities with components T1, T2, T3, T4, T5, T6.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4, T5, T6] {
+	return NewFilter6[T1, T2, T3, T4, T5, T6](w)
+}
+
+// updateMatching updates the list of matching archetypes.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) updateMatching() {
+	f.matchingArches = f.matchingArches[:0]
+	for _, a := range f.world.archetypes {
+		if a.mask.contains(f.mask) {
+			f.matchingArches = append(f.matchingArches, a)
+		}
+	}
+	f.lastVersion = f.world.archetypeVersion
+}
+
+// Reset resets the filter iterator.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	f.curMatchIdx = 0
+	f.curIdx = -1
+}
+
+// Next advances to the next entity with the components, returning true if found.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
+	for {
+		f.curIdx++
+		if f.curMatchIdx >= len(f.matchingArches) {
+			return false
+		}
+		a := f.matchingArches[f.curMatchIdx]
+		if f.curIdx >= a.size {
+			f.curMatchIdx++
+			f.curIdx = -1
+			continue
+		}
+		f.curEnt = a.entityIDs[f.curIdx]
+		return true
+	}
+}
+
+// Entity returns the current entity.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
+	return f.curEnt
+}
+
+// Get returns pointers to the current components T1, T2, T3, T4, T5, T6.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
+	a := f.matchingArches[f.curMatchIdx]
+	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
+	p4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
+	p5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
+	p6 := unsafe.Pointer(uintptr(a.compPointers[f.id6]) + uintptr(f.curIdx)*a.compSizes[f.id6])
+	
+	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5), (*T6)(p6)
+}
+
+// RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
 	}

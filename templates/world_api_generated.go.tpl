@@ -1,7 +1,7 @@
 // GetComponents{{.N}} returns pointers to the components of type {{.TypeVars}} for the entity, or nil if not present or invalid.
-func GetComponents{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}, bool) {
+func GetComponents{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 	if !w.IsValid(e) {
-		return {{.ReturnNil}}, false
+		return {{.ReturnNil}}
 	}
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
@@ -16,11 +16,11 @@ func GetComponents{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}, bool
 	{{range .Components}}m.set(id{{.Index}})
 	{{end}}
 	if !a.mask.contains(m) {
-		return {{.ReturnNil}}, false
+		return {{.ReturnNil}}
 	}
 	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
 	{{end}}
-	return {{.ReturnPtrs}}, true
+	return {{.ReturnPtrs}}
 }
 
 // SetComponents{{.N}} sets the components of type {{.TypeVars}} on the entity, adding them if not present.

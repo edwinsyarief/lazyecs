@@ -49,7 +49,7 @@ type TemplateData struct {
 }
 
 func main() {
-	maxN := 5
+	maxN := 6
 	if len(os.Args) > 1 {
 		n, err := strconv.Atoi(os.Args[1])
 		if err != nil {

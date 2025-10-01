@@ -31,6 +31,10 @@ func NewFilter[T any](w *World) *Filter[T] {
 	return f
 }
 
+func (f *Filter[T]) New(w *World) *Filter[T] {
+	return NewFilter[T](w)
+}
+
 // updateMatching updates the list of matching archetypes.
 func (f *Filter[T]) updateMatching() {
 	f.matchingArches = f.matchingArches[:0]

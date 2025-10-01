@@ -28,6 +28,11 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	return f
 }
 
+// New creates a filter for entities with components {{.TypeVars}}.
+func (f *Filter{{.N}}[{{.TypeVars}}]) New(w *World) *Filter{{.N}}[{{.TypeVars}}] {
+	return NewFilter{{.N}}[{{.TypeVars}}](w)
+}
+
 // updateMatching updates the list of matching archetypes.
 func (f *Filter{{.N}}[{{.TypeVars}}]) updateMatching() {
 	f.matchingArches = f.matchingArches[:0]
