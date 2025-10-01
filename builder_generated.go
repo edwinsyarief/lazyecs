@@ -10,8 +10,8 @@ import (
 type Builder2[T1 any, T2 any] struct {
 	world *World
 	arch  *archetype
-	id1 uint8
-	id2 uint8
+	id1   uint8
+	id2   uint8
 	
 }
 
@@ -31,15 +31,15 @@ func NewBuilder2[T1 any, T2 any](w *World) *Builder2[T1, T2] {
 	mask.set(id2)
 	
 	specs := []compSpec{
-		{id: id1, typ: t1, size: t1.Size()},
-		{id: id2, typ: t2, size: t2.Size()},
+		{id: id1, typ: t1, size: w.compIDToSize[id1]},
+		{id: id2, typ: t2, size: w.compIDToSize[id2]},
 		
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder2[T1, T2]{world: w, arch: arch, id1: id1,id2: id2,}
 }
 
-// New create a builder for entities with components T1, T2, pre-creating the archetype
+// New creates a builder for entities with components T1, T2, pre-creating the archetype.
 func (b *Builder2[T1, T2]) New(w *World) *Builder2[T1, T2] {
 	return NewBuilder2[T1, T2](w)
 }
@@ -75,8 +75,8 @@ func (b *Builder2[T1, T2]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2) {
 	if count == 0 {
 		return
 	}
@@ -98,9 +98,9 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2) {
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = c1
+		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = c2
+		*(*T2)(ptr2) = comp2
 		
 		w.nextEntityVer++
 	}
@@ -109,29 +109,35 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2) {
 // Get returns pointers to components T1, T2 for the entity, or nil if not present or invalid.
 func (b *Builder2[T1, T2]) Get(e Entity) (*T1, *T2) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil, nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil, nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.id1)
-	m.set(b.id2)
+	id1 := b.id1
+	i1 := id1 >> 6
+	o1 := id1 & 63
+	id2 := b.id2
+	i2 := id2 >> 6
+	o2 := id2 & 63
 	
-	if !a.mask.contains(m) {
+	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 {
 		return nil, nil
 	}
-	p1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 	
-	return (*T1)(p1), (*T2)(p2)
+	return (*T1)(ptr1), (*T2)(ptr2)
 }// Builder3 provides a simple API to create entities with 3 specific components.
 type Builder3[T1 any, T2 any, T3 any] struct {
 	world *World
 	arch  *archetype
-	id1 uint8
-	id2 uint8
-	id3 uint8
+	id1   uint8
+	id2   uint8
+	id3   uint8
 	
 }
 
@@ -154,16 +160,16 @@ func NewBuilder3[T1 any, T2 any, T3 any](w *World) *Builder3[T1, T2, T3] {
 	mask.set(id3)
 	
 	specs := []compSpec{
-		{id: id1, typ: t1, size: t1.Size()},
-		{id: id2, typ: t2, size: t2.Size()},
-		{id: id3, typ: t3, size: t3.Size()},
+		{id: id1, typ: t1, size: w.compIDToSize[id1]},
+		{id: id2, typ: t2, size: w.compIDToSize[id2]},
+		{id: id3, typ: t3, size: w.compIDToSize[id3]},
 		
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder3[T1, T2, T3]{world: w, arch: arch, id1: id1,id2: id2,id3: id3,}
 }
 
-// New create a builder for entities with components T1, T2, T3, pre-creating the archetype
+// New creates a builder for entities with components T1, T2, T3, pre-creating the archetype.
 func (b *Builder3[T1, T2, T3]) New(w *World) *Builder3[T1, T2, T3] {
 	return NewBuilder3[T1, T2, T3](w)
 }
@@ -199,8 +205,8 @@ func (b *Builder3[T1, T2, T3]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, c3 T3) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3) {
 	if count == 0 {
 		return
 	}
@@ -222,11 +228,11 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, 
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = c1
+		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = c2
+		*(*T2)(ptr2) = comp2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = c3
+		*(*T3)(ptr3) = comp3
 		
 		w.nextEntityVer++
 	}
@@ -235,32 +241,40 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, 
 // Get returns pointers to components T1, T2, T3 for the entity, or nil if not present or invalid.
 func (b *Builder3[T1, T2, T3]) Get(e Entity) (*T1, *T2, *T3) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil, nil, nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil, nil, nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.id1)
-	m.set(b.id2)
-	m.set(b.id3)
+	id1 := b.id1
+	i1 := id1 >> 6
+	o1 := id1 & 63
+	id2 := b.id2
+	i2 := id2 >> 6
+	o2 := id2 & 63
+	id3 := b.id3
+	i3 := id3 >> 6
+	o3 := id3 & 63
 	
-	if !a.mask.contains(m) {
+	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 {
 		return nil, nil, nil
 	}
-	p1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }// Builder4 provides a simple API to create entities with 4 specific components.
 type Builder4[T1 any, T2 any, T3 any, T4 any] struct {
 	world *World
 	arch  *archetype
-	id1 uint8
-	id2 uint8
-	id3 uint8
-	id4 uint8
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
 	
 }
 
@@ -286,17 +300,17 @@ func NewBuilder4[T1 any, T2 any, T3 any, T4 any](w *World) *Builder4[T1, T2, T3,
 	mask.set(id4)
 	
 	specs := []compSpec{
-		{id: id1, typ: t1, size: t1.Size()},
-		{id: id2, typ: t2, size: t2.Size()},
-		{id: id3, typ: t3, size: t3.Size()},
-		{id: id4, typ: t4, size: t4.Size()},
+		{id: id1, typ: t1, size: w.compIDToSize[id1]},
+		{id: id2, typ: t2, size: w.compIDToSize[id2]},
+		{id: id3, typ: t3, size: w.compIDToSize[id3]},
+		{id: id4, typ: t4, size: w.compIDToSize[id4]},
 		
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder4[T1, T2, T3, T4]{world: w, arch: arch, id1: id1,id2: id2,id3: id3,id4: id4,}
 }
 
-// New create a builder for entities with components T1, T2, T3, T4, pre-creating the archetype
+// New creates a builder for entities with components T1, T2, T3, T4, pre-creating the archetype.
 func (b *Builder4[T1, T2, T3, T4]) New(w *World) *Builder4[T1, T2, T3, T4] {
 	return NewBuilder4[T1, T2, T3, T4](w)
 }
@@ -332,8 +346,8 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, c3 T3, c4 T4) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4) {
 	if count == 0 {
 		return
 	}
@@ -355,13 +369,13 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, c1 T1, c2 
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = c1
+		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = c2
+		*(*T2)(ptr2) = comp2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = c3
+		*(*T3)(ptr3) = comp3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = c4
+		*(*T4)(ptr4) = comp4
 		
 		w.nextEntityVer++
 	}
@@ -370,35 +384,45 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, c1 T1, c2 
 // Get returns pointers to components T1, T2, T3, T4 for the entity, or nil if not present or invalid.
 func (b *Builder4[T1, T2, T3, T4]) Get(e Entity) (*T1, *T2, *T3, *T4) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil, nil, nil, nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil, nil, nil, nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.id1)
-	m.set(b.id2)
-	m.set(b.id3)
-	m.set(b.id4)
+	id1 := b.id1
+	i1 := id1 >> 6
+	o1 := id1 & 63
+	id2 := b.id2
+	i2 := id2 >> 6
+	o2 := id2 & 63
+	id3 := b.id3
+	i3 := id3 >> 6
+	o3 := id3 & 63
+	id4 := b.id4
+	i4 := id4 >> 6
+	o4 := id4 & 63
 	
-	if !a.mask.contains(m) {
+	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 {
 		return nil, nil, nil, nil
 	}
-	p1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }// Builder5 provides a simple API to create entities with 5 specific components.
 type Builder5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	world *World
 	arch  *archetype
-	id1 uint8
-	id2 uint8
-	id3 uint8
-	id4 uint8
-	id5 uint8
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
+	id5   uint8
 	
 }
 
@@ -427,18 +451,18 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 	mask.set(id5)
 	
 	specs := []compSpec{
-		{id: id1, typ: t1, size: t1.Size()},
-		{id: id2, typ: t2, size: t2.Size()},
-		{id: id3, typ: t3, size: t3.Size()},
-		{id: id4, typ: t4, size: t4.Size()},
-		{id: id5, typ: t5, size: t5.Size()},
+		{id: id1, typ: t1, size: w.compIDToSize[id1]},
+		{id: id2, typ: t2, size: w.compIDToSize[id2]},
+		{id: id3, typ: t3, size: w.compIDToSize[id3]},
+		{id: id4, typ: t4, size: w.compIDToSize[id4]},
+		{id: id5, typ: t5, size: w.compIDToSize[id5]},
 		
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder5[T1, T2, T3, T4, T5]{world: w, arch: arch, id1: id1,id2: id2,id3: id3,id4: id4,id5: id5,}
 }
 
-// New create a builder for entities with components T1, T2, T3, T4, T5, pre-creating the archetype
+// New creates a builder for entities with components T1, T2, T3, T4, T5, pre-creating the archetype.
 func (b *Builder5[T1, T2, T3, T4, T5]) New(w *World) *Builder5[T1, T2, T3, T4, T5] {
 	return NewBuilder5[T1, T2, T3, T4, T5](w)
 }
@@ -474,8 +498,8 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, c3 T3, c4 T4, c5 T5) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5) {
 	if count == 0 {
 		return
 	}
@@ -497,15 +521,15 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, c1 T1,
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = c1
+		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = c2
+		*(*T2)(ptr2) = comp2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = c3
+		*(*T3)(ptr3) = comp3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = c4
+		*(*T4)(ptr4) = comp4
 		ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])
-		*(*T5)(ptr5) = c5
+		*(*T5)(ptr5) = comp5
 		
 		w.nextEntityVer++
 	}
@@ -514,38 +538,50 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, c1 T1,
 // Get returns pointers to components T1, T2, T3, T4, T5 for the entity, or nil if not present or invalid.
 func (b *Builder5[T1, T2, T3, T4, T5]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil, nil, nil, nil, nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil, nil, nil, nil, nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.id1)
-	m.set(b.id2)
-	m.set(b.id3)
-	m.set(b.id4)
-	m.set(b.id5)
+	id1 := b.id1
+	i1 := id1 >> 6
+	o1 := id1 & 63
+	id2 := b.id2
+	i2 := id2 >> 6
+	o2 := id2 & 63
+	id3 := b.id3
+	i3 := id3 >> 6
+	o3 := id3 & 63
+	id4 := b.id4
+	i4 := id4 >> 6
+	o4 := id4 & 63
+	id5 := b.id5
+	i5 := id5 >> 6
+	o5 := id5 & 63
 	
-	if !a.mask.contains(m) {
+	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 {
 		return nil, nil, nil, nil, nil
 	}
-	p1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
-	p5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(meta.index)*a.compSizes[b.id5])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
+	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }// Builder6 provides a simple API to create entities with 6 specific components.
 type Builder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 	world *World
 	arch  *archetype
-	id1 uint8
-	id2 uint8
-	id3 uint8
-	id4 uint8
-	id5 uint8
-	id6 uint8
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
+	id5   uint8
+	id6   uint8
 	
 }
 
@@ -577,19 +613,19 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 	mask.set(id6)
 	
 	specs := []compSpec{
-		{id: id1, typ: t1, size: t1.Size()},
-		{id: id2, typ: t2, size: t2.Size()},
-		{id: id3, typ: t3, size: t3.Size()},
-		{id: id4, typ: t4, size: t4.Size()},
-		{id: id5, typ: t5, size: t5.Size()},
-		{id: id6, typ: t6, size: t6.Size()},
+		{id: id1, typ: t1, size: w.compIDToSize[id1]},
+		{id: id2, typ: t2, size: w.compIDToSize[id2]},
+		{id: id3, typ: t3, size: w.compIDToSize[id3]},
+		{id: id4, typ: t4, size: w.compIDToSize[id4]},
+		{id: id5, typ: t5, size: w.compIDToSize[id5]},
+		{id: id6, typ: t6, size: w.compIDToSize[id6]},
 		
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder6[T1, T2, T3, T4, T5, T6]{world: w, arch: arch, id1: id1,id2: id2,id3: id3,id4: id4,id5: id5,id6: id6,}
 }
 
-// New create a builder for entities with components T1, T2, T3, T4, T5, T6, pre-creating the archetype
+// New creates a builder for entities with components T1, T2, T3, T4, T5, T6, pre-creating the archetype.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) New(w *World) *Builder6[T1, T2, T3, T4, T5, T6] {
 	return NewBuilder6[T1, T2, T3, T4, T5, T6](w)
 }
@@ -625,8 +661,8 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, c1 T1, c2 T2, c3 T3, c4 T4, c5 T5, c6 T6) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5, comp6 T6) {
 	if count == 0 {
 		return
 	}
@@ -648,17 +684,17 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, c1
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = c1
+		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = c2
+		*(*T2)(ptr2) = comp2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = c3
+		*(*T3)(ptr3) = comp3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = c4
+		*(*T4)(ptr4) = comp4
 		ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])
-		*(*T5)(ptr5) = c5
+		*(*T5)(ptr5) = comp5
 		ptr6 := unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(startSize+k)*a.compSizes[b.id6])
-		*(*T6)(ptr6) = c6
+		*(*T6)(ptr6) = comp6
 		
 		w.nextEntityVer++
 	}
@@ -667,28 +703,42 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, c1
 // Get returns pointers to components T1, T2, T3, T4, T5, T6 for the entity, or nil if not present or invalid.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5, *T6) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return nil, nil, nil, nil, nil, nil
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return nil, nil, nil, nil, nil, nil
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	m.set(b.id1)
-	m.set(b.id2)
-	m.set(b.id3)
-	m.set(b.id4)
-	m.set(b.id5)
-	m.set(b.id6)
+	id1 := b.id1
+	i1 := id1 >> 6
+	o1 := id1 & 63
+	id2 := b.id2
+	i2 := id2 >> 6
+	o2 := id2 & 63
+	id3 := b.id3
+	i3 := id3 >> 6
+	o3 := id3 & 63
+	id4 := b.id4
+	i4 := id4 >> 6
+	o4 := id4 & 63
+	id5 := b.id5
+	i5 := id5 >> 6
+	o5 := id5 & 63
+	id6 := b.id6
+	i6 := id6 >> 6
+	o6 := id6 & 63
 	
-	if !a.mask.contains(m) {
+	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 || (a.mask[i6]&(uint64(1)<<uint64(o6))) == 0 {
 		return nil, nil, nil, nil, nil, nil
 	}
-	p1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
-	p5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(meta.index)*a.compSizes[b.id5])
-	p6 := unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(meta.index)*a.compSizes[b.id6])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
+	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
+	ptr6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5), (*T6)(p6)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }

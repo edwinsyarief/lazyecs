@@ -2,7 +2,7 @@
 type Builder{{.N}}[{{.Types}}] struct {
 	world *World
 	arch  *archetype
-	{{range .Components}}id{{.Index}} uint8
+	{{range .Components}}id{{.Index}}   uint8
 	{{end}}
 }
 
@@ -19,14 +19,14 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}mask.set(id{{.Index}})
 	{{end}}
 	specs := []compSpec{
-		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: t{{.Index}}.Size()},
+		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.compIDToSize[id{{.Index}}]},
 		{{end}}
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range .Components}}id{{.Index}}: id{{.Index}},{{end}}}
 }
 
-// New create a builder for entities with components {{.TypeVars}}, pre-creating the archetype
+// New creates a builder for entities with components {{.TypeVars}}, pre-creating the archetype.
 func (b *Builder{{.N}}[{{.TypeVars}}]) New(w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	return NewBuilder{{.N}}[{{.TypeVars}}](w)
 }
@@ -62,8 +62,8 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	}
 }
 
-// NewEntitiesWithValueSet creates count entities and sets the component to the given value.
-func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Vars}}) {
+// NewEntitiesWithValueSet creates count entities and sets the components to the given values.
+func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.BuilderVars}}) {
 	if count == 0 {
 		return
 	}
@@ -85,7 +85,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Var
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])
-		*(*{{.TypeName}})(ptr{{.Index}}) = c{{.Index}}
+		*(*{{.TypeName}})(ptr{{.Index}}) = {{.BuilderVarName}}
 		{{end}}
 		w.nextEntityVer++
 	}
@@ -94,18 +94,22 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Var
 // Get returns pointers to components {{.TypeVars}} for the entity, or nil if not present or invalid.
 func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	w := b.world
-	meta := &w.metas[e.ID]
+	if int(e.ID) >= len(w.metas) {
+		return {{.ReturnNil}}
+	}
+	meta := w.metas[e.ID]
 	if meta.version == 0 || meta.version != e.Version {
 		return {{.ReturnNil}}
 	}
 	a := w.archetypes[meta.archetypeIndex]
-	var m bitmask256
-	{{range .Components}}m.set(b.id{{.Index}})
+	{{range .Components}}id{{.Index}} := b.id{{.Index}}
+	i{{.Index}} := id{{.Index}} >> 6
+	o{{.Index}} := id{{.Index}} & 63
 	{{end}}
-	if !a.mask.contains(m) {
+	if {{.BuilderMaskCheck}} {
 		return {{.ReturnNil}}
 	}
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(meta.index)*a.compSizes[b.id{{.Index}}])
+	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
 	{{end}}
 	return {{.ReturnPtrs}}
 }

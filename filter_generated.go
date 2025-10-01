@@ -91,10 +91,10 @@ func (f *Filter2[T1, T2]) Entity() Entity {
 // Get returns pointers to the current components T1, T2.
 func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 	a := f.matchingArches[f.curMatchIdx]
-	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
 	
-	return (*T1)(p1), (*T2)(p2)
+	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
@@ -203,11 +203,11 @@ func (f *Filter3[T1, T2, T3]) Entity() Entity {
 // Get returns pointers to the current components T1, T2, T3.
 func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 	a := f.matchingArches[f.curMatchIdx]
-	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
@@ -320,12 +320,12 @@ func (f *Filter4[T1, T2, T3, T4]) Entity() Entity {
 // Get returns pointers to the current components T1, T2, T3, T4.
 func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 	a := f.matchingArches[f.curMatchIdx]
-	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
@@ -442,13 +442,13 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Entity() Entity {
 // Get returns pointers to the current components T1, T2, T3, T4, T5.
 func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 	a := f.matchingArches[f.curMatchIdx]
-	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
-	p5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
+	ptr5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
@@ -569,14 +569,14 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
 // Get returns pointers to the current components T1, T2, T3, T4, T5, T6.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 	a := f.matchingArches[f.curMatchIdx]
-	p1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
-	p2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
-	p3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
-	p4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
-	p5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
-	p6 := unsafe.Pointer(uintptr(a.compPointers[f.id6]) + uintptr(f.curIdx)*a.compSizes[f.id6])
+	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
+	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
+	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
+	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
+	ptr5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
+	ptr6 := unsafe.Pointer(uintptr(a.compPointers[f.id6]) + uintptr(f.curIdx)*a.compSizes[f.id6])
 	
-	return (*T1)(p1), (*T2)(p2), (*T3)(p3), (*T4)(p4), (*T5)(p5), (*T6)(p6)
+	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }
 
 // RemoveEntities batch-removes all entities matching the filter with zero allocations or memory moves.
