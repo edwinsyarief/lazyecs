@@ -266,6 +266,48 @@ func TestRemoveEntity(t *testing.T) {
 	}
 }
 
+func TestRemoveEntities(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	ents := make([]Entity, 5)
+	for i := 0; i < 5; i++ {
+		ents[i] = builder.NewEntity()
+	}
+	w.RemoveEntities(ents)
+	for _, ent := range ents {
+		if w.IsValid(ent) {
+			t.Error("entity still valid after batch remove")
+		}
+	}
+	// Test with invalid entity
+	invalidEnt := Entity{ID: 9999, Version: 1}
+	w.RemoveEntities([]Entity{invalidEnt}) // should do nothing
+}
+func TestClearEntities(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](w)
+	builder.NewEntities(5)
+	w.ClearEntities()
+	if len(w.freeIDs) != TestCap {
+		t.Errorf("expected %d free IDs after clear, got %d", TestCap, len(w.freeIDs))
+	}
+	for _, meta := range w.metas {
+		if meta.version != 0 || meta.archetypeIndex != -1 {
+			t.Error("meta not reset")
+		}
+	}
+	for _, a := range w.archetypes {
+		if a.size != 0 {
+			t.Error("archetype size not reset")
+		}
+	}
+	// Check new entity creation after clear
+	ent := builder.NewEntity()
+	if !w.IsValid(ent) {
+		t.Error("cannot create entity after clear")
+	}
+}
+
 func TestFilter(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](w)
@@ -837,6 +879,52 @@ func BenchmarkFilter2RemoveEntities(b *testing.B) {
 				filter2 := NewFilter2[Position, Velocity](w)
 				b.StartTimer()
 				filter2.RemoveEntities()
+			}
+		})
+	}
+}
+
+func BenchmarkRemoveEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				builder.NewEntities(size)
+				ents := make([]Entity, size)
+				copy(ents, builder.arch.entityIDs[:size])
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					w.RemoveEntity(ents[j])
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkClearEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](w)
+				builder.NewEntities(size)
+				b.StartTimer()
+				w.ClearEntities()
 			}
 		})
 	}

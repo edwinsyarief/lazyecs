@@ -288,6 +288,40 @@ func (w *World) RemoveEntity(e Entity) {
 	meta.version = 0 // Mark as dead
 }
 
+// RemoveEntities removes multiple entities in a batch. It processes each entity
+// individually but is convenient for removing lists of entities. Invalid entities
+// are skipped. This operation incurs no additional allocations beyond what
+// RemoveEntity would for each.
+//
+// Parameters:
+//   - ents: A slice of Entities to remove.
+func (w *World) RemoveEntities(ents []Entity) {
+	for _, e := range ents {
+		w.RemoveEntity(e)
+	}
+}
+
+// ClearEntities removes all entities from the World, resetting it to an empty state
+// while preserving archetypes and component registrations. This is extremely efficient,
+// as it batch-invalidates all metadata and resets free IDs without per-entity operations.
+//
+// After calling this, all previous Entity references become invalid.
+func (w *World) ClearEntities() {
+	w.freeIDs = w.freeIDs[:0]
+	for i := 0; i < w.capacity; i++ {
+		w.freeIDs = append(w.freeIDs, uint32(w.capacity-1-i))
+	}
+	for i := range w.metas {
+		w.metas[i].archetypeIndex = -1
+		w.metas[i].index = -1
+		w.metas[i].version = 0
+	}
+	for _, a := range w.archetypes {
+		a.size = 0
+	}
+	w.nextEntityVer = 1
+}
+
 // IsValid checks if an entity reference is still valid (i.e., it has not been
 // removed). It verifies that the entity's ID is within bounds and that its
 // version matches the current version stored in the world's metadata.
