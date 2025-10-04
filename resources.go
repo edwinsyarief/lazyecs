@@ -68,9 +68,7 @@ func (r *Resources) Clear() {
 		r.items[i] = nil
 	}
 	r.items = r.items[:0]
-	for t := range r.types {
-		delete(r.types, t)
-	}
+	clear(r.types)
 	r.freeIds = r.freeIds[:0]
 }
 
