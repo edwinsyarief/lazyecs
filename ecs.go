@@ -23,7 +23,6 @@ package lazyecs
 
 import (
 	"reflect"
-	"sync"
 	"unsafe"
 )
 
@@ -99,7 +98,7 @@ type World struct {
 	// Resources provides a thread-safe, generic key-value store for global data
 	// that needs to be accessible from anywhere in the application, such as
 	// configuration objects, resource managers, or event buses.
-	Resources sync.Map
+	resources *Resources
 
 	compIDToType     [MaxComponentTypes]reflect.Type
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
@@ -125,8 +124,9 @@ type World struct {
 //
 // Returns:
 //   - A pointer to the newly created World.
-func NewWorld(initialCapacity int) *World {
-	w := &World{
+func NewWorld(initialCapacity int) World {
+	w := World{
+		resources:        &Resources{},
 		capacity:         initialCapacity,
 		initialCapacity:  initialCapacity,
 		freeIDs:          make([]uint32, initialCapacity),
@@ -151,99 +151,6 @@ func NewWorld(initialCapacity int) *World {
 		w.metas[i].version = 0
 	}
 	return w
-}
-
-// register or fetch a component type ID for T.
-func (w *World) getCompTypeID(t reflect.Type) uint8 {
-	if id, ok := w.compTypeMap[t]; ok {
-		return id
-	}
-	if w.nextCompTypeID >= MaxComponentTypes {
-		panic("ecs: too many component types")
-	}
-	id := uint8(w.nextCompTypeID)
-	w.compTypeMap[t] = id
-	w.compIDToType[id] = t
-	w.compIDToSize[id] = t.Size()
-	w.nextCompTypeID++
-	return id
-}
-
-// getOrCreateArchetype returns an archetype for the given mask;
-// if missing, allocates component storage arrays of length cap.
-func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archetype {
-	if idx, ok := w.maskToArcIndex[mask]; ok {
-		return w.archetypes[idx]
-	}
-	// build new archetype
-	a := &archetype{
-		index:     len(w.archetypes),
-		mask:      mask,
-		size:      0,
-		entityIDs: make([]Entity, w.capacity),
-		compOrder: make([]uint8, 0, len(specs)),
-	}
-	for _, sp := range specs {
-		// allocate []T of length=cap
-		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.capacity, w.capacity)
-		a.compPointers[sp.id] = slice.UnsafePointer()
-		a.compSizes[sp.id] = sp.size
-		a.compOrder = append(a.compOrder, sp.id)
-	}
-	w.archetypes = append(w.archetypes, a)
-	w.maskToArcIndex[mask] = a.index
-	w.archetypeVersion++
-	return a
-}
-
-// expand automatically increases capacity by initialCapacity when full.
-func (w *World) expand() {
-	oldCap := w.capacity
-	newCap := oldCap * 2
-	if newCap == 0 {
-		newCap = 1
-	}
-	delta := newCap - oldCap
-	// extend metas
-	newMetas := make([]entityMeta, delta)
-	for i := range newMetas {
-		newMetas[i].archetypeIndex = -1
-		newMetas[i].version = 0
-	}
-	w.metas = append(w.metas, newMetas...)
-	// extend freeIDs with new IDs in reverse order
-	newFree := make([]uint32, delta)
-	for i := 0; i < delta; i++ {
-		newFree[i] = uint32(newCap - 1 - i)
-	}
-	w.freeIDs = append(w.freeIDs, newFree...)
-	w.capacity = newCap
-	// resize all archetypes
-	for _, a := range w.archetypes {
-		a.resizeTo(newCap, w)
-	}
-}
-
-// createEntity bumps an entity into the given archetype.
-// Zero allocations on hot path.
-func (w *World) createEntity(a *archetype) Entity {
-	if len(w.freeIDs) == 0 {
-		w.expand()
-	}
-	// pop an ID
-	last := len(w.freeIDs) - 1
-	id := w.freeIDs[last]
-	w.freeIDs = w.freeIDs[:last]
-	meta := &w.metas[id]
-	meta.archetypeIndex = a.index
-	meta.index = a.size
-	meta.version = w.nextEntityVer
-	ent := Entity{ID: id, Version: meta.version}
-	// place into archetype
-	a.entityIDs[a.size] = ent
-	a.size++
-	w.nextEntityVer++
-	return ent
 }
 
 // RemoveEntity deactivates an entity and recycles its ID for future use.
@@ -337,6 +244,103 @@ func (w *World) IsValid(e Entity) bool {
 	}
 	meta := w.metas[e.ID]
 	return meta.version != 0 && meta.version == e.Version
+}
+
+func (w *World) Resources() *Resources {
+	return w.resources
+}
+
+// register or fetch a component type ID for T.
+func (w *World) getCompTypeID(t reflect.Type) uint8 {
+	if id, ok := w.compTypeMap[t]; ok {
+		return id
+	}
+	if w.nextCompTypeID >= MaxComponentTypes {
+		panic("ecs: too many component types")
+	}
+	id := uint8(w.nextCompTypeID)
+	w.compTypeMap[t] = id
+	w.compIDToType[id] = t
+	w.compIDToSize[id] = t.Size()
+	w.nextCompTypeID++
+	return id
+}
+
+// getOrCreateArchetype returns an archetype for the given mask;
+// if missing, allocates component storage arrays of length cap.
+func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archetype {
+	if idx, ok := w.maskToArcIndex[mask]; ok {
+		return w.archetypes[idx]
+	}
+	// build new archetype
+	a := &archetype{
+		index:     len(w.archetypes),
+		mask:      mask,
+		size:      0,
+		entityIDs: make([]Entity, w.capacity),
+		compOrder: make([]uint8, 0, len(specs)),
+	}
+	for _, sp := range specs {
+		// allocate []T of length=cap
+		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.capacity, w.capacity)
+		a.compPointers[sp.id] = slice.UnsafePointer()
+		a.compSizes[sp.id] = sp.size
+		a.compOrder = append(a.compOrder, sp.id)
+	}
+	w.archetypes = append(w.archetypes, a)
+	w.maskToArcIndex[mask] = a.index
+	w.archetypeVersion++
+	return a
+}
+
+// expand automatically increases capacity by initialCapacity when full.
+func (w *World) expand() {
+	oldCap := w.capacity
+	newCap := oldCap * 2
+	if newCap == 0 {
+		newCap = 1
+	}
+	delta := newCap - oldCap
+	// extend metas
+	newMetas := make([]entityMeta, delta)
+	for i := range newMetas {
+		newMetas[i].archetypeIndex = -1
+		newMetas[i].version = 0
+	}
+	w.metas = append(w.metas, newMetas...)
+	// extend freeIDs with new IDs in reverse order
+	newFree := make([]uint32, delta)
+	for i := 0; i < delta; i++ {
+		newFree[i] = uint32(newCap - 1 - i)
+	}
+	w.freeIDs = append(w.freeIDs, newFree...)
+	w.capacity = newCap
+	// resize all archetypes
+	for _, a := range w.archetypes {
+		a.resizeTo(newCap, w)
+	}
+}
+
+// createEntity bumps an entity into the given archetype.
+// Zero allocations on hot path.
+func (w *World) createEntity(a *archetype) Entity {
+	if len(w.freeIDs) == 0 {
+		w.expand()
+	}
+	// pop an ID
+	last := len(w.freeIDs) - 1
+	id := w.freeIDs[last]
+	w.freeIDs = w.freeIDs[:last]
+	meta := &w.metas[id]
+	meta.archetypeIndex = a.index
+	meta.index = a.size
+	meta.version = w.nextEntityVer
+	ent := Entity{ID: id, Version: meta.version}
+	// place into archetype
+	a.entityIDs[a.size] = ent
+	a.size++
+	w.nextEntityVer++
+	return ent
 }
 
 // removeFromArchetype removes the entity from the archetype without freeing the ID or invalidating version.
