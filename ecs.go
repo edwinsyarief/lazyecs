@@ -142,10 +142,6 @@ func NewWorld(initialCapacity int) World {
 		// fill freeIDs with [cap-1 .. 0]
 		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
 	}
-	for i := 0; i < initialCapacity; i++ {
-		// fill freeIDs with [cap-1 .. 0]
-		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
-	}
 	for i := range w.metas {
 		w.metas[i].archetypeIndex = -1
 		w.metas[i].version = 0
