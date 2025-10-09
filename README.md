@@ -8,7 +8,7 @@ A high-performance, archetype-based, and easy-to-use Entity Component System (EC
 
 - **Archetype-Based**: Stores entities with the same components together in contiguous memory for maximum cache efficiency.
 - **Generic API**: Leverages Go generics for a type-safe and intuitive developer experience.
-- **High Performance**: Optimized for speed with zero GC overhead on the hot path (entity creation, iteration, and component access).
+- **Zero-Allocation Hot Path**: Optimized for speed with zero GC overhead on the hot path (entity creation, iteration, and component access).
 - **Simple and Clean**: Designed to be easy to learn and integrate into any project.
 
 ## Getting Started
@@ -102,9 +102,21 @@ Inside an archetype, all components are stored in tightly packed, contiguous arr
 
 When you add or remove a component from an entity, the entity is moved from its old archetype to a new one that matches its new set of components. While this operation is efficient, it is slower than creating entities with a fixed layout using a `Builder`.
 
+## Code Generation
+
+`lazyecs` uses Go's `go generate` tool to create boilerplate code for multi-component `Builders`, `Filters`, and `World` API functions (e.g., `NewBuilder3`, `Filter4`, `GetComponent2`). This approach keeps the library's public API clean and consistent without requiring developers to write repetitive code manually.
+
+To run the code generator, simply execute the following command from the root of the repository:
+
+```bash
+go generate ./...
+```
+
+This will regenerate the `*_generated.go` files. You should run this command whenever you change the templates in the `templates/` directory.
+
 ## API Reference
 
-The following tables provide a summary of the core API. For more details, please refer to the GoDoc comments in the source code.
+The following tables provide a summary of the core API. For complete and up-to-date documentation, please refer to the GoDoc comments in the source code.
 
 ### World
 
@@ -113,7 +125,7 @@ The following tables provide a summary of the core API. For more details, please
 | `NewWorld(capacity int) *World` | Creates a new `World` with a pre-allocated entity capacity. |
 | `(w *World) RemoveEntity(e Entity)` | Deactivates an entity and recycles its ID for future use. |
 | `(w *World) IsValid(e Entity) bool` | Checks if an entity reference is still valid (i.e., not deleted). |
-| `(w *World).Resources` | A `sync.Map` for storing global, thread-safe key-value data. |
+| `(w *World).Resources() *Resources` | Retrieves the `Resources` manager for storing global data. |
 
 ### Component Management
 
@@ -149,9 +161,28 @@ Filters are available for iterating over entities with 1 to 6 components (`NewFi
 | `(f *Filter[T]) Reset()` | Resets the iterator to the beginning. |
 | `(f *Filter[T]) RemoveEntities()` | Efficiently removes all entities matching the filter. |
 
+### EventBus
+
+| Function | Description |
+| --- | --- |
+| `Subscribe[T any](bus *EventBus, handler func(T))` | Registers a handler for events of type T. |
+| `Publish[T any](bus *EventBus, event T)` | Sends an event of type T to all subscribed handlers. |
+
+### Resources
+
+| Function | Description |
+| --- | --- |
+| `(r *Resources) Add(res any) int` | Adds a resource and returns its ID. |
+| `(r *Resources) Has(id int) bool` | Checks if a resource with the given ID exists. |
+| `(r *Resources) Get(id int) any` | Retrieves the resource by ID. |
+| `(r *Resources) Remove(id int)` | Removes the resource by ID. |
+| `(r *Resources) Clear()` | Removes all resources. |
+| `HasResource[T any](r *Resources) (bool, int)` | Checks if a resource of type T exists. |
+| `GetResource[T any](r *Resources) (*T, int)` | Retrieves the resource of type T. |
+
 ## Concurrency
 
-The `World` object is **not** thread-safe. All operations that modify the world state (e.g., creating/removing entities, adding/removing components) should be performed from a single goroutine. The `World.Resources` map, however, is a `sync.Map` and can be safely accessed from multiple goroutines.
+The `World` object and the `Resources` manager are **not** thread-safe. All operations that modify the world state (e.g., creating/removing entities, adding/removing components, or modifying resources) should be performed from a single goroutine.
 
 ## Benchmark Results
 
@@ -159,7 +190,7 @@ The following tables summarize the performance of `lazyecs` across a range of co
 
 Notably, many core operations like creating entities, accessing components, and iterating with filters show **zero memory allocations** (`0 allocs/op`), making `lazyecs` ideal for performance-critical applications where garbage collection pressure is a concern.
 
-### Entity
+### Entity Benchmark
 
 | Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -177,7 +208,7 @@ Notably, many core operations like creating entities, accessing components, and 
 | **Filter & Iterate** | 2.36 | 2.35 | 2.34 | 2.33 |
 | **Clear Entities** | 3.25 | 3.31 | 2.65 | 2.62 |
 
-### Event Bus
+### Event Bus Benchmark
 
 | Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -186,7 +217,7 @@ Notably, many core operations like creating entities, accessing components, and 
 | **Publish (One Handler)** | 0.000019 | 0.000183 | 0.001852 | 0.01839 |
 | **Publish (Many Handlers)**| 1.89 | 1.88 | 1.88 | 1.88 |
 
-### Resources
+### Resources Benchmark
 
 | Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
 | :--- | :--- | :--- | :--- | :--- |

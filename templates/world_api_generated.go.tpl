@@ -1,3 +1,19 @@
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent{{.N}} retrieves pointers to the {{.N}} components of type
 // ({{.TypeVars}}) for the given entity.
 //

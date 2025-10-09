@@ -6,6 +6,17 @@ import (
 	"unsafe"
 )
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder2 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 2 components: T1, T2.
 type Builder2[T1 any, T2 any] struct {
@@ -162,6 +173,17 @@ func (b *Builder2[T1, T2]) Get(e Entity) (*T1, *T2) {
 	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder3 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 3 components: T1, T2, T3.
 type Builder3[T1 any, T2 any, T3 any] struct {
@@ -330,6 +352,17 @@ func (b *Builder3[T1, T2, T3]) Get(e Entity) (*T1, *T2, *T3) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder4 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 4 components: T1, T2, T3, T4.
 type Builder4[T1 any, T2 any, T3 any, T4 any] struct {
@@ -510,6 +543,17 @@ func (b *Builder4[T1, T2, T3, T4]) Get(e Entity) (*T1, *T2, *T3, *T4) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder5 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 5 components: T1, T2, T3, T4, T5.
 type Builder5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
@@ -702,6 +746,17 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder6 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 6 components: T1, T2, T3, T4, T5, T6.
 type Builder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {

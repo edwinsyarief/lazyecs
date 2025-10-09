@@ -6,6 +6,22 @@ import (
 	"unsafe"
 )
 
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent2 retrieves pointers to the 2 components of type
 // (T1, T2) for the given entity.
 //
@@ -210,6 +226,22 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	meta.index = newIdx
 }
 
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent3 retrieves pointers to the 3 components of type
 // (T1, T2, T3) for the given entity.
 //
@@ -442,6 +474,22 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	meta.index = newIdx
 }
 
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent4 retrieves pointers to the 4 components of type
 // (T1, T2, T3, T4) for the given entity.
 //
@@ -702,6 +750,22 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	meta.index = newIdx
 }
 
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent5 retrieves pointers to the 5 components of type
 // (T1, T2, T3, T4, T5) for the given entity.
 //
@@ -990,6 +1054,22 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	meta.index = newIdx
 }
 
+// This template generates N-ary functions for the public World API, specifically
+// for getting, setting, and removing multiple components at once. These functions
+// (e.g., GetComponent2, SetComponent3) provide a convenient and type-safe way to
+// interact with entities that have several components, abstracting away the
+// underlying archetype and bitmask operations.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .Vars: Variable declarations for SetComponentN, e.g., "v1 T1, v2 T2".
+// - .ReturnTypes: Pointer return types for GetComponentN, e.g., "*T1, *T2".
+// - .ReturnNil: A list of nil values for returns, e.g., "nil, nil".
+// - .MaskCheck: The condition to check if an archetype has all the components.
+// - .HasAll: A boolean check for SetComponentN, e.g., "has1 && has2".
+// - .IsRemovedID: A condition to check if a component is being removed.
 // GetComponent6 retrieves pointers to the 6 components of type
 // (T1, T2, T3, T4, T5, T6) for the given entity.
 //

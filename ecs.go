@@ -242,6 +242,13 @@ func (w *World) IsValid(e Entity) bool {
 	return meta.version != 0 && meta.version == e.Version
 }
 
+// Resources returns the world's resource manager. It provides a thread-safe,
+// generic key-value store for global data that needs to be accessible from
+// anywhere in the application, such as configuration objects, resource managers,
+// or event buses.
+//
+// Returns:
+//   - A pointer to the Resources object.
 func (w *World) Resources() *Resources {
 	return w.resources
 }

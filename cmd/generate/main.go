@@ -11,51 +11,87 @@ import (
 )
 
 // ComponentInfo holds all the variable names for a single component,
-// making it easy to use in templates.
+// making it easy to use in templates. For a component `T1`, it generates
+// corresponding variable names like `v1`, `id1`, `size1`, etc., which are used
+// to build the generated Go code.
 type ComponentInfo struct {
-	TypeName       string // T1, T2...
-	VarName        string // v1, v2...
-	BuilderVarName string // comp1, comp2...
-	IDName         string // id1, id2...
-	SizeName       string // size1, size2...
-	OKName         string // ok1, ok2...
-	SlotName       string // slot1, slot2...
-	BytesName      string // bytes1, bytes2...
-	SrcName        string // src1, src2...
-	BaseName       string // base1, base2...
-	StrideName     string // stride1, stride2...
-	PtrName        string // p1, p2...
-	Index          int
+	TypeName       string // e.g., T1, T2
+	VarName        string // e.g., v1, v2
+	BuilderVarName string // e.g., comp1, comp2
+	IDName         string // e.g., id1, id2
+	SizeName       string // e.g., size1, size2
+	OKName         string // e.g., ok1, ok2
+	SlotName       string // e.g., slot1, slot2
+	BytesName      string // e.g., bytes1, bytes2
+	SrcName        string // e.g., src1, src2
+	BaseName       string // e.g., base1, base2
+	StrideName     string // e.g., stride1, stride2
+	PtrName        string // e.g., p1, p2
+	Index          int    // The 1-based index of the component (1, 2, ...)
 }
 
-// TemplateData holds the placeholders for a single N-ary function variant.
+// TemplateData holds all the placeholders for a single N-ary function variant.
+// For a given number of components `N`, it aggregates all the necessary string
+// fragments (like type lists, variable declarations, and return types) needed
+// to generate the corresponding Go functions (e.g., `NewBuilderN`, `FilterN`).
 type TemplateData struct {
-	Types               string // T1 any, T2 any
-	TypeVars            string // T1, T2
-	Vars                string // v1 T1, v2 T2
-	BuilderVars         string // comp1 T1, comp2 T2
-	IDs                 string // id1, id2
-	OKIDs               string // !ok1 || !ok2
-	DuplicateIDs        string // id1 == id2 || id1 == id3 ...
-	ReturnTypes         string // *T1, *T2
-	ReturnSinglePtrs    string // *T1, *T2
-	ReturnPtrs          string // (*T1)(p1), (*T2)(p2)
-	ReturnVars          string // c1, c2
-	ReturnNil           string // nil, nil
-	SlotCheckCondition  string // slot1 == -1 || slot2 == -1
-	BatchRes            string // []*T1, []*T2
-	ReturnBatchRes      string // res1, res2
-	ReturnPtrsFromBytes string // (*T1)(unsafe.Pointer(&bytes1[...])), ...
-	MaskCheck           string
-	BuilderMaskCheck    string
-	HasAll              string
-	HasNone             string
-	IsRemovedID         string
-	Components          []ComponentInfo
-	N                   int
+	// Generic type parameters, e.g., "T1 any, T2 any"
+	Types string
+	// Type names without "any", e.g., "T1, T2"
+	TypeVars string
+	// Variable declarations, e.g., "v1 T1, v2 T2"
+	Vars string
+	// Builder-specific variable declarations, e.g., "comp1 T1, comp2 T2"
+	BuilderVars string
+	// Component ID variable names, e.g., "id1, id2"
+	IDs string
+	// Condition to check if all component lookups were successful, e.g., "!ok1 || !ok2"
+	OKIDs string
+	// Condition to check for duplicate component types, e.g., "id1 == id2 || id1 == id3"
+	DuplicateIDs string
+	// Return types for functions, e.g., "*T1, *T2"
+	ReturnTypes string
+	// Return types for single pointer returns, e.g., "*T1, *T2"
+	ReturnSinglePtrs string
+	// Casting pointers for returns, e.g., "(*T1)(p1), (*T2)(p2)"
+	ReturnPtrs string
+	// Variable names for return values, e.g., "c1, c2"
+	ReturnVars string
+	// Nil return values, e.g., "nil, nil"
+	ReturnNil string
+	// Condition for checking component slots, e.g., "slot1 == -1 || slot2 == -1"
+	SlotCheckCondition string
+	// Batch result types, e.g., "[]*T1, []*T2"
+	BatchRes string
+	// Batch result return variables, e.g., "res1, res2"
+	ReturnBatchRes string
+	// Casting pointers from byte slices for returns
+	ReturnPtrsFromBytes string
+	// Bitmask check condition for filters
+	MaskCheck string
+	// Bitmask check condition for builders
+	BuilderMaskCheck string
+	// Boolean check for having all components
+	HasAll string
+	// Boolean check for having none of the components
+	HasNone string
+	// Condition to check if a component ID is one being removed
+	IsRemovedID string
+	// Detailed information for each component
+	Components []ComponentInfo
+	// The number of components this data is for (e.g., 2 for Filter2)
+	N int
 }
 
+// main is the entry point for the code generation script. It reads template
+// files from the `templates` directory, populates them with data for a
+// specified range of component counts (N), and writes the generated Go code
+// to the project's root directory.
+//
+// By default, it generates code for N=2 to N=6. This can be overridden by
+// providing a number as a command-line argument.
 func main() {
+	// The maximum number of components to generate functions for.
 	maxN := 6
 	if len(os.Args) > 1 {
 		n, err := strconv.Atoi(os.Args[1])
@@ -65,24 +101,37 @@ func main() {
 		}
 		maxN = n
 	}
+
+	// List of templates to process.
 	templates := []string{"builder_generated.go.tpl", "world_api_generated.go.tpl", "filter_generated.go.tpl"}
 	templateDir := "templates"
-	outputDir := "."
-	fmt.Printf("Generating code for N=1 to %d...\n", maxN)
+	outputDir := "." // Write to the package root.
+
+	fmt.Printf("Generating code for N=2 to %d...\n", maxN)
+
 	for _, tplFile := range templates {
 		tplPath := filepath.Join(templateDir, tplFile)
 		outPath := filepath.Join(outputDir, strings.TrimSuffix(tplFile, ".tpl"))
+
+		// Create the output file.
 		outFile, err := os.Create(outPath)
 		if err != nil {
 			panic(err)
 		}
+		defer outFile.Close()
+
+		// Write the standard "do not edit" header to the generated file.
 		_, _ = outFile.WriteString("// Code generated by go generate; DO NOT EDIT.\n")
 		_, _ = outFile.WriteString("package lazyecs\n\n")
 		_, _ = outFile.WriteString("import (\n\t\"reflect\"\n\t\"unsafe\"\n)\n\n")
+
+		// Parse the template file.
 		tpl, err := template.ParseFiles(tplPath)
 		if err != nil {
 			panic(err)
 		}
+
+		// Execute the template for each value of N from 2 to maxN.
 		for i := 2; i <= maxN; i++ {
 			data := buildTemplateData(i)
 			var buf bytes.Buffer
@@ -90,14 +139,18 @@ func main() {
 			if err != nil {
 				panic(fmt.Sprintf("Error executing template %s for N=%d: %v", tplFile, i, err))
 			}
+			// Write the generated code to the output file.
 			_, _ = outFile.Write(buf.Bytes())
-			_, _ = outFile.WriteString("\n\n")
+			_, _ = outFile.WriteString("\n")
 		}
-		outFile.Close()
 	}
 	fmt.Println("Code generation complete.")
 }
 
+// buildTemplateData constructs the TemplateData struct for a given number of
+// components, `n`. It programmatically generates all the string snippets
+// (e.g., function signatures, parameter lists, loop conditions) that are
+// injected into the Go templates.
 func buildTemplateData(n int) TemplateData {
 	components := make([]ComponentInfo, n)
 	var types, typeVars, vars, builderVars, ids, okIDs, returnTypes, returnSinglePtrs, returnPtrs, returnVars, returnNil, slotCheck, batchRes, returnBatchRes, returnFromBytes []string

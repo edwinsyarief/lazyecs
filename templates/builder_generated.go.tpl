@@ -1,3 +1,14 @@
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder{{.N}} provides a highly efficient, type-safe API for creating entities
 // with a predefined set of {{.N}} components: {{.TypeVars}}.
 type Builder{{.N}}[{{.Types}}] struct {
@@ -32,7 +43,7 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 		{{end}}
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
-	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range .Components}}id{{.Index}}: id{{.Index}},{{end}}}
+	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}}
 }
 
 // New is a convenience function that creates a new builder instance.
