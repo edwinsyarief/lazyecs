@@ -1,35 +1,12 @@
 package lazyecs
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"unsafe"
 )
 
-// Define constants for configurability
-const (
-	TestCap      = 100000 // Capacity for world in tests
-	TestEntities = 100000 // Number of entities for data integrity tests
-)
-
-// Define some test components
-type Position struct {
-	X, Y float32
-}
-
-type Velocity struct {
-	DX, DY float32
-}
-
-type Health struct {
-	HP int
-}
-
-type WithPointer struct {
-	Data *int
-}
-
+// World Creation and Basic Operations
 func TestNewWorld(t *testing.T) {
 	w := NewWorld(TestCap)
 	if w.capacity != TestCap {
@@ -43,6 +20,52 @@ func TestNewWorld(t *testing.T) {
 	}
 	if len(w.archetypes) != 1 {
 		t.Errorf("expected 1 archetypes, got %d", len(w.archetypes))
+	}
+}
+
+func TestAutoExpand(t *testing.T) {
+	initialCap := 10
+	w := NewWorld(initialCap)
+	if w.capacity != initialCap || w.initialCapacity != initialCap {
+		t.Errorf("expected initial capacity %d, got %d/%d", initialCap, w.capacity, w.initialCapacity)
+	}
+	builder := NewBuilder[Position](&w)
+	// Create initial cap entities
+	for i := 0; i < initialCap; i++ {
+		ent := builder.NewEntity()
+		if !w.IsValid(ent) {
+			t.Errorf("entity %d invalid", i)
+		}
+	}
+	// Create extra to trigger expand
+	extra := 5
+	for i := 0; i < extra; i++ {
+		ent := builder.NewEntity()
+		if !w.IsValid(ent) {
+			t.Errorf("extra entity %d invalid", i)
+		}
+	}
+	expectedCap := initialCap * 2
+	if w.capacity != expectedCap {
+		t.Errorf("expected expanded capacity %d, got %d", expectedCap, w.capacity)
+	}
+	if len(w.metas) != expectedCap {
+		t.Errorf("expected metas len %d, got %d", expectedCap, len(w.metas))
+	}
+	if len(w.freeIDs) != expectedCap-(initialCap+extra) {
+		t.Errorf("expected freeIDs len %d, got %d", expectedCap-(initialCap+extra), len(w.freeIDs))
+	}
+	// Verify archetype resized
+	a := builder.arch
+	if cap(a.entityIDs) != expectedCap {
+		t.Errorf("expected archetype entityIDs cap %d, got %d", expectedCap, cap(a.entityIDs))
+	}
+	// Check data integrity after expand
+	for i := 0; i < initialCap+extra; i++ {
+		pos := GetComponent[Position](&w, a.entityIDs[i])
+		if pos == nil {
+			t.Errorf("position nil for entity %d after expand", i)
+		}
 	}
 }
 
@@ -80,6 +103,7 @@ func TestGetOrCreateArchetype(t *testing.T) {
 	}
 }
 
+// Builder Tests
 func TestBuilderNewEntity(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
@@ -167,6 +191,7 @@ func TestBuilderNewEntitiesWithValueSet2(t *testing.T) {
 	}
 }
 
+// World Entity Creation Tests
 func TestWorldCreateEntity(t *testing.T) {
 	w := NewWorld(TestCap)
 	ent := w.CreateEntity()
@@ -255,6 +280,7 @@ func TestWorldCreateEntitiesExpand(t *testing.T) {
 	}
 }
 
+// Component Operations
 func TestGetComponent(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
@@ -325,6 +351,7 @@ func TestRemoveComponent(t *testing.T) {
 	}
 }
 
+// Entity Removal Tests
 func TestRemoveEntity(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
@@ -371,6 +398,7 @@ func TestRemoveEntities(t *testing.T) {
 	invalidEnt := Entity{ID: 9999, Version: 1}
 	w.RemoveEntities([]Entity{invalidEnt}) // should do nothing
 }
+
 func TestClearEntities(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
@@ -396,6 +424,7 @@ func TestClearEntities(t *testing.T) {
 	}
 }
 
+// Filter Tests
 func TestFilter(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
@@ -445,105 +474,6 @@ func TestFilter2(t *testing.T) {
 	}
 	if count != 2 {
 		t.Errorf("expected 2 entities, got %d", count)
-	}
-}
-
-func TestDataIntegrityAfterRemoveEntity(t *testing.T) {
-	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
-	ents := make([]Entity, TestEntities)
-	for i := 0; i < TestEntities; i++ {
-		ents[i] = builder.NewEntity()
-		pos := builder.Get(ents[i])
-		*pos = Position{X: float32(i), Y: float32(i * 2)}
-	}
-	// Remove every other entity
-	for i := 0; i < TestEntities; i += 2 {
-		w.RemoveEntity(ents[i])
-	}
-	// Check remaining entities' data
-	for i := 1; i < TestEntities; i += 2 {
-		if !w.IsValid(ents[i]) {
-			t.Errorf("entity %d should be valid", i)
-		}
-		pos := GetComponent[Position](&w, ents[i])
-		if pos == nil {
-			t.Errorf("position nil for entity %d", i)
-		} else if pos.X != float32(i) || pos.Y != float32(i*2) {
-			t.Errorf("data corrupted for entity %d: got (%f,%f), expected (%f,%f)", i, pos.X, pos.Y, float32(i), float32(i*2))
-		}
-	}
-}
-
-func TestDataIntegrityAfterSetComponentNew(t *testing.T) {
-	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
-	ents := make([]Entity, TestEntities)
-	for i := 0; i < TestEntities; i++ {
-		ents[i] = builder.NewEntity()
-		pos := builder.Get(ents[i])
-		*pos = Position{X: float32(i), Y: float32(i * 2)}
-	}
-	// Add velocity to every entity
-	for i := 0; i < TestEntities; i++ {
-		SetComponent(&w, ents[i], Velocity{DX: float32(i * 3), DY: float32(i * 4)})
-	}
-	// Check data
-	for i := 0; i < TestEntities; i++ {
-		pos := GetComponent[Position](&w, ents[i])
-		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
-			t.Errorf("position corrupted for entity %d", i)
-		}
-		vel := GetComponent[Velocity](&w, ents[i])
-		if vel == nil || vel.DX != float32(i*3) || vel.DY != float32(i*4) {
-			t.Errorf("velocity incorrect for entity %d", i)
-		}
-	}
-}
-
-func TestDataIntegrityAfterRemoveComponent(t *testing.T) {
-	w := NewWorld(TestCap)
-	builder2 := NewBuilder2[Position, Velocity](&w)
-	ents := make([]Entity, TestEntities)
-	for i := 0; i < TestEntities; i++ {
-		ents[i] = builder2.NewEntity()
-		pos, vel := builder2.Get(ents[i])
-		*pos = Position{X: float32(i), Y: float32(i * 2)}
-		*vel = Velocity{DX: float32(i * 3), DY: float32(i * 4)}
-	}
-	// Remove velocity from every entity
-	for i := 0; i < TestEntities; i++ {
-		RemoveComponent[Velocity](&w, ents[i])
-	}
-	// Check data
-	for i := 0; i < TestEntities; i++ {
-		pos := GetComponent[Position](&w, ents[i])
-		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
-			t.Errorf("position corrupted for entity %d", i)
-		}
-		vel := GetComponent[Velocity](&w, ents[i])
-		if vel != nil {
-			t.Errorf("velocity not removed for entity %d", i)
-		}
-	}
-}
-
-func TestComponentWithPointer(t *testing.T) {
-	w := NewWorld(TestCap)
-	builder := NewBuilder[WithPointer](&w)
-	ent := builder.NewEntity()
-	data := 42
-	comp := builder.Get(ent)
-	comp.Data = &data
-	got := builder.Get(ent)
-	if *got.Data != 42 {
-		t.Error("pointer data not preserved")
-	}
-	// Add another component
-	SetComponent(&w, ent, Position{X: 1, Y: 2})
-	got = GetComponent[WithPointer](&w, ent)
-	if got == nil || *got.Data != 42 {
-		t.Error("pointer data lost after archetype move")
 	}
 }
 
@@ -635,473 +565,103 @@ func TestFilter2RemoveEntities(t *testing.T) {
 	}
 }
 
-func TestAutoExpand(t *testing.T) {
-	initialCap := 10
-	w := NewWorld(initialCap)
-	if w.capacity != initialCap || w.initialCapacity != initialCap {
-		t.Errorf("expected initial capacity %d, got %d/%d", initialCap, w.capacity, w.initialCapacity)
-	}
+// Data Integrity Tests
+func TestDataIntegrityAfterRemoveEntity(t *testing.T) {
+	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
-	// Create initial cap entities
-	for i := 0; i < initialCap; i++ {
-		ent := builder.NewEntity()
-		if !w.IsValid(ent) {
-			t.Errorf("entity %d invalid", i)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder.NewEntity()
+		pos := builder.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+	}
+	// Remove every other entity
+	for i := 0; i < TestEntities; i += 2 {
+		w.RemoveEntity(ents[i])
+	}
+	// Check remaining entities' data
+	for i := 1; i < TestEntities; i += 2 {
+		if !w.IsValid(ents[i]) {
+			t.Errorf("entity %d should be valid", i)
 		}
-	}
-	// Create extra to trigger expand
-	extra := 5
-	for i := 0; i < extra; i++ {
-		ent := builder.NewEntity()
-		if !w.IsValid(ent) {
-			t.Errorf("extra entity %d invalid", i)
-		}
-	}
-	expectedCap := initialCap * 2
-	if w.capacity != expectedCap {
-		t.Errorf("expected expanded capacity %d, got %d", expectedCap, w.capacity)
-	}
-	if len(w.metas) != expectedCap {
-		t.Errorf("expected metas len %d, got %d", expectedCap, len(w.metas))
-	}
-	if len(w.freeIDs) != expectedCap-(initialCap+extra) {
-		t.Errorf("expected freeIDs len %d, got %d", expectedCap-(initialCap+extra), len(w.freeIDs))
-	}
-	// Verify archetype resized
-	a := builder.arch
-	if cap(a.entityIDs) != expectedCap {
-		t.Errorf("expected archetype entityIDs cap %d, got %d", expectedCap, cap(a.entityIDs))
-	}
-	// Check data integrity after expand
-	for i := 0; i < initialCap+extra; i++ {
-		pos := GetComponent[Position](&w, a.entityIDs[i])
+		pos := GetComponent[Position](&w, ents[i])
 		if pos == nil {
-			t.Errorf("position nil for entity %d after expand", i)
+			t.Errorf("position nil for entity %d", i)
+		} else if pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("data corrupted for entity %d: got (%f,%f), expected (%f,%f)", i, pos.X, pos.Y, float32(i), float32(i*2))
 		}
 	}
 }
 
-// Assuming Position, Velocity, Entity, NewWorld, NewBuilder, NewBuilder2, NewFilter, NewFilter2, SetComponent, RemoveComponent are defined elsewhere.
-
-func BenchmarkCreateWorld(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
+func TestDataIntegrityAfterSetComponentNew(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](&w)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder.NewEntity()
+		pos := builder.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+	}
+	// Add velocity to every entity
+	for i := 0; i < TestEntities; i++ {
+		SetComponent(&w, ents[i], Velocity{DX: float32(i * 3), DY: float32(i * 4)})
+	}
+	// Check data
+	for i := 0; i < TestEntities; i++ {
+		pos := GetComponent[Position](&w, ents[i])
+		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("position corrupted for entity %d", i)
 		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				_ = NewWorld(size)
-			}
-		})
+		vel := GetComponent[Velocity](&w, ents[i])
+		if vel == nil || vel.DX != float32(i*3) || vel.DY != float32(i*4) {
+			t.Errorf("velocity incorrect for entity %d", i)
+		}
 	}
 }
 
-func BenchmarkAutoExpand(b *testing.B) {
-	initialSizes := []int{1000, 10000, 100000}
-	expandMultiplier := 2
-	for _, initSize := range initialSizes {
-		name := fmt.Sprintf("%dK_init_x%d", initSize/1000, expandMultiplier)
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			targetEntities := initSize * expandMultiplier
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(initSize)
-				builder := NewBuilder[Position](&w)
-				b.StartTimer()
-				for j := 0; j < targetEntities; j++ {
-					builder.NewEntity()
-				}
-			}
-		})
+func TestDataIntegrityAfterRemoveComponent(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder2 := NewBuilder2[Position, Velocity](&w)
+	ents := make([]Entity, TestEntities)
+	for i := 0; i < TestEntities; i++ {
+		ents[i] = builder2.NewEntity()
+		pos, vel := builder2.Get(ents[i])
+		*pos = Position{X: float32(i), Y: float32(i * 2)}
+		*vel = Velocity{DX: float32(i * 3), DY: float32(i * 4)}
+	}
+	// Remove velocity from every entity
+	for i := 0; i < TestEntities; i++ {
+		RemoveComponent[Velocity](&w, ents[i])
+	}
+	// Check data
+	for i := 0; i < TestEntities; i++ {
+		pos := GetComponent[Position](&w, ents[i])
+		if pos == nil || pos.X != float32(i) || pos.Y != float32(i*2) {
+			t.Errorf("position corrupted for entity %d", i)
+		}
+		vel := GetComponent[Velocity](&w, ents[i])
+		if vel != nil {
+			t.Errorf("velocity not removed for entity %d", i)
+		}
 	}
 }
 
-func BenchmarkBuilderNewEntity(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					builder.NewEntity()
-				}
-			}
-		})
+// Special Cases
+func TestComponentWithPointer(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[WithPointer](&w)
+	ent := builder.NewEntity()
+	data := 42
+	comp := builder.Get(ent)
+	comp.Data = &data
+	got := builder.Get(ent)
+	if *got.Data != 42 {
+		t.Error("pointer data not preserved")
 	}
-}
-
-func BenchmarkBuilderNewEntitiesBatch(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				b.StartTimer()
-				builder.NewEntities(size)
-			}
-		})
-	}
-}
-
-func BenchmarkWorldCreateEntity(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					w.CreateEntity()
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkWorldCreateEntities(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				b.StartTimer()
-				w.CreateEntities(size)
-			}
-		})
-	}
-}
-
-func BenchmarkGetComponent(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
-			builder.NewEntities(size)
-			ents := builder.arch.entityIDs[:size]
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				builder.Get(ents[i%size])
-			}
-		})
-	}
-}
-
-func BenchmarkSetComponentExisting(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
-			builder.NewEntities(size)
-			ents := builder.arch.entityIDs[:size]
-			val := Position{1, 2}
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				SetComponent(&w, ents[i%size], val)
-			}
-		})
-	}
-}
-
-func BenchmarkSetComponentNew(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			val := Velocity{3, 4}
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				dummyBuilder := NewBuilder2[Position, Velocity](&w)
-				dummy := dummyBuilder.NewEntity()
-				w.RemoveEntity(dummy)
-				builder.NewEntities(size)
-				ents := builder.arch.entityIDs[:size]
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					SetComponent(&w, ents[j], val)
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkNewEntitiesWithValueSet(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			val := Position{1, 2}
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				b.StartTimer()
-				builder.NewEntitiesWithValueSet(size, val)
-			}
-		})
-	}
-}
-
-func BenchmarkNewEntitiesWithValueSet2(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			pos := Position{1, 2}
-			vel := Velocity{3, 4}
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
-				b.StartTimer()
-				builder2.NewEntitiesWithValueSet(size, pos, vel)
-			}
-		})
-	}
-}
-
-func BenchmarkRemoveComponent(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
-				dummyBuilder := NewBuilder[Position](&w)
-				dummy := dummyBuilder.NewEntity()
-				w.RemoveEntity(dummy)
-				builder2.NewEntities(size)
-				ents := builder2.arch.entityIDs[:size]
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					RemoveComponent[Velocity](&w, ents[j])
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkRemoveEntity(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				builder.NewEntities(size)
-				ents := make([]Entity, size)
-				copy(ents, builder.arch.entityIDs[:size])
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					w.RemoveEntity(ents[j])
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkFilterRemoveEntities(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				builder.NewEntities(size)
-				filter := NewFilter[Position](&w)
-				b.StartTimer()
-				filter.RemoveEntities()
-			}
-		})
-	}
-}
-
-func BenchmarkFilter2RemoveEntities(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
-				builder2.NewEntities(size)
-				filter2 := NewFilter2[Position, Velocity](&w)
-				b.StartTimer()
-				filter2.RemoveEntities()
-			}
-		})
-	}
-}
-
-func BenchmarkRemoveEntities(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				builder.NewEntities(size)
-				ents := make([]Entity, size)
-				copy(ents, builder.arch.entityIDs[:size])
-				b.StartTimer()
-				for j := 0; j < size; j++ {
-					w.RemoveEntity(ents[j])
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkClearEntities(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				builder.NewEntities(size)
-				b.StartTimer()
-				w.ClearEntities()
-			}
-		})
-	}
-}
-
-func BenchmarkFilterIterate(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
-			builder.NewEntities(size)
-			filter := NewFilter[Position](&w)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				filter.Reset()
-				for filter.Next() {
-					_ = filter.Get()
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkFilter2Iterate(b *testing.B) {
-	sizes := []int{1000, 10000, 100000, 1000000}
-	for _, size := range sizes {
-		name := fmt.Sprintf("%dK", size/1000)
-		if size == 1000000 {
-			name = "1M"
-		}
-		b.Run(name, func(b *testing.B) {
-			w := NewWorld(size)
-			builder2 := NewBuilder2[Position, Velocity](&w)
-			builder2.NewEntities(size)
-			filter2 := NewFilter2[Position, Velocity](&w)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				filter2.Reset()
-				for filter2.Next() {
-					_, _ = filter2.Get()
-				}
-			}
-		})
+	// Add another component
+	SetComponent(&w, ent, Position{X: 1, Y: 2})
+	got = GetComponent[WithPointer](&w, ent)
+	if got == nil || *got.Data != 42 {
+		t.Error("pointer data lost after archetype move")
 	}
 }
