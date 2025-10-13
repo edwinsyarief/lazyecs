@@ -41,8 +41,8 @@ func TestNewWorld(t *testing.T) {
 	if len(w.metas) != TestCap {
 		t.Errorf("expected %d metas, got %d", TestCap, len(w.metas))
 	}
-	if len(w.archetypes) != 0 {
-		t.Errorf("expected 0 archetypes, got %d", len(w.archetypes))
+	if len(w.archetypes) != 1 {
+		t.Errorf("expected 1 archetypes, got %d", len(w.archetypes))
 	}
 }
 
@@ -71,8 +71,8 @@ func TestGetOrCreateArchetype(t *testing.T) {
 	if a1 == nil {
 		t.Fatal("archetype not created")
 	}
-	if len(w.archetypes) != 1 {
-		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	if len(w.archetypes) != 2 {
+		t.Errorf("expected 2 archetype, got %d", len(w.archetypes))
 	}
 	a2 := w.getOrCreateArchetype(mask, specs)
 	if a1 != a2 {
@@ -80,7 +80,7 @@ func TestGetOrCreateArchetype(t *testing.T) {
 	}
 }
 
-func TestCreateEntity(t *testing.T) {
+func TestBuilderNewEntity(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
 	ent := builder.NewEntity()
@@ -105,7 +105,7 @@ func TestCreateEntity(t *testing.T) {
 	}
 }
 
-func TestNewEntitiesBatch(t *testing.T) {
+func TestBuilderNewEntities(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
 	builder.NewEntities(5)
@@ -121,7 +121,7 @@ func TestNewEntitiesBatch(t *testing.T) {
 	}
 }
 
-func TestNewEntitiesWithValueSet(t *testing.T) {
+func TestBuilderNewEntitiesWithValueSet(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder := NewBuilder[Position](&w)
 	posVal := Position{10, 20}
@@ -142,7 +142,7 @@ func TestNewEntitiesWithValueSet(t *testing.T) {
 	}
 }
 
-func TestNewEntitiesWithValueSet2(t *testing.T) {
+func TestBuilderNewEntitiesWithValueSet2(t *testing.T) {
 	w := NewWorld(TestCap)
 	builder2 := NewBuilder2[Position, Velocity](&w)
 	posVal := Position{10, 20}
@@ -164,6 +164,94 @@ func TestNewEntitiesWithValueSet2(t *testing.T) {
 		if vel == nil || vel.DX != 30 || vel.DY != 40 {
 			t.Errorf("velocity incorrect for entity %d", i)
 		}
+	}
+}
+
+func TestWorldCreateEntity(t *testing.T) {
+	w := NewWorld(TestCap)
+	ent := w.CreateEntity()
+	if !w.IsValid(ent) {
+		t.Errorf("created entity is invalid")
+	}
+	if len(w.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	}
+	a := w.archetypes[0]
+	if a.size != 1 {
+		t.Errorf("expected archetype size 1, got %d", a.size)
+	}
+	if a.mask != (bitmask256{}) {
+		t.Errorf("archetype mask not empty")
+	}
+	if GetComponent[Position](&w, ent) != nil {
+		t.Errorf("empty entity has component")
+	}
+}
+
+func TestWorldCreateEntityVersion(t *testing.T) {
+	w := NewWorld(TestCap)
+	ent1 := w.CreateEntity()
+	w.RemoveEntity(ent1)
+	ent2 := w.CreateEntity()
+	if ent1.ID != ent2.ID {
+		t.Errorf("expected same ID after recycle, got %d and %d", ent1.ID, ent2.ID)
+	}
+	if ent1.Version >= ent2.Version {
+		t.Errorf("version not incremented: %d >= %d", ent1.Version, ent2.Version)
+	}
+}
+
+func TestWorldCreateEntities(t *testing.T) {
+	w := NewWorld(TestCap)
+	ents := w.CreateEntities(0)
+	if ents != nil {
+		t.Errorf("expected nil for count 0, got %v", ents)
+	}
+
+	ents = w.CreateEntities(5)
+	if len(ents) != 5 {
+		t.Errorf("expected 5 entities, got %d", len(ents))
+	}
+	for i, e := range ents {
+		if !w.IsValid(e) {
+			t.Errorf("entity %d invalid", i)
+		}
+		if GetComponent[Position](&w, e) != nil {
+			t.Errorf("entity %d has unexpected component", i)
+		}
+	}
+	if len(w.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	}
+	a := w.archetypes[0]
+	if a.size != 5 {
+		t.Errorf("expected archetype size 5, got %d", a.size)
+	}
+	if a.mask != (bitmask256{}) {
+		t.Errorf("archetype mask not empty")
+	}
+}
+
+func TestWorldCreateEntitiesExpand(t *testing.T) {
+	w := NewWorld(1)
+	ents := w.CreateEntities(2)
+	if len(ents) != 2 {
+		t.Errorf("expected 2 entities, got %d", len(ents))
+	}
+	for i, e := range ents {
+		if !w.IsValid(e) {
+			t.Errorf("entity %d invalid", i)
+		}
+	}
+	if w.capacity != 2 {
+		t.Errorf("expected capacity 2 after expand, got %d", w.capacity)
+	}
+	if len(w.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	}
+	a := w.archetypes[0]
+	if cap(a.entityIDs) != 2 {
+		t.Errorf("expected archetype entityIDs cap 2, got %d", cap(a.entityIDs))
 	}
 }
 
@@ -632,7 +720,7 @@ func BenchmarkAutoExpand(b *testing.B) {
 	}
 }
 
-func BenchmarkCreateEntity(b *testing.B) {
+func BenchmarkBuilderNewEntity(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -654,7 +742,7 @@ func BenchmarkCreateEntity(b *testing.B) {
 	}
 }
 
-func BenchmarkNewEntitiesBatch(b *testing.B) {
+func BenchmarkBuilderNewEntitiesBatch(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -669,6 +757,46 @@ func BenchmarkNewEntitiesBatch(b *testing.B) {
 				builder := NewBuilder[Position](&w)
 				b.StartTimer()
 				builder.NewEntities(size)
+			}
+		})
+	}
+}
+
+func BenchmarkWorldCreateEntity(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					w.CreateEntity()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkWorldCreateEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				b.StartTimer()
+				w.CreateEntities(size)
 			}
 		})
 	}

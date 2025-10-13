@@ -197,14 +197,14 @@ Notably, many core operations like creating entities, accessing components, and 
 | **Create World** | 5.87 | 5.50 | 4.16 | 3.34 |
 | **Auto Expand** | 25.67 | 27.68 | 39.28 | N/A |
 | **Create Entity** | 6.67 | 7.36 | 5.60 | 5.46 |
-| **New Entities Batch** | 2.70 | 2.60 | 2.37 | 2.36 |
-| **New Entities With Value Set** | 4.58 | 4.76 | 4.31 | 4.24 |
+| **New Entities (Batch)** | 2.70 | 2.60 | 2.37 | 2.36 |
+| **New Entities With Value Set (Batch)** | 4.58 | 4.76 | 4.31 | 4.24 |
 | **Get Component** | 4.59 | 4.59 | 4.62 | 4.67 |
 | **Set Component Existing**| 25.49 | 25.39 | 25.50 | 25.54 |
 | **Set Component New** | 78.85 | 75.55 | 73.69 | 73.78 |
 | **Remove Component** | 77.73 | 73.80 | 72.28 | 72.06 |
 | **Remove Entity** | 12.49 | 12.98 | 11.37 | 11.11 |
-| **Filter & Remove** | 4.75 | 4.75 | 4.20 | 4.15 |
+| **Filter & Remove (Batch)** | 4.75 | 4.75 | 4.20 | 4.15 |
 | **Filter & Iterate** | 2.36 | 2.35 | 2.34 | 2.33 |
 | **Clear Entities** | 3.25 | 3.31 | 2.65 | 2.62 |
 

@@ -146,43 +146,72 @@ func NewWorld(initialCapacity int) World {
 		w.metas[i].archetypeIndex = -1
 		w.metas[i].version = 0
 	}
+	// Pre-create empty archetype for zero-component entities
+	w.getOrCreateArchetype(bitmask256{}, nil)
 	return w
 }
 
-// RemoveEntity deactivates an entity and recycles its ID for future use.
-// It removes the entity from its archetype by swapping it with the last element,
-// ensuring component arrays remain tightly packed. This operation is highly
-// efficient and incurs zero allocations.
-//
-// If the provided entity is invalid (e.g., already removed or has a stale
-// version), the function does nothing.
+// CreateEntity creates a new entity with no components.
+func (w *World) CreateEntity() Entity {
+	var mask bitmask256
+	var specs []compSpec
+	a := w.getOrCreateArchetype(mask, specs)
+	return w.createEntity(a)
+}
+
+// CreateEntities creates a batch of entities with no components and returns them.
+// The returned slice is a view into internal storage; do not modify its contents.
+func (w *World) CreateEntities(count int) []Entity {
+	if count == 0 {
+		return nil
+	}
+	var mask bitmask256
+	var specs []compSpec
+	a := w.getOrCreateArchetype(mask, specs)
+	for len(w.freeIDs) < count {
+		w.expand()
+	}
+	startSize := a.size
+	a.size += count
+	popped := w.freeIDs[len(w.freeIDs)-count:]
+	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	for k := 0; k < count; k++ {
+		id := popped[k]
+		meta := &w.metas[id]
+		meta.archetypeIndex = a.index
+		meta.index = startSize + k
+		meta.version = w.nextEntityVer
+		ent := Entity{ID: id, Version: meta.version}
+		a.entityIDs[startSize+k] = ent
+		w.nextEntityVer++
+	}
+	return a.entityIDs[startSize : startSize+count]
+}
+
+// RemoveEntity removes an entity from the World, freeing its ID for reuse and
+// invalidating all references to it. If the entity is invalid or already removed,
+// this operation does nothing.
 //
 // Parameters:
 //   - e: The Entity to remove.
 func (w *World) RemoveEntity(e Entity) {
 	if !w.IsValid(e) {
-		return // already deleted or stale
+		return
 	}
-
 	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
 	idx := meta.index
 	lastIdx := a.size - 1
-
-	// Swap the entity to be removed with the last entity in the archetype.
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]
 		a.entityIDs[idx] = lastEnt
-		// Move component data.
-		for _, id := range a.compOrder {
-			src := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(lastIdx)*a.compSizes[id])
-			dst := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(idx)*a.compSizes[id])
-			memCopy(dst, src, a.compSizes[id])
+		for _, cid := range a.compOrder {
+			src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(lastIdx)*a.compSizes[cid])
+			dst := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(idx)*a.compSizes[cid])
+			memCopy(dst, src, a.compSizes[cid])
 		}
-		// Update the metadata of the moved entity.
 		w.metas[lastEnt.ID].index = idx
 	}
-
 	// Invalidate the removed entity's metadata and recycle its ID.
 	a.size--
 	w.freeIDs = append(w.freeIDs, e.ID)
@@ -353,10 +382,10 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 	if idx < lastIdx {
 		lastEnt := a.entityIDs[lastIdx]
 		a.entityIDs[idx] = lastEnt
-		for _, id := range a.compOrder {
-			src := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(lastIdx)*a.compSizes[id])
-			dst := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(idx)*a.compSizes[id])
-			memCopy(dst, src, a.compSizes[id])
+		for _, cid := range a.compOrder {
+			src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(lastIdx)*a.compSizes[cid])
+			dst := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(idx)*a.compSizes[cid])
+			memCopy(dst, src, a.compSizes[cid])
 		}
 		w.metas[lastEnt.ID].index = idx
 	}
