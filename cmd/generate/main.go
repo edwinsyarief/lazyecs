@@ -103,7 +103,7 @@ func main() {
 	}
 
 	// List of templates to process.
-	templates := []string{"builder_generated.go.tpl", "world_api_generated.go.tpl", "filter_generated.go.tpl"}
+	templates := []string{"builder_generated.go.tpl", "ecs_api_generated.go.tpl", "filter_generated.go.tpl"}
 	templateDir := "templates"
 	outputDir := "." // Write to the package root.
 
