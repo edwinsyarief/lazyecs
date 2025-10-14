@@ -155,3 +155,79 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	{{end}}
 	return {{.ReturnPtrs}}
 }
+
+// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+{{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
+{{end}}
+func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
+	w := b.world
+	if !w.IsValid(e) {
+		return
+	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	{{range .Components}}id{{.Index}} := b.id{{.Index}}
+	i{{.Index}} := id{{.Index}} >> 6
+	o{{.Index}} := id{{.Index}} & 63
+	{{end}}
+	{{range .Components}}has{{.Index}} := (a.mask[i{{.Index}}] & (uint64(1) << uint64(o{{.Index}}))) != 0
+	{{end}}
+	if {{.SetHasVars}} {
+		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
+		*(*{{.TypeName}})(ptr{{.Index}}) = v{{.Index}}
+		{{end}}
+		return
+	}
+	newMask := a.mask
+	{{range .Components}}if !has{{.Index}} {
+		newMask.set(id{{.Index}})
+	}
+	{{end}}
+	var targetA *archetype
+	if idx, ok := w.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes[idx]
+	} else {
+		var tempSpecs [MaxComponentTypes]compSpec
+		count := 0
+		for _, cid := range a.compOrder {
+			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			count++
+		}
+		{{range .Components}}if !has{{.Index}} {
+			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.compIDToType[id{{.Index}}], size: w.compIDToSize[id{{.Index}}]}
+			count++
+		}
+		{{end}}
+		specs := tempSpecs[:count]
+		targetA = w.getOrCreateArchetype(newMask, specs)
+	}
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+	for _, cid := range a.compOrder {
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
+	}
+	{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
+	*(*{{.TypeName}})(ptr{{.Index}}) = v{{.Index}}
+	{{end}}
+	w.removeFromArchetype(a, meta)
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
+}
+
+// SetBatch sets the component values for multiple entities.
+// 
+// Parameters:
+//   - entities: The entities slices to set the components for.
+{{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
+{{end}}
+func (b *Builder{{.N}}[{{.TypeVars}}]) SetBatch(entities []Entity, {{.SetVars}}) {
+	for _, e := range entities {
+		b.Set(e, {{.SetVarNames}})
+	}
+}

@@ -17,6 +17,7 @@ import (
 type ComponentInfo struct {
 	TypeName       string // e.g., T1, T2
 	VarName        string // e.g., v1, v2
+	SetVarName     string // e.g., v1, v2
 	BuilderVarName string // e.g., comp1, comp2
 	IDName         string // e.g., id1, id2
 	SizeName       string // e.g., size1, size2
@@ -77,6 +78,12 @@ type TemplateData struct {
 	HasNone string
 	// Condition to check if a component ID is one being removed
 	IsRemovedID string
+	// Variable declarations for Set method, e.g., "v1 T1, v2 T2"
+	SetVars string
+	// Variable names for Set method, e.g., "v1, v2"
+	SetVarNames string
+	// Boolean check for having all components in Set method
+	SetHasVars string
 	// Detailed information for each component
 	Components []ComponentInfo
 	// The number of components this data is for (e.g., 2 for Filter2)
@@ -154,13 +161,14 @@ func main() {
 func buildTemplateData(n int) TemplateData {
 	components := make([]ComponentInfo, n)
 	var types, typeVars, vars, builderVars, ids, okIDs, returnTypes, returnSinglePtrs, returnPtrs, returnVars, returnNil, slotCheck, batchRes, returnBatchRes, returnFromBytes []string
-	var duplicateIDs, maskChecks, builderMaskChecks, hasAll, hasNone, isRemovedIDs []string
+	var duplicateIDs, maskChecks, builderMaskChecks, hasAll, hasNone, isRemovedIDs, setVars, setVarNames, setHasVars []string
 	for i := 1; i <= n; i++ {
 		is := strconv.Itoa(i)
 		ci := ComponentInfo{
 			Index:          i,
 			TypeName:       "T" + is,
 			VarName:        "v" + is,
+			SetVarName:     "v" + is,
 			BuilderVarName: "comp" + is,
 			IDName:         "id" + is,
 			SizeName:       "size" + is,
@@ -197,6 +205,9 @@ func buildTemplateData(n int) TemplateData {
 			js := strconv.Itoa(j)
 			duplicateIDs = append(duplicateIDs, "id"+is+" == id"+js)
 		}
+		setVars = append(setVars, ci.SetVarName+" "+ci.TypeName)
+		setVarNames = append(setVarNames, ci.SetVarName)
+		setHasVars = append(setHasVars, "has"+is)
 	}
 
 	return TemplateData{
@@ -223,5 +234,8 @@ func buildTemplateData(n int) TemplateData {
 		HasAll:              strings.Join(hasAll, " && "),
 		HasNone:             strings.Join(hasNone, " && "),
 		IsRemovedID:         strings.Join(isRemovedIDs, " || "),
+		SetVars:             strings.Join(setVars, ", "),
+		SetVarNames:         strings.Join(setVarNames, ", "),
+		SetHasVars:          strings.Join(setHasVars, " && "),
 	}
 }

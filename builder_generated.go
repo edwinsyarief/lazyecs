@@ -5,6 +5,17 @@ import (
 	"unsafe"
 )
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder2 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 2 components: T1, T2.
 type Builder2[T1 any, T2 any] struct {
@@ -122,6 +133,7 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2
 		*(*T1)(ptr1) = comp1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
 		*(*T2)(ptr2) = comp2
+
 		w.nextEntityVer++
 	}
 }
@@ -161,6 +173,11 @@ func (b *Builder2[T1, T2]) Get(e Entity) (*T1, *T2) {
 }
 
 // Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
 func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -183,6 +200,7 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 		*(*T1)(ptr1) = v1
 		ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
 		*(*T2)(ptr2) = v2
+
 		return
 	}
 	newMask := a.mask
@@ -211,6 +229,7 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
 			count++
 		}
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -226,18 +245,35 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	*(*T1)(ptr1) = v1
 	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[id2]) + uintptr(newIdx)*targetA.compSizes[id2])
 	*(*T2)(ptr2) = v2
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
 // SetBatch sets the component values for multiple entities.
+//
+// Parameters:
+//   - entities: The entities slices to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
 func (b *Builder2[T1, T2]) SetBatch(entities []Entity, v1 T1, v2 T2) {
 	for _, e := range entities {
 		b.Set(e, v1, v2)
 	}
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder3 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 3 components: T1, T2, T3.
 type Builder3[T1 any, T2 any, T3 any] struct {
@@ -266,7 +302,7 @@ func NewBuilder3[T1 any, T2 any, T3 any](w *World) *Builder3[T1, T2, T3] {
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 
-	if id1 == id2 || id1 == id3 || id2 == id3 {
+	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in Builder3")
 	}
 	var mask bitmask256
@@ -363,6 +399,7 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp
 		*(*T2)(ptr2) = comp2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
 		*(*T3)(ptr3) = comp3
+
 		w.nextEntityVer++
 	}
 }
@@ -406,6 +443,12 @@ func (b *Builder3[T1, T2, T3]) Get(e Entity) (*T1, *T2, *T3) {
 }
 
 // Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
 func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -434,6 +477,7 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 		*(*T2)(ptr2) = v2
 		ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
 		*(*T3)(ptr3) = v3
+
 		return
 	}
 	newMask := a.mask
@@ -469,6 +513,7 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
 			count++
 		}
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -486,18 +531,36 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	*(*T2)(ptr2) = v2
 	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[id3]) + uintptr(newIdx)*targetA.compSizes[id3])
 	*(*T3)(ptr3) = v3
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
 // SetBatch sets the component values for multiple entities.
+//
+// Parameters:
+//   - entities: The entities slices to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
 func (b *Builder3[T1, T2, T3]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3) {
 	for _, e := range entities {
 		b.Set(e, v1, v2, v3)
 	}
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder4 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 4 components: T1, T2, T3, T4.
 type Builder4[T1 any, T2 any, T3 any, T4 any] struct {
@@ -529,7 +592,7 @@ func NewBuilder4[T1 any, T2 any, T3 any, T4 any](w *World) *Builder4[T1, T2, T3,
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 
-	if id1 == id2 || id1 == id3 || id1 == id4 || id2 == id3 || id2 == id4 || id3 == id4 {
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in Builder4")
 	}
 	var mask bitmask256
@@ -631,6 +694,7 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, 
 		*(*T3)(ptr3) = comp3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
 		*(*T4)(ptr4) = comp4
+
 		w.nextEntityVer++
 	}
 }
@@ -678,6 +742,13 @@ func (b *Builder4[T1, T2, T3, T4]) Get(e Entity) (*T1, *T2, *T3, *T4) {
 }
 
 // Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
 func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -712,6 +783,7 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 		*(*T3)(ptr3) = v3
 		ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
 		*(*T4)(ptr4) = v4
+
 		return
 	}
 	newMask := a.mask
@@ -754,6 +826,7 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 			tempSpecs[count] = compSpec{id: id4, typ: w.compIDToType[id4], size: w.compIDToSize[id4]}
 			count++
 		}
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -773,18 +846,37 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	*(*T3)(ptr3) = v3
 	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[id4]) + uintptr(newIdx)*targetA.compSizes[id4])
 	*(*T4)(ptr4) = v4
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
 // SetBatch sets the component values for multiple entities.
+//
+// Parameters:
+//   - entities: The entities slices to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
 func (b *Builder4[T1, T2, T3, T4]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	for _, e := range entities {
 		b.Set(e, v1, v2, v3, v4)
 	}
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder5 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 5 components: T1, T2, T3, T4, T5.
 type Builder5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
@@ -819,7 +911,7 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
 
-	if id1 == id2 || id1 == id3 || id1 == id4 || id1 == id5 || id2 == id3 || id2 == id4 || id2 == id5 || id3 == id4 || id3 == id5 || id4 == id5 {
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in Builder5")
 	}
 	var mask bitmask256
@@ -926,6 +1018,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 
 		*(*T4)(ptr4) = comp4
 		ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])
 		*(*T5)(ptr5) = comp5
+
 		w.nextEntityVer++
 	}
 }
@@ -977,6 +1070,14 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5) {
 }
 
 // Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
+//   - comp5: The initial value for the component T5.
 func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -1017,6 +1118,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 		*(*T4)(ptr4) = v4
 		ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
 		*(*T5)(ptr5) = v5
+
 		return
 	}
 	newMask := a.mask
@@ -1066,6 +1168,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 			tempSpecs[count] = compSpec{id: id5, typ: w.compIDToType[id5], size: w.compIDToSize[id5]}
 			count++
 		}
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -1087,18 +1190,38 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 	*(*T4)(ptr4) = v4
 	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[id5]) + uintptr(newIdx)*targetA.compSizes[id5])
 	*(*T5)(ptr5) = v5
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
 // SetBatch sets the component values for multiple entities.
+//
+// Parameters:
+//   - entities: The entities slices to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
+//   - comp5: The initial value for the component T5.
 func (b *Builder5[T1, T2, T3, T4, T5]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
 	for _, e := range entities {
 		b.Set(e, v1, v2, v3, v4, v5)
 	}
 }
 
+// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
+// A Builder is a highly optimized factory for creating entities with a fixed set
+// of components. By pre-calculating the archetype, it makes entity creation an
+// extremely fast, allocation-free operation.
+//
+// Placeholders:
+// - .N: The number of components (e.g., 2, 3).
+// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
+// - .TypeVars: The type names themselves, e.g., "T1, T2".
+// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
+// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder6 provides a highly efficient, type-safe API for creating entities
 // with a predefined set of 6 components: T1, T2, T3, T4, T5, T6.
 type Builder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
@@ -1136,7 +1259,7 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 	id5 := w.getCompTypeID(t5)
 	id6 := w.getCompTypeID(t6)
 
-	if id1 == id2 || id1 == id3 || id1 == id4 || id1 == id5 || id1 == id6 || id2 == id3 || id2 == id4 || id2 == id5 || id2 == id6 || id3 == id4 || id3 == id5 || id3 == id6 || id4 == id5 || id4 == id6 || id5 == id6 {
+	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in Builder6")
 	}
 	var mask bitmask256
@@ -1248,6 +1371,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, co
 		*(*T5)(ptr5) = comp5
 		ptr6 := unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(startSize+k)*a.compSizes[b.id6])
 		*(*T6)(ptr6) = comp6
+
 		w.nextEntityVer++
 	}
 }
@@ -1303,6 +1427,15 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Get(e Entity) (*T1, *T2, *T3, *T4, *T
 }
 
 // Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+//
+// Parameters:
+//   - entity: The entity to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
+//   - comp5: The initial value for the component T5.
+//   - comp6: The initial value for the component T6.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -1349,6 +1482,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 		*(*T5)(ptr5) = v5
 		ptr6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
 		*(*T6)(ptr6) = v6
+
 		return
 	}
 	newMask := a.mask
@@ -1405,6 +1539,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 			tempSpecs[count] = compSpec{id: id6, typ: w.compIDToType[id6], size: w.compIDToSize[id6]}
 			count++
 		}
+
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
@@ -1428,12 +1563,22 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 	*(*T5)(ptr5) = v5
 	ptr6 := unsafe.Pointer(uintptr(targetA.compPointers[id6]) + uintptr(newIdx)*targetA.compSizes[id6])
 	*(*T6)(ptr6) = v6
+
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 }
 
 // SetBatch sets the component values for multiple entities.
+//
+// Parameters:
+//   - entities: The entities slices to set the components for.
+//   - comp1: The initial value for the component T1.
+//   - comp2: The initial value for the component T2.
+//   - comp3: The initial value for the component T3.
+//   - comp4: The initial value for the component T4.
+//   - comp5: The initial value for the component T5.
+//   - comp6: The initial value for the component T6.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
 	for _, e := range entities {
 		b.Set(e, v1, v2, v3, v4, v5, v6)
