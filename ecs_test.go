@@ -1194,17 +1194,15 @@ func BenchmarkFilterGetEntities(b *testing.B) {
 			name = "1M"
 		}
 		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](&w)
+			builder.NewEntities(size)
+			filter := NewFilter[Position](&w)
+
 			b.ReportAllocs()
+			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				w := NewWorld(size)
-				ents := make([]Entity, size)
-				for j := 0; j < size; j++ {
-					ents[j] = w.CreateEntity()
-				}
-				builder := NewFilter[Position](&w)
-				b.StartTimer()
-				_ = builder.Entities()
+				filter.Entities()
 			}
 		})
 	}
