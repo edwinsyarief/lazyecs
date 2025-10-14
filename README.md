@@ -147,6 +147,8 @@ Builders are available for creating entities with 1 to 6 components (`NewBuilder
 | `(b *Builder[T]) NewEntity() Entity` | Creates a single new entity with the pre-configured components. |
 | `(b *Builder[T]) NewEntities(count int)` | Creates a batch of `count` entities with the pre-configured components. |
 | `(b *Builder[T]) Get(e Entity) *T` | Gets the component(s) for an entity created by this builder. |
+| `(b *Builder[T]) Set(e Entity, comp T)` | Sets the component(s) for an entity. |
+| `(b *Builder[T]) SetBatch(e []Entity, comp T)` | Sets the component(s) for entities. |
 
 ### Filters (Querying)
 
@@ -160,6 +162,7 @@ Filters are available for iterating over entities with 1 to 6 components (`NewFi
 | `(f *Filter[T]) Get() *T` | Returns the component(s) for the current entity. |
 | `(f *Filter[T]) Reset()` | Resets the iterator to the beginning. |
 | `(f *Filter[T]) RemoveEntities()` | Efficiently removes all entities matching the filter. |
+| `(f *Filter[T]) Entities() []Entity` | Returns the entities matching the filter. |
 
 ### EventBus
 
