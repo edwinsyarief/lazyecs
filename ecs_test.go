@@ -690,6 +690,46 @@ func TestComponentWithPointer(t *testing.T) {
 	}
 }
 
+func TestBuilderSet(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](&w)
+	ent := w.CreateEntity()
+	builder.Set(ent, Position{X: 1, Y: 2})
+	pos := builder.Get(ent)
+	if pos == nil || pos.X != 1 || pos.Y != 2 {
+		t.Error("Set failed")
+	}
+	builder.Set(ent, Position{X: 3, Y: 4})
+	pos = builder.Get(ent)
+	if pos.X != 3 || pos.Y != 4 {
+		t.Error("Update failed")
+	}
+}
+
+func TestBuilderSetBatch(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](&w)
+	ents := []Entity{w.CreateEntity(), w.CreateEntity()}
+	builder.SetBatch(ents, Position{X: 5, Y: 6})
+	for _, e := range ents {
+		pos := builder.Get(e)
+		if pos == nil || pos.X != 5 || pos.Y != 6 {
+			t.Error("SetBatch failed")
+		}
+	}
+}
+
+func TestFilterEntities(t *testing.T) {
+	w := NewWorld(TestCap)
+	builder := NewBuilder[Position](&w)
+	builder.NewEntities(5)
+	filter := NewFilter[Position](&w)
+	ents := filter.Entities()
+	if len(ents) != 5 {
+		t.Errorf("expected 5, got %d", len(ents))
+	}
+}
+
 // World Creation Benchmarks
 func BenchmarkCreateWorld(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
@@ -851,6 +891,32 @@ func BenchmarkNewEntitiesWithValueSet2(b *testing.B) {
 				builder2 := NewBuilder2[Position, Velocity](&w)
 				b.StartTimer()
 				builder2.NewEntitiesWithValueSet(size, pos, vel)
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderSet(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				ents := make([]Entity, size)
+				for j := 0; j < size; j++ {
+					ents[j] = w.CreateEntity()
+				}
+				builder := NewBuilder[Position](&w)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					builder.Set(ents[j], Position{})
+				}
 			}
 		})
 	}
@@ -1115,6 +1181,30 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 				for filter2.Next() {
 					_, _ = filter2.Get()
 				}
+			}
+		})
+	}
+}
+
+func BenchmarkFilterGetEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				ents := make([]Entity, size)
+				for j := 0; j < size; j++ {
+					ents[j] = w.CreateEntity()
+				}
+				builder := NewFilter[Position](&w)
+				b.StartTimer()
+				_ = builder.Entities()
 			}
 		})
 	}

@@ -145,3 +145,21 @@ func (f *Filter[T]) RemoveEntities() {
 	}
 	f.Reset()
 }
+
+// Entities returns all entities that match the filter.
+func (f *Filter[T]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
+}

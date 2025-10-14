@@ -1,3 +1,4 @@
+// builder.go
 package lazyecs
 
 import (
@@ -148,4 +149,60 @@ func (b *Builder[T]) Get(e Entity) *T {
 	}
 	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 	return (*T)(ptr)
+}
+
+// Set replaces the existing component value if it exists, or adds the component to the entity if it doesn't have it.
+func (b *Builder[T]) Set(e Entity, comp T) {
+	w := b.world
+	if !w.IsValid(e) {
+		return
+	}
+	meta := &w.metas[e.ID]
+	a := w.archetypes[meta.archetypeIndex]
+	id := b.compID
+	i := id >> 6
+	o := id & 63
+	if (a.mask[i] & (uint64(1) << uint64(o))) != 0 {
+		ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
+		*(*T)(ptr) = comp
+		return
+	}
+	// add new
+	newMask := a.mask
+	newMask.set(id)
+	var targetA *archetype
+	if idx, ok := w.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes[idx]
+	} else {
+		var tempSpecs [MaxComponentTypes]compSpec
+		count := 0
+		for _, cid := range a.compOrder {
+			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			count++
+		}
+		tempSpecs[count] = compSpec{id: id, typ: w.compIDToType[id], size: w.compIDToSize[id]}
+		count++
+		specs := tempSpecs[:count]
+		targetA = w.getOrCreateArchetype(newMask, specs)
+	}
+	newIdx := targetA.size
+	targetA.entityIDs[newIdx] = e
+	targetA.size++
+	for _, cid := range a.compOrder {
+		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		memCopy(dst, src, a.compSizes[cid])
+	}
+	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
+	*(*T)(dst) = comp
+	w.removeFromArchetype(a, meta)
+	meta.archetypeIndex = targetA.index
+	meta.index = newIdx
+}
+
+// SetBatch sets the component value for multiple entities.
+func (b *Builder[T]) SetBatch(entities []Entity, comp T) {
+	for _, e := range entities {
+		b.Set(e, comp)
+	}
 }

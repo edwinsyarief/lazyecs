@@ -150,6 +150,24 @@ func (f *Filter2[T1, T2]) RemoveEntities() {
 	f.Reset()
 }
 
+// Entities returns all entities that match the filter.
+func (f *Filter2[T1, T2]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
+}
+
 // This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
 // A Filter is a high-performance iterator (or query) that finds all entities
 // possessing a specific set of components. It works by iterating directly over
@@ -298,6 +316,24 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 		a.size = 0
 	}
 	f.Reset()
+}
+
+// Entities returns all entities that match the filter.
+func (f *Filter3[T1, T2, T3]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
 }
 
 // This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
@@ -453,6 +489,24 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 		a.size = 0
 	}
 	f.Reset()
+}
+
+// Entities returns all entities that match the filter.
+func (f *Filter4[T1, T2, T3, T4]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
 }
 
 // This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
@@ -613,6 +667,24 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 		a.size = 0
 	}
 	f.Reset()
+}
+
+// Entities returns all entities that match the filter.
+func (f *Filter5[T1, T2, T3, T4, T5]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
 }
 
 // This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
@@ -778,4 +850,22 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 		a.size = 0
 	}
 	f.Reset()
+}
+
+// Entities returns all entities that match the filter.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entities() []Entity {
+	if f.world.archetypeVersion != f.lastVersion {
+		f.updateMatching()
+	}
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	ents := make([]Entity, total)
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	return ents
 }
