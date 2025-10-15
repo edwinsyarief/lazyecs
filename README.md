@@ -1,12 +1,12 @@
-# lazyecs
+# Teishoku
 
 ![Go Version](https://img.shields.io/badge/Go-1.25.1-blue?logo=go&style=flat&logoColor=white)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/lazyecs/test.yml)
-<!--![GitHub Repo stars](https://img.shields.io/github/stars/edwinsyarief/lazyecs)-->
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/teishoku/test.yml)
+<!--![GitHub Repo stars](https://img.shields.io/github/stars/edwinsyarief/teishoku)-->
 
 A high-performance, archetype-based, and easy-to-use Entity Component System (ECS) library for Go.
 
-`lazyecs` is designed for performance-critical applications like games and simulations, offering a simple, generic API that minimizes garbage collection overhead. It uses archetypes to store entities with the same component layout in contiguous memory blocks, enabling extremely fast iteration.
+`Teishoku` is designed for performance-critical applications like games and simulations, offering a simple, generic API that minimizes garbage collection overhead. It uses archetypes to store entities with the same component layout in contiguous memory blocks, enabling extremely fast iteration.
 
 ## Features
 
@@ -17,7 +17,7 @@ A high-performance, archetype-based, and easy-to-use Entity Component System (EC
 
 ## Getting Started
 
-This guide covers the primary workflow for setting up and using `lazyecs`.
+This guide covers the primary workflow for setting up and using `Teishoku`.
 
 ### 1. Define Components
 
@@ -40,11 +40,11 @@ type Velocity struct {
 The `World` is the container for all your entities and components. You must specify its initial entity capacity.
 
 ```go
-import "github.com/edwinsyarief/lazyecs"
+import "github.com/edwinsyarief/teishoku"
 
 func main() {
     // Create a new world with a capacity for 10,000 entities.
-    world := lazyecs.NewWorld(10000)
+    world := teishoku.NewWorld(10000)
 }
 ```
 
@@ -54,7 +54,7 @@ A `Builder` is the most efficient way to create entities with a predefined set o
 
 ```go
 // Create a builder for entities that have both Position and Velocity.
-builder := lazyecs.NewBuilder2[Position, Velocity](world)
+builder := teishoku.NewBuilder2[Position, Velocity](world)
 
 // Create 100 entities with these components.
 for i := 0; i < 100; i++ {
@@ -73,7 +73,7 @@ A `Filter` (or "query") allows you to iterate over all entities that have a spec
 
 ```go
 // Create a filter to find all entities with Position and Velocity.
-query := lazyecs.NewFilter2[Position, Velocity](world)
+query := teishoku.NewFilter2[Position, Velocity](world)
 
 // This is your system's main loop.
 for query.Next() {
@@ -88,7 +88,7 @@ for query.Next() {
 
 ## How It Works
 
-`lazyecs` is built around a few core concepts that work together to provide a high-performance and ergonomic experience.
+`teishoku` is built around a few core concepts that work together to provide a high-performance and ergonomic experience.
 
 ### World, Entity, and Component
 
@@ -98,7 +98,7 @@ for query.Next() {
 
 ### Archetypes and Performance
 
-The key to `lazyecs`'s performance is its **archetype-based architecture**.
+The key to `teishoku`'s performance is its **archetype-based architecture**.
 
 An **archetype** is a unique combination of component types. For example, all entities that have _only_ a `Position` and a `Velocity` component belong to the same archetype.
 
@@ -108,7 +108,7 @@ When you add or remove a component from an entity, the entity is moved from its 
 
 ## Code Generation
 
-`lazyecs` uses Go's `go generate` tool to create boilerplate code for multi-component `Builders`, `Filters`, and `World` API functions (e.g., `NewBuilder3`, `Filter4`, `GetComponent2`). This approach keeps the library's public API clean and consistent without requiring developers to write repetitive code manually.
+`teishoku` uses Go's `go generate` tool to create boilerplate code for multi-component `Builders`, `Filters`, and `World` API functions (e.g., `NewBuilder3`, `Filter4`, `GetComponent2`). This approach keeps the library's public API clean and consistent without requiring developers to write repetitive code manually.
 
 To run the code generator, simply execute the following command from the root of the repository:
 
@@ -193,9 +193,9 @@ The `World` object and the `Resources` manager are **not** thread-safe. All oper
 
 ## Benchmark Results
 
-The following tables summarize the performance of `lazyecs` across a range of common operations. The results are presented in nanoseconds (ns) per unit (e.g., per entity) and were run on an AMD EPYC 7763 64-Core Processor.
+The following tables summarize the performance of `teishoku` across a range of common operations. The results are presented in nanoseconds (ns) per unit (e.g., per entity) and were run on an AMD EPYC 7763 64-Core Processor.
 
-Notably, many core operations like creating entities, accessing components, and iterating with filters show **zero memory allocations** (`0 allocs/op`), making `lazyecs` ideal for performance-critical applications where garbage collection pressure is a concern.
+Notably, many core operations like creating entities, accessing components, and iterating with filters show **zero memory allocations** (`0 allocs/op`), making `teishoku` ideal for performance-critical applications where garbage collection pressure is a concern.
 
 ### Entity Benchmark
 
@@ -241,7 +241,7 @@ Notably, many core operations like creating entities, accessing components, and 
 ```plaintext
 goos: linux
 goarch: amd64
-pkg: github.com/edwinsyarief/lazyecs
+pkg: github.com/edwinsyarief/teishoku
 cpu: AMD EPYC 7763 64-Core Processor
 BenchmarkCreateWorld/1K-4                	  229825	      5867 ns/op	   29608 B/op	       5 allocs/op
 BenchmarkCreateWorld/10K-4               	   25072	     55012 ns/op	  287657 B/op	       5 allocs/op
@@ -347,7 +347,7 @@ BenchmarkResourcesClear/10K-4                     	   10000	    140288 ns/op	   
 BenchmarkResourcesClear/100K-4                    	     928	   1354513 ns/op	       0 B/op	       0 allocs/op
 BenchmarkResourcesClear/1M-4                      	     100	  22719380 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok  	github.com/edwinsyarief/lazyecs	475.819s
+ok  	github.com/edwinsyarief/teishoku	475.819s
 ```
 
 </details>

@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/edwinsyarief/lazyecs"
+	"github.com/edwinsyarief/teishoku"
 	"github.com/pkg/profile"
 )
 
@@ -30,9 +30,9 @@ func main() {
 
 func run(rounds, iters, numEntities int) {
 	for range rounds {
-		w := lazyecs.NewWorld(numEntities)
-		query := lazyecs.NewFilter2[comp1, comp2](&w)
-		batch := lazyecs.NewBuilder2[comp1, comp2](&w)
+		w := teishoku.NewWorld(numEntities)
+		query := teishoku.NewFilter2[comp1, comp2](&w)
+		batch := teishoku.NewBuilder2[comp1, comp2](&w)
 		batch.NewEntities(numEntities)
 
 		for range iters {

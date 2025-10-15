@@ -1,4 +1,4 @@
-package lazyecs
+package teishoku
 
 // bitmask256 represents a set of up to 256 component IDs. It is used to
 // uniquely identify archetypes. Each bit corresponds to a component ID, and if

@@ -1,4 +1,4 @@
-package lazyecs
+package teishoku
 
 import (
 	"reflect"
@@ -78,7 +78,7 @@ func (f *Filter[T]) Reset() {
 //
 // Example:
 //
-//	query := lazyecs.NewFilter[Position](world)
+//	query := teishoku.NewFilter[Position](world)
 //	for query.Next() {
 //	    // ... process entity
 //	}

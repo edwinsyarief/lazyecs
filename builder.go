@@ -1,5 +1,5 @@
 // builder.go
-package lazyecs
+package teishoku
 
 import (
 	"reflect"

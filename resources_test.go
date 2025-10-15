@@ -1,4 +1,4 @@
-package lazyecs
+package teishoku
 
 import (
 	"fmt"
