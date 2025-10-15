@@ -2,6 +2,7 @@
 
 ![Go Version](https://img.shields.io/badge/Go-1.25.1-blue?logo=go&style=flat&logoColor=white)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/teishoku/test.yml)
+![Go Reference](https://pkg.go.dev/badge/github.com/edwinsyarief/teishoku.svg)
 <!--![GitHub Repo stars](https://img.shields.io/github/stars/edwinsyarief/teishoku)-->
 
 A high-performance, archetype-based, and easy-to-use Entity Component System (ECS) library for Go.
