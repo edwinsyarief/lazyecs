@@ -1,4 +1,3 @@
-// builder.go
 package teishoku
 
 import (
