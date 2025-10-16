@@ -1,16 +1,3 @@
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter{{.N}} provides a fast, cache-friendly iterator over all entities that
 // have the {{.N}} components: {{.TypeVars}}.
 type Filter{{.N}}[{{.Types}}] struct {

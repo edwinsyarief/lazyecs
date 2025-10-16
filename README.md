@@ -1,9 +1,8 @@
 # Teishoku
 
-![Go Version](https://img.shields.io/badge/Go-1.25.1-blue?logo=go&style=flat&logoColor=white)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/teishoku/test.yml)
+![Go Version](https://img.shields.io/badge/Go-1.25.1-blue?logo=go&style=flat&logoColor=white)
 ![Go Reference](https://pkg.go.dev/badge/github.com/edwinsyarief/teishoku.svg)
-<!--![GitHub Repo stars](https://img.shields.io/github/stars/edwinsyarief/teishoku)-->
 
 A high-performance, archetype-based, and easy-to-use Entity Component System (ECS) library for Go.
 
@@ -89,7 +88,7 @@ for query.Next() {
 
 ## How It Works
 
-`teishoku` is built around a few core concepts that work together to provide a high-performance and ergonomic experience.
+`Teishoku` is built around a few core concepts that work together to provide a high-performance and ergonomic experience.
 
 ### World, Entity, and Component
 
@@ -109,7 +108,7 @@ When you add or remove a component from an entity, the entity is moved from its 
 
 ## Code Generation
 
-`teishoku` uses Go's `go generate` tool to create boilerplate code for multi-component `Builders`, `Filters`, and `World` API functions (e.g., `NewBuilder3`, `Filter4`, `GetComponent2`). This approach keeps the library's public API clean and consistent without requiring developers to write repetitive code manually.
+`Teishoku` uses Go's `go generate` tool to create boilerplate code for multi-component `Builders`, `Filters`, and `World` API functions (e.g., `NewBuilder3`, `Filter4`, `GetComponent2`). This approach keeps the library's public API clean and consistent without requiring developers to write repetitive code manually.
 
 To run the code generator, simply execute the following command from the root of the repository:
 

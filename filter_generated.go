@@ -5,27 +5,14 @@ import (
 	"unsafe"
 )
 
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter2 provides a fast, cache-friendly iterator over all entities that
 // have the 2 components: T1, T2.
 type Filter2[T1 any, T2 any] struct {
-	world          *World
-	mask           bitmask256
-	id1            uint8
-	id2            uint8
-	
+	world *World
+	mask  bitmask256
+	id1   uint8
+	id2   uint8
+
 	matchingArches []*archetype
 	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
 	curMatchIdx    int    // index into matchingArches
@@ -44,17 +31,17 @@ type Filter2[T1 any, T2 any] struct {
 func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
-	
+
 	if id2 == id1 {
 		panic("ecs: duplicate component types in Filter2")
 	}
 	var m bitmask256
 	m.set(id1)
 	m.set(id2)
-	
+
 	f := &Filter2[T1, T2]{world: w, mask: m, id1: id1, id2: id2, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
@@ -125,7 +112,7 @@ func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 	a := f.matchingArches[f.curMatchIdx]
 	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
@@ -168,28 +155,15 @@ func (f *Filter2[T1, T2]) Entities() []Entity {
 	return ents
 }
 
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter3 provides a fast, cache-friendly iterator over all entities that
 // have the 3 components: T1, T2, T3.
 type Filter3[T1 any, T2 any, T3 any] struct {
-	world          *World
-	mask           bitmask256
-	id1            uint8
-	id2            uint8
-	id3            uint8
-	
+	world *World
+	mask  bitmask256
+	id1   uint8
+	id2   uint8
+	id3   uint8
+
 	matchingArches []*archetype
 	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
 	curMatchIdx    int    // index into matchingArches
@@ -209,11 +183,11 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in Filter3")
 	}
@@ -221,7 +195,7 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	m.set(id1)
 	m.set(id2)
 	m.set(id3)
-	
+
 	f := &Filter3[T1, T2, T3]{world: w, mask: m, id1: id1, id2: id2, id3: id3, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
@@ -293,7 +267,7 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 	ptr1 := unsafe.Pointer(uintptr(a.compPointers[f.id1]) + uintptr(f.curIdx)*a.compSizes[f.id1])
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
@@ -336,29 +310,16 @@ func (f *Filter3[T1, T2, T3]) Entities() []Entity {
 	return ents
 }
 
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter4 provides a fast, cache-friendly iterator over all entities that
 // have the 4 components: T1, T2, T3, T4.
 type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
-	world          *World
-	mask           bitmask256
-	id1            uint8
-	id2            uint8
-	id3            uint8
-	id4            uint8
-	
+	world *World
+	mask  bitmask256
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
+
 	matchingArches []*archetype
 	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
 	curMatchIdx    int    // index into matchingArches
@@ -379,12 +340,12 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in Filter4")
 	}
@@ -393,7 +354,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	m.set(id2)
 	m.set(id3)
 	m.set(id4)
-	
+
 	f := &Filter4[T1, T2, T3, T4]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
@@ -466,7 +427,7 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 	ptr2 := unsafe.Pointer(uintptr(a.compPointers[f.id2]) + uintptr(f.curIdx)*a.compSizes[f.id2])
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
@@ -509,30 +470,17 @@ func (f *Filter4[T1, T2, T3, T4]) Entities() []Entity {
 	return ents
 }
 
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter5 provides a fast, cache-friendly iterator over all entities that
 // have the 5 components: T1, T2, T3, T4, T5.
 type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
-	world          *World
-	mask           bitmask256
-	id1            uint8
-	id2            uint8
-	id3            uint8
-	id4            uint8
-	id5            uint8
-	
+	world *World
+	mask  bitmask256
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
+	id5   uint8
+
 	matchingArches []*archetype
 	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
 	curMatchIdx    int    // index into matchingArches
@@ -554,13 +502,13 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in Filter5")
 	}
@@ -570,7 +518,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	m.set(id3)
 	m.set(id4)
 	m.set(id5)
-	
+
 	f := &Filter5[T1, T2, T3, T4, T5]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
@@ -644,7 +592,7 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 	ptr3 := unsafe.Pointer(uintptr(a.compPointers[f.id3]) + uintptr(f.curIdx)*a.compSizes[f.id3])
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
 	ptr5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
@@ -687,31 +635,18 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Entities() []Entity {
 	return ents
 }
 
-// This template generates the code for N-ary Filters (Filter2, Filter3, etc.).
-// A Filter is a high-performance iterator (or query) that finds all entities
-// possessing a specific set of components. It works by iterating directly over
-// the contiguous memory blocks of matching archetypes, which is extremely fast.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types.
-// - .Components: A slice of ComponentInfo structs for looping.
-// - .ReturnTypes: The list of pointer types for the Get() method, e.g., "*T1, *T2".
-// - .ReturnPtrs: The expression for returning the pointers, e.g., "(*T1)(p1), (*T2)(p2)".
 // Filter6 provides a fast, cache-friendly iterator over all entities that
 // have the 6 components: T1, T2, T3, T4, T5, T6.
 type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
-	world          *World
-	mask           bitmask256
-	id1            uint8
-	id2            uint8
-	id3            uint8
-	id4            uint8
-	id5            uint8
-	id6            uint8
-	
+	world *World
+	mask  bitmask256
+	id1   uint8
+	id2   uint8
+	id3   uint8
+	id4   uint8
+	id5   uint8
+	id6   uint8
+
 	matchingArches []*archetype
 	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
 	curMatchIdx    int    // index into matchingArches
@@ -734,14 +669,14 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
-	
+
 	id1 := w.getCompTypeID(t1)
 	id2 := w.getCompTypeID(t2)
 	id3 := w.getCompTypeID(t3)
 	id4 := w.getCompTypeID(t4)
 	id5 := w.getCompTypeID(t5)
 	id6 := w.getCompTypeID(t6)
-	
+
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in Filter6")
 	}
@@ -752,7 +687,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	m.set(id4)
 	m.set(id5)
 	m.set(id6)
-	
+
 	f := &Filter6[T1, T2, T3, T4, T5, T6]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, id6: id6, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
 	return f
@@ -827,7 +762,7 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 	ptr4 := unsafe.Pointer(uintptr(a.compPointers[f.id4]) + uintptr(f.curIdx)*a.compSizes[f.id4])
 	ptr5 := unsafe.Pointer(uintptr(a.compPointers[f.id5]) + uintptr(f.curIdx)*a.compSizes[f.id5])
 	ptr6 := unsafe.Pointer(uintptr(a.compPointers[f.id6]) + uintptr(f.curIdx)*a.compSizes[f.id6])
-	
+
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }
 
@@ -869,4 +804,3 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entities() []Entity {
 	}
 	return ents
 }
-

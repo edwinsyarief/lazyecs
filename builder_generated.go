@@ -5,7 +5,6 @@ import (
 	"unsafe"
 )
 
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.
@@ -263,7 +262,6 @@ func (b *Builder2[T1, T2]) SetBatch(entities []Entity, v1 T1, v2 T2) {
 	}
 }
 
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.
@@ -550,7 +548,6 @@ func (b *Builder3[T1, T2, T3]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3) 
 	}
 }
 
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.
@@ -866,7 +863,6 @@ func (b *Builder4[T1, T2, T3, T4]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 
 	}
 }
 
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.
@@ -1211,7 +1207,6 @@ func (b *Builder5[T1, T2, T3, T4, T5]) SetBatch(entities []Entity, v1 T1, v2 T2,
 	}
 }
 
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.

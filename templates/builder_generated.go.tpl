@@ -1,4 +1,3 @@
-// This template generates the code for N-ary Builders (Builder2, Builder3, etc.).
 // A Builder is a highly optimized factory for creating entities with a fixed set
 // of components. By pre-calculating the archetype, it makes entity creation an
 // extremely fast, allocation-free operation.
