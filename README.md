@@ -54,7 +54,7 @@ A `Builder` is the most efficient way to create entities with a predefined set o
 
 ```go
 // Create a builder for entities that have both Position and Velocity.
-builder := teishoku.NewBuilder2[Position, Velocity](world)
+builder := teishoku.NewBuilder2[Position, Velocity](&world)
 
 // Create 100 entities with these components.
 for i := 0; i < 100; i++ {
@@ -65,6 +65,13 @@ for i := 0; i < 100; i++ {
     pos.X = float32(i) * 2.0
     vel.VX = 1.0
 }
+
+// OR
+
+builder.NewEntities(100)
+
+// Use filter to iterate and set value
+
 ```
 
 ### 4. Create a System with a Filter
@@ -73,7 +80,7 @@ A `Filter` (or "query") allows you to iterate over all entities that have a spec
 
 ```go
 // Create a filter to find all entities with Position and Velocity.
-query := teishoku.NewFilter2[Position, Velocity](world)
+query := teishoku.NewFilter2[Position, Velocity](&world)
 
 // This is your system's main loop.
 for query.Next() {
