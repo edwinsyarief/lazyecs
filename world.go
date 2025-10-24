@@ -371,7 +371,7 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 	a.size--
 }
 
-/* // memCopy copies size bytes from src to dst using word-by-word copy for performance.
+// memCopy copies size bytes from src to dst using word-by-word copy for performance.
 func memCopy(dst, src unsafe.Pointer, size uintptr) {
 	wordSize := unsafe.Sizeof(uintptr(0))
 	words := size / wordSize
@@ -390,14 +390,4 @@ func memCopy(dst, src unsafe.Pointer, size uintptr) {
 		d = unsafe.Add(d, 1)
 		s = unsafe.Add(s, 1)
 	}
-} */
-
-// memCopy copies size bytes from src to dst.
-func memCopy(dst, src unsafe.Pointer, size uintptr) {
-	if size == 0 {
-		return
-	}
-	dstSlice := unsafe.Slice((*byte)(dst), size)
-	srcSlice := unsafe.Slice((*byte)(src), size)
-	copy(dstSlice, srcSlice)
 }
