@@ -133,7 +133,7 @@ func (f *Filter[T]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1

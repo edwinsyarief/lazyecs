@@ -117,7 +117,7 @@ func NewWorld(initialCapacity int) World {
 		nextEntityVer:    1,
 		archetypeVersion: 0,
 	}
-	for i := 0; i < initialCapacity; i++ {
+	for i := range initialCapacity {
 		// fill freeIDs with [cap-1 .. 0]
 		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
 	}
@@ -321,7 +321,7 @@ func (w *World) expand() {
 	w.metas = append(w.metas, newMetas...)
 	// extend freeIDs with new IDs in reverse order
 	newFree := make([]uint32, delta)
-	for i := 0; i < delta; i++ {
+	for i := range delta {
 		newFree[i] = uint32(newCap - 1 - i)
 	}
 	w.freeIDs = append(w.freeIDs, newFree...)
@@ -371,21 +371,33 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 	a.size--
 }
 
-// memCopy copies size bytes from src to dst using word-by-word copy for performance.
+/* // memCopy copies size bytes from src to dst using word-by-word copy for performance.
 func memCopy(dst, src unsafe.Pointer, size uintptr) {
 	wordSize := unsafe.Sizeof(uintptr(0))
 	words := size / wordSize
 	d := dst
 	s := src
-	for i := uintptr(0); i < words; i++ {
+	for i := range words {
+		_ = i
 		*(*uintptr)(d) = *(*uintptr)(s)
 		d = unsafe.Add(d, wordSize)
 		s = unsafe.Add(s, wordSize)
 	}
 	rem := size % wordSize
-	for i := uintptr(0); i < rem; i++ {
+	for i := range rem {
+		_ = i
 		*(*byte)(d) = *(*byte)(s)
 		d = unsafe.Add(d, 1)
 		s = unsafe.Add(s, 1)
 	}
+} */
+
+// memCopy copies size bytes from src to dst.
+func memCopy(dst, src unsafe.Pointer, size uintptr) {
+	if size == 0 {
+		return
+	}
+	dstSlice := unsafe.Slice((*byte)(dst), size)
+	srcSlice := unsafe.Slice((*byte)(src), size)
+	copy(dstSlice, srcSlice)
 }

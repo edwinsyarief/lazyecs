@@ -124,7 +124,7 @@ func (f *Filter2[T1, T2]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -279,7 +279,7 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -439,7 +439,7 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -604,7 +604,7 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -774,7 +774,7 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
+		for i := range a.size {
 			ent := a.entityIDs[i]
 			meta := &f.world.metas[ent.ID]
 			meta.archetypeIndex = -1

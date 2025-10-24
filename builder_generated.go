@@ -88,7 +88,7 @@ func (b *Builder2[T1, T2]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -120,7 +120,7 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -350,7 +350,7 @@ func (b *Builder3[T1, T2, T3]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -383,7 +383,7 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -641,7 +641,7 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -675,7 +675,7 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, 
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -961,7 +961,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -996,7 +996,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -1310,7 +1310,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -1346,7 +1346,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, co
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index

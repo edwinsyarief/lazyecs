@@ -76,7 +76,7 @@ func (b *Builder[T]) NewEntities(count int) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
@@ -108,7 +108,7 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 	a.size += count
 	popped := w.freeIDs[len(w.freeIDs)-count:]
 	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
-	for k := 0; k < count; k++ {
+	for k := range count {
 		id := popped[k]
 		meta := &w.metas[id]
 		meta.archetypeIndex = a.index
