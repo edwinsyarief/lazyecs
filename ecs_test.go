@@ -481,9 +481,19 @@ func TestFilter(t *testing.T) {
 	}
 	builder2.NewEntities(2)
 	filter.Reset()
+	for filter.Next() {
+		p := filter.Get()
+		p.X += 10
+		p.Y += 10
+	}
+	filter.Reset()
 	count = 0
 	for filter.Next() {
 		count++
+		p := filter.Get()
+		if p.X != 10 || p.Y != 10 {
+			t.Errorf("component data incorrect after update, expected (10, 10), got (%f,%f)", p.X, p.Y)
+		}
 	}
 	if count != 7 {
 		t.Errorf("expected 7 entities, got %d", count)
