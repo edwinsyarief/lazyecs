@@ -1,18 +1,23 @@
 // Filter{{.N}} provides a fast, cache-friendly iterator over all entities that
 // have the {{.N}} components: {{.TypeVars}}.
 type Filter{{.N}}[{{.Types}}] struct {
-	world          *World
-	mask           bitmask256
+	world               *World
+	{{range .Components}}curBase{{.Index}}            unsafe.Pointer
+	{{end}}
+	matchingArches      []*archetype
+	curEntityIDs        []Entity
+	cachedEntities      []Entity
+	mask                bitmask256
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	{{range .Components}}compSize{{.Index}}            uintptr
+	{{end}}
+	curArchSize         int
+	curEnt              Entity
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
 	{{range .Components}}id{{.Index}}            uint8
 	{{end}}
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
-
-	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
-	cachedEntities      []Entity
 }
 
 // NewFilter{{.N}} creates a new `Filter` that iterates over all entities
@@ -24,9 +29,7 @@ type Filter{{.N}}[{{.Types}}] struct {
 // Returns:
 //   - A pointer to the newly created `Filter{{.N}}`.
 func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
-	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
-	{{end}}
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(reflect.TypeFor[{{.TypeName}}]())
 	{{end}}
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in Filter{{.N}}")
@@ -35,8 +38,11 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}m.set(id{{.Index}})
 	{{end}}
 	f := &Filter{{.N}}[{{.TypeVars}}]{world: w, mask: m, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
+	{{range .Components}}f.compSize{{.Index}} = w.compIDToSize[id{{.Index}}]
+	{{end}}
 	f.updateMatching()
 	f.updateCachedEntities()
+	f.Reset()
 	return f
 }
 
@@ -85,6 +91,13 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
+	if len(f.matchingArches) > 0 {
+		a := f.matchingArches[0]
+		{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
+		{{end}}
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
+	}
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
@@ -95,16 +108,20 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
 	for {
 		f.curIdx++
-		if f.curMatchIdx >= len(f.matchingArches) {
-			return false
-		}
-		a := f.matchingArches[f.curMatchIdx]
-		if f.curIdx >= a.size {
+		if f.curIdx >= f.curArchSize {
 			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
+			{{end}}
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
 			f.curIdx = -1
 			continue
 		}
-		f.curEnt = a.entityIDs[f.curIdx]
+		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 }
@@ -122,8 +139,7 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data ({{.ReturnTypes}}).
 func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
-	a := f.matchingArches[f.curMatchIdx]
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[f.id{{.Index}}]) + uintptr(f.curIdx)*a.compSizes[f.id{{.Index}}])
+	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(f.curBase{{.Index}}) + uintptr(f.curIdx)*f.compSize{{.Index}})
 	{{end}}
 	return {{.ReturnPtrs}}
 }

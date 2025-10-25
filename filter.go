@@ -13,17 +13,20 @@ import (
 // This is the filter for entities with one component. Generated filters for
 // multiple components (e.g., Filter2, Filter3) follow a similar pattern.
 type Filter[T any] struct {
-	world          *World
-	matchingArches []*archetype
-	mask           bitmask256
-	curMatchIdx    int // index into matchingArches
-	curIdx         int // index into the current archetype's entity/component array
-	curEnt         Entity
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	compID         uint8
-
-	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	world               *World
+	curBase             unsafe.Pointer
+	matchingArches      []*archetype
+	curEntityIDs        []Entity
 	cachedEntities      []Entity
+	mask                bitmask256
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	compSize            uintptr
+	curArchSize         int
+	curEnt              Entity
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	compID              uint8
 }
 
 // NewFilter creates a new `Filter` that iterates over all entities possessing
@@ -36,13 +39,14 @@ type Filter[T any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter[T]`.
 func NewFilter[T any](w *World) *Filter[T] {
-	t := reflect.TypeFor[T]()
-	id := w.getCompTypeID(t)
+	id := w.getCompTypeID(reflect.TypeFor[T]())
 	var m bitmask256
 	m.set(id)
 	f := &Filter[T]{world: w, mask: m, compID: id, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
+	f.compSize = w.compIDToSize[id]
 	f.updateMatching()
 	f.updateCachedEntities()
+	f.Reset()
 	return f
 }
 
@@ -94,6 +98,12 @@ func (f *Filter[T]) Reset() {
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
+	if len(f.matchingArches) > 0 {
+		a := f.matchingArches[0]
+		f.curBase = a.compPointers[f.compID]
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
+	}
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
@@ -112,16 +122,19 @@ func (f *Filter[T]) Reset() {
 func (f *Filter[T]) Next() bool {
 	for {
 		f.curIdx++
-		if f.curMatchIdx >= len(f.matchingArches) {
-			return false
-		}
-		a := f.matchingArches[f.curMatchIdx]
-		if f.curIdx >= a.size {
+		if f.curIdx >= f.curArchSize {
 			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase = a.compPointers[f.compID]
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
 			f.curIdx = -1
 			continue
 		}
-		f.curEnt = a.entityIDs[f.curIdx]
+		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 }
@@ -141,8 +154,7 @@ func (f *Filter[T]) Entity() Entity {
 // Returns:
 //   - A pointer to the component data (*T).
 func (f *Filter[T]) Get() *T {
-	a := f.matchingArches[f.curMatchIdx]
-	ptr := unsafe.Pointer(uintptr(a.compPointers[f.compID]) + uintptr(f.curIdx)*a.compSizes[f.compID])
+	ptr := unsafe.Pointer(uintptr(f.curBase) + uintptr(f.curIdx)*f.compSize)
 	return (*T)(ptr)
 }
 

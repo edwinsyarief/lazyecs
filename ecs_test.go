@@ -479,6 +479,15 @@ func TestFilter(t *testing.T) {
 	if count != 5 {
 		t.Error("reset failed")
 	}
+	builder2.NewEntities(2)
+	filter.Reset()
+	count = 0
+	for filter.Next() {
+		count++
+	}
+	if count != 7 {
+		t.Errorf("expected 7 entities, got %d", count)
+	}
 }
 
 func TestFilter2(t *testing.T) {
