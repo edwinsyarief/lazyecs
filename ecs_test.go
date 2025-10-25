@@ -1249,7 +1249,7 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 	}
 }
 
-func BenchmarkFilterGetEntities(b *testing.B) {
+func BenchmarkFilterGetEntitiesCached(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -1265,6 +1265,30 @@ func BenchmarkFilterGetEntities(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
+				filter.Entities()
+			}
+		})
+	}
+}
+
+func BenchmarkFilterGetEntitiesUncached(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](&w)
+			filter := NewFilter[Position](&w)
+
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w.ClearEntities()
+				builder.NewEntities(size)
+				b.StartTimer()
 				filter.Entities()
 			}
 		})

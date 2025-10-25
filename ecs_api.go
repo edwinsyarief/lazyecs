@@ -22,9 +22,6 @@ func GetComponent[T any](w *World, e Entity) *T {
 		return nil
 	}
 	meta := w.metas[e.ID]
-	if meta.version == 0 || meta.version != e.Version {
-		return nil
-	}
 	id := w.getCompTypeID(reflect.TypeFor[T]())
 	a := w.archetypes[meta.archetypeIndex]
 	i := id >> 6

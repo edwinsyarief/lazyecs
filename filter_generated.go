@@ -13,11 +13,13 @@ type Filter2[T1 any, T2 any] struct {
 	id1   uint8
 	id2   uint8
 
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
+	matchingArches      []*archetype
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	curEnt              Entity
 }
 
 // NewFilter2 creates a new `Filter` that iterates over all entities
@@ -44,6 +46,7 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 
 	f := &Filter2[T1, T2]{world: w, mask: m, id1: id1, id2: id2, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -64,11 +67,31 @@ func (f *Filter2[T1, T2]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter2[T1, T2]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter2[T1, T2]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -134,25 +157,18 @@ func (f *Filter2[T1, T2]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
+// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
 func (f *Filter2[T1, T2]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }
 
 // Filter3 provides a fast, cache-friendly iterator over all entities that
@@ -164,11 +180,13 @@ type Filter3[T1 any, T2 any, T3 any] struct {
 	id2   uint8
 	id3   uint8
 
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
+	matchingArches      []*archetype
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	curEnt              Entity
 }
 
 // NewFilter3 creates a new `Filter` that iterates over all entities
@@ -198,6 +216,7 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 
 	f := &Filter3[T1, T2, T3]{world: w, mask: m, id1: id1, id2: id2, id3: id3, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -218,11 +237,31 @@ func (f *Filter3[T1, T2, T3]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter3[T1, T2, T3]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter3[T1, T2, T3]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -289,25 +328,18 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
+// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
 func (f *Filter3[T1, T2, T3]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }
 
 // Filter4 provides a fast, cache-friendly iterator over all entities that
@@ -320,11 +352,13 @@ type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 	id3   uint8
 	id4   uint8
 
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
+	matchingArches      []*archetype
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	curEnt              Entity
 }
 
 // NewFilter4 creates a new `Filter` that iterates over all entities
@@ -357,6 +391,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 
 	f := &Filter4[T1, T2, T3, T4]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -377,11 +412,31 @@ func (f *Filter4[T1, T2, T3, T4]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter4[T1, T2, T3, T4]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter4[T1, T2, T3, T4]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -449,25 +504,18 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
+// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
 func (f *Filter4[T1, T2, T3, T4]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }
 
 // Filter5 provides a fast, cache-friendly iterator over all entities that
@@ -481,11 +529,13 @@ type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	id4   uint8
 	id5   uint8
 
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
+	matchingArches      []*archetype
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	curEnt              Entity
 }
 
 // NewFilter5 creates a new `Filter` that iterates over all entities
@@ -521,6 +571,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 
 	f := &Filter5[T1, T2, T3, T4, T5]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -541,11 +592,31 @@ func (f *Filter5[T1, T2, T3, T4, T5]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter5[T1, T2, T3, T4, T5]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -614,25 +685,18 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
+// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
 func (f *Filter5[T1, T2, T3, T4, T5]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }
 
 // Filter6 provides a fast, cache-friendly iterator over all entities that
@@ -647,11 +711,13 @@ type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 	id5   uint8
 	id6   uint8
 
-	matchingArches []*archetype
-	lastVersion    uint32 // world.archetypeVersion when matchingArches was last updated
-	curMatchIdx    int    // index into matchingArches
-	curIdx         int    // index into the current archetype's entity/component array
-	curEnt         Entity
+	matchingArches      []*archetype
+	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
+	curMatchIdx         int // index into matchingArches
+	curIdx              int // index into the current archetype's entity/component array
+	curEnt              Entity
 }
 
 // NewFilter6 creates a new `Filter` that iterates over all entities
@@ -690,6 +756,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 
 	f := &Filter6[T1, T2, T3, T4, T5, T6]{world: w, mask: m, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, id6: id6, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -710,11 +777,31 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -784,23 +871,16 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
+// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }

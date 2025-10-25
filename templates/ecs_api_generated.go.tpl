@@ -15,9 +15,7 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 		return {{.ReturnNil}}
 	}
 	meta := w.metas[e.ID]
-	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
-	{{end}}
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	{{range .Components}}id{{.Index}} := w.getCompTypeID(reflect.TypeFor[{{.TypeName}}]())
 	{{end}}
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in GetComponent{{.N}}")

@@ -22,11 +22,8 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 		return nil, nil
 	}
 	meta := w.metas[e.ID]
-	t1 := reflect.TypeFor[T1]()
-	t2 := reflect.TypeFor[T2]()
-
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
+	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in GetComponent2")
@@ -226,13 +223,9 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 		return nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	t1 := reflect.TypeFor[T1]()
-	t2 := reflect.TypeFor[T2]()
-	t3 := reflect.TypeFor[T3]()
-
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
+	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in GetComponent3")
@@ -458,15 +451,10 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 		return nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	t1 := reflect.TypeFor[T1]()
-	t2 := reflect.TypeFor[T2]()
-	t3 := reflect.TypeFor[T3]()
-	t4 := reflect.TypeFor[T4]()
-
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
+	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in GetComponent4")
@@ -718,17 +706,11 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 		return nil, nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	t1 := reflect.TypeFor[T1]()
-	t2 := reflect.TypeFor[T2]()
-	t3 := reflect.TypeFor[T3]()
-	t4 := reflect.TypeFor[T4]()
-	t5 := reflect.TypeFor[T5]()
-
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
+	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
+	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in GetComponent5")
@@ -1006,19 +988,12 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 		return nil, nil, nil, nil, nil, nil
 	}
 	meta := w.metas[e.ID]
-	t1 := reflect.TypeFor[T1]()
-	t2 := reflect.TypeFor[T2]()
-	t3 := reflect.TypeFor[T3]()
-	t4 := reflect.TypeFor[T4]()
-	t5 := reflect.TypeFor[T5]()
-	t6 := reflect.TypeFor[T6]()
-
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
-	id6 := w.getCompTypeID(t6)
+	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
+	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
+	id6 := w.getCompTypeID(reflect.TypeFor[T6]())
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in GetComponent6")

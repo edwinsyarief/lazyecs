@@ -90,6 +90,7 @@ type World struct {
 	initialCapacity  int    // initial capacity, used for expansion
 	nextEntityVer    uint32 // version for the next created entity
 	archetypeVersion uint32 // incremented when a new archetype is created
+	mutationVersion  uint32 // incremented on entity mutations
 	nextCompTypeID   uint16 // counter for assigning new component type IDs
 }
 
@@ -116,37 +117,35 @@ func NewWorld(initialCapacity int) World {
 		nextCompTypeID:   0,
 		nextEntityVer:    1,
 		archetypeVersion: 0,
+		mutationVersion:  0,
 	}
 	for i := range initialCapacity {
-		// fill freeIDs with [cap-1 .. 0]
 		w.freeIDs[i] = uint32(initialCapacity - 1 - i)
-	}
-	for i := range w.metas {
 		w.metas[i].archetypeIndex = -1
+		w.metas[i].index = -1
 		w.metas[i].version = 0
 	}
-	// Pre-create empty archetype for zero-component entities
-	w.getOrCreateArchetype(bitmask256{}, nil)
+	// Create the empty archetype
+	var emptyMask bitmask256
+	w.getOrCreateArchetype(emptyMask, []compSpec{})
+	w.archetypeVersion = 1
+	w.nextEntityVer = 1
 	return w
 }
 
 // CreateEntity creates a new entity with no components.
 func (w *World) CreateEntity() Entity {
-	var mask bitmask256
-	var specs []compSpec
-	a := w.getOrCreateArchetype(mask, specs)
+	a := w.archetypes[0] // empty archetype
+	w.mutationVersion++
 	return w.createEntity(a)
 }
 
-// CreateEntities creates a batch of entities with no components and returns them.
-// The returned slice is a view into internal storage; do not modify its contents.
+// CreateEntities creates a batch of entities with no components and returns their IDs.
 func (w *World) CreateEntities(count int) []Entity {
 	if count == 0 {
 		return nil
 	}
-	var mask bitmask256
-	var specs []compSpec
-	a := w.getOrCreateArchetype(mask, specs)
+	a := w.archetypes[0]
 	for len(w.freeIDs) < count {
 		w.expand()
 	}
@@ -164,73 +163,48 @@ func (w *World) CreateEntities(count int) []Entity {
 		a.entityIDs[startSize+k] = ent
 		w.nextEntityVer++
 	}
+	w.mutationVersion++
 	return a.entityIDs[startSize : startSize+count]
 }
 
-// RemoveEntity removes an entity from the World, freeing its ID for reuse and
-// invalidating all references to it. If the entity is invalid or already removed,
-// this operation does nothing.
-//
-// Parameters:
-//   - e: The Entity to remove.
+// RemoveEntity removes an entity, recycling its ID.
 func (w *World) RemoveEntity(e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
 	meta := &w.metas[e.ID]
 	a := w.archetypes[meta.archetypeIndex]
-	idx := meta.index
-	lastIdx := a.size - 1
-	if idx < lastIdx {
-		lastEnt := a.entityIDs[lastIdx]
-		a.entityIDs[idx] = lastEnt
-		for _, cid := range a.compOrder {
-			src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(lastIdx)*a.compSizes[cid])
-			dst := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(idx)*a.compSizes[cid])
-			memCopy(dst, src, a.compSizes[cid])
-		}
-		w.metas[lastEnt.ID].index = idx
-	}
-	// Invalidate the removed entity's metadata and recycle its ID.
-	a.size--
-	w.freeIDs = append(w.freeIDs, e.ID)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = -1
 	meta.index = -1
-	meta.version = 0 // Mark as dead
+	meta.version = 0
+	w.freeIDs = append(w.freeIDs, e.ID)
+	w.mutationVersion++
 }
 
-// RemoveEntities removes multiple entities in a batch. It processes each entity
-// individually but is convenient for removing lists of entities. Invalid entities
-// are skipped. This operation incurs no additional allocations beyond what
-// RemoveEntity would for each.
-//
-// Parameters:
-//   - ents: A slice of Entities to remove.
+// RemoveEntities removes multiple entities.
 func (w *World) RemoveEntities(ents []Entity) {
 	for _, e := range ents {
 		w.RemoveEntity(e)
 	}
 }
 
-// ClearEntities removes all entities from the World, resetting it to an empty state
-// while preserving archetypes and component registrations. This is extremely efficient,
-// as it batch-invalidates all metadata and resets free IDs without per-entity operations.
-//
-// After calling this, all previous Entity references become invalid.
+// ClearEntities removes all entities from the world.
 func (w *World) ClearEntities() {
-	w.freeIDs = w.freeIDs[:0]
-	for i := 0; i < w.capacity; i++ {
-		w.freeIDs = append(w.freeIDs, uint32(w.capacity-1-i))
-	}
 	for i := range w.metas {
 		w.metas[i].archetypeIndex = -1
 		w.metas[i].index = -1
 		w.metas[i].version = 0
 	}
+	w.freeIDs = w.freeIDs[:0]
+	for i := 0; i < w.capacity; i++ {
+		w.freeIDs = append(w.freeIDs, uint32(w.capacity-1-i))
+	}
 	for _, a := range w.archetypes {
 		a.size = 0
 	}
 	w.nextEntityVer = 1
+	w.mutationVersion++
 }
 
 // IsValid checks if an entity reference is still valid (i.e., it has not been
@@ -316,6 +290,7 @@ func (w *World) expand() {
 	newMetas := make([]entityMeta, delta)
 	for i := range newMetas {
 		newMetas[i].archetypeIndex = -1
+		newMetas[i].index = -1
 		newMetas[i].version = 0
 	}
 	w.metas = append(w.metas, newMetas...)
@@ -351,6 +326,7 @@ func (w *World) createEntity(a *archetype) Entity {
 	a.entityIDs[a.size] = ent
 	a.size++
 	w.nextEntityVer++
+	w.mutationVersion++
 	return ent
 }
 
@@ -369,6 +345,7 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 		w.metas[lastEnt.ID].index = idx
 	}
 	a.size--
+	w.mutationVersion++
 }
 
 // memCopy copies size bytes from src to dst using word-by-word copy for performance.

@@ -10,6 +10,9 @@ type Filter{{.N}}[{{.Types}}] struct {
 	curMatchIdx    int    // index into matchingArches
 	curIdx         int    // index into the current archetype's entity/component array
 	curEnt         Entity
+
+	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
+	cachedEntities      []Entity
 }
 
 // NewFilter{{.N}} creates a new `Filter` that iterates over all entities
@@ -33,6 +36,7 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	{{end}}
 	f := &Filter{{.N}}[{{.TypeVars}}]{world: w, mask: m, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
 	f.updateMatching()
+	f.updateCachedEntities()
 	return f
 }
 
@@ -53,11 +57,31 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) updateMatching() {
 	f.lastVersion = f.world.archetypeVersion
 }
 
+// updateCachedEntities rebuilds the cached list of entities.
+func (f *Filter{{.N}}[{{.TypeVars}}]) updateCachedEntities() {
+	total := 0
+	for _, a := range f.matchingArches {
+		total += a.size
+	}
+	if cap(f.cachedEntities) < total {
+		f.cachedEntities = make([]Entity, total)
+	} else {
+		f.cachedEntities = f.cachedEntities[:total]
+	}
+	idx := 0
+	for _, a := range f.matchingArches {
+		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
+	}
+	f.lastMutationVersion = f.world.mutationVersion
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 	if f.world.archetypeVersion != f.lastVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -122,23 +146,15 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
 		}
 		a.size = 0
 	}
+	f.world.mutationVersion++
 	f.Reset()
 }
 
 // Entities returns all entities that match the filter.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	ents := make([]Entity, total)
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(ents[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	return ents
+	return f.cachedEntities
 }
