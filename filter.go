@@ -13,11 +13,12 @@ type Filter[T any] struct {
 	curBase      unsafe.Pointer
 	curEntityIDs []Entity
 	queryCache
-	curMatchIdx int // index into matchingArches
-	curIdx      int // index into the current archetype's entity/component array
-	compSize    uintptr
-	curArchSize int
-	compID      uint8
+	curArchIdx   int
+	curChunkIdx  int
+	curIdx       int
+	compSize     uintptr
+	curChunkSize int
+	compID       uint8
 }
 
 // NewFilter creates a new `Filter` that iterates over all entities possessing
@@ -36,7 +37,8 @@ func NewFilter[T any](w *World) *Filter[T] {
 	f := &Filter[T]{
 		queryCache:  newQueryCache(w, m),
 		compID:      id,
-		curMatchIdx: 0,
+		curArchIdx:  0,
+		curChunkIdx: 0,
 		curIdx:      -1,
 	}
 	f.compSize = w.components.compIDToSize[id]
@@ -61,15 +63,21 @@ func (f *Filter[T]) Reset() {
 		f.updateMatching()
 		f.updateCachedEntities()
 	}
-	f.curMatchIdx = 0
+	f.curArchIdx = 0
+	f.curChunkIdx = 0
 	f.curIdx = -1
 	if len(f.matchingArches) > 0 {
 		a := f.matchingArches[0]
-		f.curBase = a.compPointers[f.compID]
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+		if len(a.chunks) > 0 {
+			c := a.chunks[0]
+			f.curBase = c.compPointers[f.compID]
+			f.curEntityIDs = unsafe.Slice((*Entity)(unsafe.Pointer(&c.entityIDs[0])), c.size)
+			f.curChunkSize = c.size
+		} else {
+			f.curChunkSize = 0
+		}
 	} else {
-		f.curArchSize = 0
+		f.curChunkSize = 0
 	}
 }
 
@@ -88,17 +96,35 @@ func (f *Filter[T]) Reset() {
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter[T]) Next() bool {
 	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	if f.curIdx < f.curChunkSize {
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	f.curChunkIdx++
+	if f.curArchIdx >= len(f.matchingArches) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase = a.compPointers[f.compID]
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	a := f.matchingArches[f.curArchIdx]
+	if f.curChunkIdx < len(a.chunks) {
+		c := a.chunks[f.curChunkIdx]
+		f.curBase = c.compPointers[f.compID]
+		f.curEntityIDs = unsafe.Slice((*Entity)(unsafe.Pointer(&c.entityIDs[0])), c.size)
+		f.curChunkSize = c.size
+		f.curIdx = 0
+		return true
+	}
+	f.curArchIdx++
+	if f.curArchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a = f.matchingArches[f.curArchIdx]
+	f.curChunkIdx = 0
+	if len(a.chunks) == 0 {
+		return false
+	}
+	c := a.chunks[0]
+	f.curBase = c.compPointers[f.compID]
+	f.curEntityIDs = unsafe.Slice((*Entity)(unsafe.Pointer(&c.entityIDs[0])), c.size)
+	f.curChunkSize = c.size
 	f.curIdx = 0
 	return true
 }
@@ -133,14 +159,20 @@ func (f *Filter[T]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := 0; i < a.size; i++ {
-			ent := a.entityIDs[i]
-			meta := &f.world.entities.metas[ent.ID]
-			meta.archetypeIndex = -1
-			meta.index = -1
-			meta.version = 0
-			f.world.entities.freeIDs = append(f.world.entities.freeIDs, ent.ID)
+		for ci := 0; ci < len(a.chunks); ci++ {
+			c := a.chunks[ci]
+			for i := 0; i < c.size; i++ {
+				ent := c.entityIDs[i]
+				meta := &f.world.entities.metas[ent.ID]
+				meta.archetypeIndex = -1
+				meta.chunkIndex = -1
+				meta.index = -1
+				meta.version = 0
+				f.world.entities.freeIDs = append(f.world.entities.freeIDs, ent.ID)
+			}
+			c.size = 0
 		}
+		a.chunks = a.chunks[:0]
 		a.size = 0
 	}
 	f.world.mutationVersion++

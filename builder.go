@@ -5,29 +5,14 @@ import (
 	"unsafe"
 )
 
-// Builder provides a highly efficient, type-safe API for creating entities
-// with a predefined set of components. By pre-calculating the target
-// archetype, it minimizes overhead and avoids allocations when creating
-// entities, making it the ideal choice for spawning large numbers of entities
-// with the same component layout.
-//
-// This is the builder for entities with one component. Generated builders for
-// multiple components (e.g., Builder2, Builder3) follow a similar pattern.
+// Builder ...
 type Builder[T any] struct {
 	world  *World
 	arch   *archetype
 	compID uint8
 }
 
-// NewBuilder creates a new `Builder` for entities with a single component of
-// type `T`. It finds or creates the corresponding archetype and caches it for
-// future entity creation.
-//
-// Parameters:
-//   - w: The World in which to create entities.
-//
-// Returns:
-//   - A pointer to the configured `Builder[T]`.
+// NewBuilder ...
 func NewBuilder[T any](w *World) *Builder[T] {
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
@@ -38,102 +23,97 @@ func NewBuilder[T any](w *World) *Builder[T] {
 	return &Builder[T]{world: w, arch: arch, compID: id}
 }
 
-// New is a convenience method that constructs a new `Builder` instance for the
-// same component type, equivalent to calling `NewBuilder`.
+// New ...
 func (b *Builder[T]) New(w *World) *Builder[T] {
 	return NewBuilder[T](w)
 }
 
-// NewEntity creates a single new entity with the component layout defined by the
-// builder. This method is highly optimized and should not cause any garbage
-// collection overhead.
-//
-// Returns:
-//   - The newly created Entity.
+// NewEntity ...
 func (b *Builder[T]) NewEntity() Entity {
 	return b.world.createEntity(b.arch)
 }
 
-// NewEntities creates a batch of `count` entities with the component layout
-// defined by the builder. This is the most performant way to create many
-// entities at once, as it minimizes overhead by processing them in a single
-// operation.
-//
-// This method does not return the created entities to avoid allocations. Use a
-// `Filter` to query for and initialize them afterward.
-//
-// Parameters:
-//   - count: The number of entities to create.
+// NewEntities ...
 func (b *Builder[T]) NewEntities(count int) {
 	if count == 0 {
 		return
 	}
 	w := b.world
 	a := b.arch
-	for len(w.entities.freeIDs) < count {
-		w.expand()
+	remaining := count
+	for remaining > 0 {
+		if len(a.chunks) == 0 || a.chunks[len(a.chunks)-1].size == ChunkSize {
+			a.chunks = append(a.chunks, w.newChunk(a))
+		}
+		lastC := a.chunks[len(a.chunks)-1]
+		avail := ChunkSize - lastC.size
+		batch := min(avail, remaining)
+		if len(w.entities.freeIDs) < batch {
+			w.expand(batch - len(w.entities.freeIDs) + 1)
+		}
+		startIdx := lastC.size
+		popped := w.entities.freeIDs[len(w.entities.freeIDs)-batch:]
+		w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-batch]
+		for k := 0; k < batch; k++ {
+			id := popped[k]
+			meta := &w.entities.metas[id]
+			meta.archetypeIndex = a.index
+			meta.chunkIndex = len(a.chunks) - 1
+			meta.index = startIdx + k
+			meta.version = w.entities.nextEntityVer
+			ent := Entity{ID: id, Version: meta.version}
+			lastC.entityIDs[startIdx+k] = ent
+			w.entities.nextEntityVer++
+		}
+		lastC.size += batch
+		a.size += batch
+		remaining -= batch
 	}
-	startSize := a.size
-	a.size += count
-	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
-	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
-		id := popped[k]
-		meta := &w.entities.metas[id]
-		meta.archetypeIndex = a.index
-		meta.index = startSize + k
-		meta.version = w.entities.nextEntityVer
-		ent := Entity{ID: id, Version: meta.version}
-		a.entityIDs[startSize+k] = ent
-		w.entities.nextEntityVer++
-	}
+	w.mutationVersion++
 }
 
-// NewEntitiesWithValueSet creates a batch of `count` entities and initializes
-// their component of type `T` to the provided value. This is useful for
-// creating and setting up entities in one step.
-//
-// Parameters:
-//   - count: The number of entities to create.
-//   - comp: The initial value for the component `T`.
+// NewEntitiesWithValueSet ...
 func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 	if count == 0 {
 		return
 	}
 	w := b.world
 	a := b.arch
-	for len(w.entities.freeIDs) < count {
-		w.expand()
+	remaining := count
+	for remaining > 0 {
+		if len(a.chunks) == 0 || a.chunks[len(a.chunks)-1].size == ChunkSize {
+			a.chunks = append(a.chunks, w.newChunk(a))
+		}
+		lastC := a.chunks[len(a.chunks)-1]
+		avail := ChunkSize - lastC.size
+		batch := min(avail, remaining)
+		if len(w.entities.freeIDs) < batch {
+			w.expand(batch - len(w.entities.freeIDs) + 1)
+		}
+		startIdx := lastC.size
+		popped := w.entities.freeIDs[len(w.entities.freeIDs)-batch:]
+		w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-batch]
+		for k := 0; k < batch; k++ {
+			id := popped[k]
+			meta := &w.entities.metas[id]
+			meta.archetypeIndex = a.index
+			meta.chunkIndex = len(a.chunks) - 1
+			meta.index = startIdx + k
+			meta.version = w.entities.nextEntityVer
+			ent := Entity{ID: id, Version: meta.version}
+			lastC.entityIDs[startIdx+k] = ent
+			ptr := unsafe.Pointer(uintptr(lastC.compPointers[b.compID]) + uintptr(startIdx+k)*a.compSizes[b.compID])
+			*(*T)(ptr) = comp
+			w.entities.nextEntityVer++
+		}
+		lastC.size += batch
+		a.size += batch
+		remaining -= batch
 	}
-	startSize := a.size
-	a.size += count
-	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
-	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
-		id := popped[k]
-		meta := &w.entities.metas[id]
-		meta.archetypeIndex = a.index
-		meta.index = startSize + k
-		meta.version = w.entities.nextEntityVer
-		ent := Entity{ID: id, Version: meta.version}
-		a.entityIDs[startSize+k] = ent
-		ptr := unsafe.Pointer(uintptr(a.compPointers[b.compID]) + uintptr(startSize+k)*a.compSizes[b.compID])
-		*(*T)(ptr) = comp
-		w.entities.nextEntityVer++
-	}
+	w.mutationVersion++
 }
 
-// Get retrieves a pointer to the component of type `T` for the given entity.
-// This method is most efficient when the entity was created by this same
-// builder, as the archetype is already known.
-//
-// If the entity is invalid or does not have the component, this returns nil.
-//
-// Parameters:
-//   - e: The entity to get the component from.
-//
-// Returns:
-//   - A pointer to the component data (*T), or nil if not found.
+// Get ...
 func (b *Builder[T]) Get(e Entity) *T {
 	w := b.world
 	if !w.IsValid(e) {
@@ -147,23 +127,12 @@ func (b *Builder[T]) Get(e Entity) *T {
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
+	chunk := a.chunks[meta.chunkIndex]
+	ptr := unsafe.Pointer(uintptr(chunk.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 	return (*T)(ptr)
 }
 
-// Set adds or updates the component `T` for a given entity with the specified
-// value.
-//
-// If the entity already has the component, its value is updated. If it does
-// not, the component is added, which may trigger an archetype change for the
-// entity. This operation is slower than `Get` because it may involve moving
-// the entity between archetypes.
-//
-// It is safe to call this on an invalid entity; the operation will be ignored.
-//
-// Parameters:
-//   - e: The entity to modify.
-//   - comp: The component value to set.
+// Set ...
 func (b *Builder[T]) Set(e Entity, comp T) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -175,11 +144,11 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	i := id >> 6
 	o := id & 63
 	if (a.mask[i] & (uint64(1) << uint64(o))) != 0 {
-		ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
+		chunk := a.chunks[meta.chunkIndex]
+		ptr := unsafe.Pointer(uintptr(chunk.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 		*(*T)(ptr) = comp
 		return
 	}
-	// add new
 	newMask := a.mask
 	newMask.set(id)
 	var targetA *archetype
@@ -197,27 +166,29 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
-	newIdx := targetA.size
-	targetA.entityIDs[newIdx] = e
+	if len(targetA.chunks) == 0 || targetA.chunks[len(targetA.chunks)-1].size == ChunkSize {
+		targetA.chunks = append(targetA.chunks, w.newChunk(targetA))
+	}
+	newChunk := targetA.chunks[len(targetA.chunks)-1]
+	newIdx := newChunk.size
+	newChunk.entityIDs[newIdx] = e
+	newChunk.size++
 	targetA.size++
+	oldChunk := a.chunks[meta.chunkIndex]
 	for _, cid := range a.compOrder {
-		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
-		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		src := unsafe.Pointer(uintptr(oldChunk.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(newChunk.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
+	dst := unsafe.Pointer(uintptr(newChunk.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = comp
 	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
+	meta.chunkIndex = len(targetA.chunks) - 1
 	meta.index = newIdx
 }
 
-// SetBatch efficiently sets the component value for a slice of entities. It
-// iterates over the provided entities and calls `Set` for each one.
-//
-// Parameters:
-//   - entities: A slice of entities to modify.
-//   - comp: The component value to set for each entity.
+// SetBatch ...
 func (b *Builder[T]) SetBatch(entities []Entity, comp T) {
 	for _, e := range entities {
 		b.Set(e, comp)

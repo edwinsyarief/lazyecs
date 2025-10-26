@@ -29,7 +29,8 @@ func GetComponent[T any](w *World, e Entity) *T {
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
+	chunk := a.chunks[meta.chunkIndex]
+	ptr := unsafe.Pointer(uintptr(chunk.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 	return (*T)(ptr)
 }
 
@@ -55,56 +56,47 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
+	oldChunk := a.chunks[meta.chunkIndex]
 	if (a.mask[i] & (uint64(1) << uint64(o))) != 0 {
-		// already has, just set
-		ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
+		ptr := unsafe.Pointer(uintptr(oldChunk.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
 		*(*T)(ptr) = val
 		return
 	}
-	// add new
 	newMask := a.mask
 	newMask.set(id)
 	var targetA *archetype
 	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes.archetypes[idx]
 	} else {
-		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{
-				id:   cid,
-				typ:  w.components.compIDToType[cid],
-				size: w.components.compIDToSize[cid],
-			}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
-		tempSpecs[count] = compSpec{
-			id:   id,
-			typ:  w.components.compIDToType[id],
-			size: w.components.compIDToSize[id],
-		}
+		tempSpecs[count] = compSpec{id: id, typ: w.components.compIDToType[id], size: w.components.compIDToSize[id]}
 		count++
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
-	// move to target
-	newIdx := targetA.size
-	targetA.entityIDs[newIdx] = e
+	if len(targetA.chunks) == 0 || targetA.chunks[len(targetA.chunks)-1].size == ChunkSize {
+		targetA.chunks = append(targetA.chunks, w.newChunk(targetA))
+	}
+	newChunk := targetA.chunks[len(targetA.chunks)-1]
+	newIdx := newChunk.size
+	newChunk.entityIDs[newIdx] = e
+	newChunk.size++
 	targetA.size++
-	// copy existing components
 	for _, cid := range a.compOrder {
-		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
-		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		src := unsafe.Pointer(uintptr(oldChunk.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(newChunk.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	// set new component
-	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
+	dst := unsafe.Pointer(uintptr(newChunk.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = val
-	// remove from old
 	w.removeFromArchetype(a, meta)
-	// update meta
 	meta.archetypeIndex = targetA.index
+	meta.chunkIndex = len(targetA.chunks) - 1
 	meta.index = newIdx
 }
 
@@ -130,46 +122,43 @@ func RemoveComponent[T any](w *World, e Entity) {
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return
 	}
-	// remove
 	newMask := a.mask
 	newMask.unset(id)
 	var targetA *archetype
 	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
 		targetA = w.archetypes.archetypes[idx]
 	} else {
-		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
 			if cid == id {
 				continue
 			}
-			tempSpecs[count] = compSpec{
-				id:   cid,
-				typ:  w.components.compIDToType[cid],
-				size: w.components.compIDToSize[cid],
-			}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
 	}
-	// move to target
-	newIdx := targetA.size
-	targetA.entityIDs[newIdx] = e
+	if len(targetA.chunks) == 0 || targetA.chunks[len(targetA.chunks)-1].size == ChunkSize {
+		targetA.chunks = append(targetA.chunks, w.newChunk(targetA))
+	}
+	newChunk := targetA.chunks[len(targetA.chunks)-1]
+	newIdx := newChunk.size
+	newChunk.entityIDs[newIdx] = e
+	newChunk.size++
 	targetA.size++
-	// copy existing components except removed
+	oldChunk := a.chunks[meta.chunkIndex]
 	for _, cid := range a.compOrder {
 		if cid == id {
 			continue
 		}
-		src := unsafe.Pointer(uintptr(a.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
-		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
+		src := unsafe.Pointer(uintptr(oldChunk.compPointers[cid]) + uintptr(meta.index)*a.compSizes[cid])
+		dst := unsafe.Pointer(uintptr(newChunk.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	// remove from old
 	w.removeFromArchetype(a, meta)
-	// update meta
 	meta.archetypeIndex = targetA.index
+	meta.chunkIndex = len(targetA.chunks) - 1
 	meta.index = newIdx
 }

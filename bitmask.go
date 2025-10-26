@@ -34,3 +34,10 @@ func (m bitmask256) contains(sub bitmask256) bool {
 		(m[2]&sub[2]) == sub[2] &&
 		(m[3]&sub[3]) == sub[3]
 }
+
+// containsBit checks if a specific bit is set in the mask.
+func (m bitmask256) containsBit(bit uint8) bool {
+	i := bit >> 6
+	o := bit & 63
+	return (m[i] & (uint64(1) << uint64(o))) != 0
+}

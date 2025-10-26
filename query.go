@@ -1,5 +1,7 @@
 package teishoku
 
+import "unsafe"
+
 // queryCache provides a reusable mechanism for caching the results of a filter
 // query. It stores a list of matching archetypes and entities, and tracks the
 // world's version numbers to detect when the cache needs to be updated. This
@@ -56,11 +58,17 @@ func (c *queryCache) updateCachedEntities() {
 	for _, a := range c.matchingArches {
 		total += a.size
 	}
-	c.cachedEntities = c.cachedEntities[:total]
+	if cap(c.cachedEntities) < total {
+		c.cachedEntities = make([]Entity, total)
+	} else {
+		c.cachedEntities = c.cachedEntities[:total]
+	}
 	idx := 0
 	for _, a := range c.matchingArches {
-		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
+		for _, ch := range a.chunks {
+			copy(c.cachedEntities[idx:], unsafe.Slice((*Entity)(unsafe.Pointer(&ch.entityIDs[0])), ch.size))
+			idx += ch.size
+		}
 	}
 	c.lastMutationVersion = c.world.mutationVersion
 }
