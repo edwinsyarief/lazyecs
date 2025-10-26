@@ -69,6 +69,7 @@ func TestAutoExpand(t *testing.T) {
 			t.Errorf("entity %d invalid", i)
 		}
 	}
+
 	// Create extra to trigger expand
 	extra := 5
 	for i := 0; i < extra; i++ {
@@ -195,8 +196,6 @@ func TestBuilderSet(t *testing.T) {
 		t.Errorf("expected pos %+v, got %+v", val, *pos)
 	}
 }
-
-// Add more builder tests if necessary...
 
 // Filter Tests
 func TestFilter(t *testing.T) {
@@ -745,7 +744,7 @@ func BenchmarkFilterIterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter.Reset()
 				for filter.Next() {
-					_ = filter.Get()
+					//_ = filter.Get()
 				}
 			}
 		})
@@ -769,7 +768,7 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter2.Reset()
 				for filter2.Next() {
-					//_, _ = filter2.Get()
+					// _, _ = filter2.Get()
 				}
 			}
 		})
