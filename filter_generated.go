@@ -11,17 +11,18 @@ type Filter2[T1 any, T2 any] struct {
 	queryCache
 	curBase1 unsafe.Pointer
 	curBase2 unsafe.Pointer
-
+	
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	compSize1    uintptr
-	compSize2    uintptr
-
-	curArchSize int
-	curEnt      Entity
-	id1         uint8
-	id2         uint8
+	compSize1 uintptr
+	compSize2 uintptr
+	
+	curArchSize  int
+	curEnt       Entity
+	id1       uint8
+	id2       uint8
+	
 }
 
 // NewFilter2 creates a new `Filter` that iterates over all entities
@@ -35,24 +36,24 @@ type Filter2[T1 any, T2 any] struct {
 func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
-
+	
 	if id2 == id1 {
 		panic("ecs: duplicate component types in Filter2")
 	}
 	var m bitmask256
 	m.set(id1)
 	m.set(id2)
-
+	
 	f := &Filter2[T1, T2]{
-		queryCache:  newQueryCache(w, m),
-		id1:         id1,
-		id2:         id2,
+		queryCache: newQueryCache(w, m),
+		id1: id1,
+		id2: id2,
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
 	f.compSize1 = w.components.compIDToSize[id1]
 	f.compSize2 = w.components.compIDToSize[id2]
-
+	
 	f.updateMatching()
 	f.updateCachedEntities()
 	f.Reset()
@@ -77,11 +78,9 @@ func (f *Filter2[T1, T2]) Reset() {
 		a := f.matchingArches[0]
 		f.curBase1 = a.compPointers[f.id1]
 		f.curBase2 = a.compPointers[f.id2]
-
+		
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
-	} else {
-		f.curArchSize = 0
 	}
 }
 
@@ -91,24 +90,25 @@ func (f *Filter2[T1, T2]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter2[T1, T2]) Next() bool {
-	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	for {
+		f.curIdx++
+		if f.curIdx >= f.curArchSize {
+			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase1 = a.compPointers[f.id1]
+			f.curBase2 = a.compPointers[f.id2]
+			
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
+			f.curIdx = -1
+			continue
+		}
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
-		return false
-	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase1 = a.compPointers[f.id1]
-	f.curBase2 = a.compPointers[f.id2]
-
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
-	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
-	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -126,7 +126,7 @@ func (f *Filter2[T1, T2]) Entity() Entity {
 func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 	ptr1 := unsafe.Pointer(uintptr(f.curBase1) + uintptr(f.curIdx)*f.compSize1)
 	ptr2 := unsafe.Pointer(uintptr(f.curBase2) + uintptr(f.curIdx)*f.compSize2)
-
+	
 	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
@@ -164,19 +164,20 @@ type Filter3[T1 any, T2 any, T3 any] struct {
 	curBase1 unsafe.Pointer
 	curBase2 unsafe.Pointer
 	curBase3 unsafe.Pointer
-
+	
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	compSize1    uintptr
-	compSize2    uintptr
-	compSize3    uintptr
-
-	curArchSize int
-	curEnt      Entity
-	id1         uint8
-	id2         uint8
-	id3         uint8
+	compSize1 uintptr
+	compSize2 uintptr
+	compSize3 uintptr
+	
+	curArchSize  int
+	curEnt       Entity
+	id1       uint8
+	id2       uint8
+	id3       uint8
+	
 }
 
 // NewFilter3 creates a new `Filter` that iterates over all entities
@@ -191,7 +192,7 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
-
+	
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in Filter3")
 	}
@@ -199,19 +200,19 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	m.set(id1)
 	m.set(id2)
 	m.set(id3)
-
+	
 	f := &Filter3[T1, T2, T3]{
-		queryCache:  newQueryCache(w, m),
-		id1:         id1,
-		id2:         id2,
-		id3:         id3,
+		queryCache: newQueryCache(w, m),
+		id1: id1,
+		id2: id2,
+		id3: id3,
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
 	f.compSize1 = w.components.compIDToSize[id1]
 	f.compSize2 = w.components.compIDToSize[id2]
 	f.compSize3 = w.components.compIDToSize[id3]
-
+	
 	f.updateMatching()
 	f.updateCachedEntities()
 	f.Reset()
@@ -237,11 +238,9 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 		f.curBase1 = a.compPointers[f.id1]
 		f.curBase2 = a.compPointers[f.id2]
 		f.curBase3 = a.compPointers[f.id3]
-
+		
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
-	} else {
-		f.curArchSize = 0
 	}
 }
 
@@ -251,25 +250,26 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter3[T1, T2, T3]) Next() bool {
-	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	for {
+		f.curIdx++
+		if f.curIdx >= f.curArchSize {
+			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase1 = a.compPointers[f.id1]
+			f.curBase2 = a.compPointers[f.id2]
+			f.curBase3 = a.compPointers[f.id3]
+			
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
+			f.curIdx = -1
+			continue
+		}
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
-		return false
-	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase1 = a.compPointers[f.id1]
-	f.curBase2 = a.compPointers[f.id2]
-	f.curBase3 = a.compPointers[f.id3]
-
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
-	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
-	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -288,7 +288,7 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 	ptr1 := unsafe.Pointer(uintptr(f.curBase1) + uintptr(f.curIdx)*f.compSize1)
 	ptr2 := unsafe.Pointer(uintptr(f.curBase2) + uintptr(f.curIdx)*f.compSize2)
 	ptr3 := unsafe.Pointer(uintptr(f.curBase3) + uintptr(f.curIdx)*f.compSize3)
-
+	
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
@@ -327,21 +327,22 @@ type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 	curBase2 unsafe.Pointer
 	curBase3 unsafe.Pointer
 	curBase4 unsafe.Pointer
-
+	
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	compSize1    uintptr
-	compSize2    uintptr
-	compSize3    uintptr
-	compSize4    uintptr
-
-	curArchSize int
-	curEnt      Entity
-	id1         uint8
-	id2         uint8
-	id3         uint8
-	id4         uint8
+	compSize1 uintptr
+	compSize2 uintptr
+	compSize3 uintptr
+	compSize4 uintptr
+	
+	curArchSize  int
+	curEnt       Entity
+	id1       uint8
+	id2       uint8
+	id3       uint8
+	id4       uint8
+	
 }
 
 // NewFilter4 creates a new `Filter` that iterates over all entities
@@ -357,7 +358,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
 	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
-
+	
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in Filter4")
 	}
@@ -366,13 +367,13 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	m.set(id2)
 	m.set(id3)
 	m.set(id4)
-
+	
 	f := &Filter4[T1, T2, T3, T4]{
-		queryCache:  newQueryCache(w, m),
-		id1:         id1,
-		id2:         id2,
-		id3:         id3,
-		id4:         id4,
+		queryCache: newQueryCache(w, m),
+		id1: id1,
+		id2: id2,
+		id3: id3,
+		id4: id4,
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
@@ -380,7 +381,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	f.compSize2 = w.components.compIDToSize[id2]
 	f.compSize3 = w.components.compIDToSize[id3]
 	f.compSize4 = w.components.compIDToSize[id4]
-
+	
 	f.updateMatching()
 	f.updateCachedEntities()
 	f.Reset()
@@ -407,11 +408,9 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 		f.curBase2 = a.compPointers[f.id2]
 		f.curBase3 = a.compPointers[f.id3]
 		f.curBase4 = a.compPointers[f.id4]
-
+		
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
-	} else {
-		f.curArchSize = 0
 	}
 }
 
@@ -421,26 +420,27 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter4[T1, T2, T3, T4]) Next() bool {
-	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	for {
+		f.curIdx++
+		if f.curIdx >= f.curArchSize {
+			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase1 = a.compPointers[f.id1]
+			f.curBase2 = a.compPointers[f.id2]
+			f.curBase3 = a.compPointers[f.id3]
+			f.curBase4 = a.compPointers[f.id4]
+			
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
+			f.curIdx = -1
+			continue
+		}
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
-		return false
-	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase1 = a.compPointers[f.id1]
-	f.curBase2 = a.compPointers[f.id2]
-	f.curBase3 = a.compPointers[f.id3]
-	f.curBase4 = a.compPointers[f.id4]
-
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
-	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
-	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -460,7 +460,7 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 	ptr2 := unsafe.Pointer(uintptr(f.curBase2) + uintptr(f.curIdx)*f.compSize2)
 	ptr3 := unsafe.Pointer(uintptr(f.curBase3) + uintptr(f.curIdx)*f.compSize3)
 	ptr4 := unsafe.Pointer(uintptr(f.curBase4) + uintptr(f.curIdx)*f.compSize4)
-
+	
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
@@ -500,23 +500,24 @@ type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	curBase3 unsafe.Pointer
 	curBase4 unsafe.Pointer
 	curBase5 unsafe.Pointer
-
+	
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	compSize1    uintptr
-	compSize2    uintptr
-	compSize3    uintptr
-	compSize4    uintptr
-	compSize5    uintptr
-
-	curArchSize int
-	curEnt      Entity
-	id1         uint8
-	id2         uint8
-	id3         uint8
-	id4         uint8
-	id5         uint8
+	compSize1 uintptr
+	compSize2 uintptr
+	compSize3 uintptr
+	compSize4 uintptr
+	compSize5 uintptr
+	
+	curArchSize  int
+	curEnt       Entity
+	id1       uint8
+	id2       uint8
+	id3       uint8
+	id4       uint8
+	id5       uint8
+	
 }
 
 // NewFilter5 creates a new `Filter` that iterates over all entities
@@ -533,7 +534,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
 	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
 	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
-
+	
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in Filter5")
 	}
@@ -543,14 +544,14 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	m.set(id3)
 	m.set(id4)
 	m.set(id5)
-
+	
 	f := &Filter5[T1, T2, T3, T4, T5]{
-		queryCache:  newQueryCache(w, m),
-		id1:         id1,
-		id2:         id2,
-		id3:         id3,
-		id4:         id4,
-		id5:         id5,
+		queryCache: newQueryCache(w, m),
+		id1: id1,
+		id2: id2,
+		id3: id3,
+		id4: id4,
+		id5: id5,
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
@@ -559,7 +560,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	f.compSize3 = w.components.compIDToSize[id3]
 	f.compSize4 = w.components.compIDToSize[id4]
 	f.compSize5 = w.components.compIDToSize[id5]
-
+	
 	f.updateMatching()
 	f.updateCachedEntities()
 	f.Reset()
@@ -587,11 +588,9 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 		f.curBase3 = a.compPointers[f.id3]
 		f.curBase4 = a.compPointers[f.id4]
 		f.curBase5 = a.compPointers[f.id5]
-
+		
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
-	} else {
-		f.curArchSize = 0
 	}
 }
 
@@ -601,27 +600,28 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
-	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	for {
+		f.curIdx++
+		if f.curIdx >= f.curArchSize {
+			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase1 = a.compPointers[f.id1]
+			f.curBase2 = a.compPointers[f.id2]
+			f.curBase3 = a.compPointers[f.id3]
+			f.curBase4 = a.compPointers[f.id4]
+			f.curBase5 = a.compPointers[f.id5]
+			
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
+			f.curIdx = -1
+			continue
+		}
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
-		return false
-	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase1 = a.compPointers[f.id1]
-	f.curBase2 = a.compPointers[f.id2]
-	f.curBase3 = a.compPointers[f.id3]
-	f.curBase4 = a.compPointers[f.id4]
-	f.curBase5 = a.compPointers[f.id5]
-
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
-	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
-	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -642,7 +642,7 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 	ptr3 := unsafe.Pointer(uintptr(f.curBase3) + uintptr(f.curIdx)*f.compSize3)
 	ptr4 := unsafe.Pointer(uintptr(f.curBase4) + uintptr(f.curIdx)*f.compSize4)
 	ptr5 := unsafe.Pointer(uintptr(f.curBase5) + uintptr(f.curIdx)*f.compSize5)
-
+	
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
@@ -683,25 +683,26 @@ type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 	curBase4 unsafe.Pointer
 	curBase5 unsafe.Pointer
 	curBase6 unsafe.Pointer
-
+	
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	compSize1    uintptr
-	compSize2    uintptr
-	compSize3    uintptr
-	compSize4    uintptr
-	compSize5    uintptr
-	compSize6    uintptr
-
-	curArchSize int
-	curEnt      Entity
-	id1         uint8
-	id2         uint8
-	id3         uint8
-	id4         uint8
-	id5         uint8
-	id6         uint8
+	compSize1 uintptr
+	compSize2 uintptr
+	compSize3 uintptr
+	compSize4 uintptr
+	compSize5 uintptr
+	compSize6 uintptr
+	
+	curArchSize  int
+	curEnt       Entity
+	id1       uint8
+	id2       uint8
+	id3       uint8
+	id4       uint8
+	id5       uint8
+	id6       uint8
+	
 }
 
 // NewFilter6 creates a new `Filter` that iterates over all entities
@@ -719,7 +720,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
 	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
 	id6 := w.getCompTypeID(reflect.TypeFor[T6]())
-
+	
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in Filter6")
 	}
@@ -730,15 +731,15 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	m.set(id4)
 	m.set(id5)
 	m.set(id6)
-
+	
 	f := &Filter6[T1, T2, T3, T4, T5, T6]{
-		queryCache:  newQueryCache(w, m),
-		id1:         id1,
-		id2:         id2,
-		id3:         id3,
-		id4:         id4,
-		id5:         id5,
-		id6:         id6,
+		queryCache: newQueryCache(w, m),
+		id1: id1,
+		id2: id2,
+		id3: id3,
+		id4: id4,
+		id5: id5,
+		id6: id6,
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
@@ -748,7 +749,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	f.compSize4 = w.components.compIDToSize[id4]
 	f.compSize5 = w.components.compIDToSize[id5]
 	f.compSize6 = w.components.compIDToSize[id6]
-
+	
 	f.updateMatching()
 	f.updateCachedEntities()
 	f.Reset()
@@ -777,11 +778,9 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 		f.curBase4 = a.compPointers[f.id4]
 		f.curBase5 = a.compPointers[f.id5]
 		f.curBase6 = a.compPointers[f.id6]
-
+		
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
-	} else {
-		f.curArchSize = 0
 	}
 }
 
@@ -791,28 +790,29 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
-	f.curIdx++
-	if f.curIdx < f.curArchSize {
+	for {
+		f.curIdx++
+		if f.curIdx >= f.curArchSize {
+			f.curMatchIdx++
+			if f.curMatchIdx >= len(f.matchingArches) {
+				return false
+			}
+			a := f.matchingArches[f.curMatchIdx]
+			f.curBase1 = a.compPointers[f.id1]
+			f.curBase2 = a.compPointers[f.id2]
+			f.curBase3 = a.compPointers[f.id3]
+			f.curBase4 = a.compPointers[f.id4]
+			f.curBase5 = a.compPointers[f.id5]
+			f.curBase6 = a.compPointers[f.id6]
+			
+			f.curEntityIDs = a.entityIDs
+			f.curArchSize = a.size
+			f.curIdx = -1
+			continue
+		}
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
-	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
-		return false
-	}
-	a := f.matchingArches[f.curMatchIdx]
-	f.curBase1 = a.compPointers[f.id1]
-	f.curBase2 = a.compPointers[f.id2]
-	f.curBase3 = a.compPointers[f.id3]
-	f.curBase4 = a.compPointers[f.id4]
-	f.curBase5 = a.compPointers[f.id5]
-	f.curBase6 = a.compPointers[f.id6]
-
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
-	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
-	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -834,7 +834,7 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 	ptr4 := unsafe.Pointer(uintptr(f.curBase4) + uintptr(f.curIdx)*f.compSize4)
 	ptr5 := unsafe.Pointer(uintptr(f.curBase5) + uintptr(f.curIdx)*f.compSize5)
 	ptr6 := unsafe.Pointer(uintptr(f.curBase6) + uintptr(f.curIdx)*f.compSize6)
-
+	
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }
 
@@ -864,3 +864,4 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
+
