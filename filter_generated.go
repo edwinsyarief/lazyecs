@@ -19,7 +19,6 @@ type Filter2[T1 any, T2 any] struct {
 	compSize2    uintptr
 
 	curArchSize int
-	curEnt      Entity
 	id1         uint8
 	id2         uint8
 }
@@ -93,7 +92,6 @@ func (f *Filter2[T1, T2]) Reset() {
 func (f *Filter2[T1, T2]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -107,14 +105,13 @@ func (f *Filter2[T1, T2]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter2[T1, T2]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the 2 components (T1, T2) for the
@@ -138,7 +135,7 @@ func (f *Filter2[T1, T2]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -173,7 +170,6 @@ type Filter3[T1 any, T2 any, T3 any] struct {
 	compSize3    uintptr
 
 	curArchSize int
-	curEnt      Entity
 	id1         uint8
 	id2         uint8
 	id3         uint8
@@ -253,7 +249,6 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 func (f *Filter3[T1, T2, T3]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -268,14 +263,13 @@ func (f *Filter3[T1, T2, T3]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter3[T1, T2, T3]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the 3 components (T1, T2, T3) for the
@@ -300,7 +294,7 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -337,7 +331,6 @@ type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 	compSize4    uintptr
 
 	curArchSize int
-	curEnt      Entity
 	id1         uint8
 	id2         uint8
 	id3         uint8
@@ -423,7 +416,6 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 func (f *Filter4[T1, T2, T3, T4]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -439,14 +431,13 @@ func (f *Filter4[T1, T2, T3, T4]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter4[T1, T2, T3, T4]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the 4 components (T1, T2, T3, T4) for the
@@ -472,7 +463,7 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -511,7 +502,6 @@ type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	compSize5    uintptr
 
 	curArchSize int
-	curEnt      Entity
 	id1         uint8
 	id2         uint8
 	id3         uint8
@@ -603,7 +593,6 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -620,14 +609,13 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter5[T1, T2, T3, T4, T5]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the 5 components (T1, T2, T3, T4, T5) for the
@@ -654,7 +642,7 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
@@ -695,7 +683,6 @@ type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 	compSize6    uintptr
 
 	curArchSize int
-	curEnt      Entity
 	id1         uint8
 	id2         uint8
 	id3         uint8
@@ -793,7 +780,6 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -811,14 +797,13 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the 6 components (T1, T2, T3, T4, T5, T6) for the
@@ -846,7 +831,7 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1

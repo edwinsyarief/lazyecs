@@ -123,40 +123,51 @@ func NewWorld(initialCapacity int) World {
 			initialCapacity: initialCapacity,
 			freeIDs:         make([]uint32, initialCapacity),
 			metas:           make([]entityMeta, initialCapacity),
-			nextEntityVer:   1,
+			nextEntityVer:   1, // start from 1, 0 means dead
 		},
 		archetypes: archetypeRegistry{
-			archetypes:     make([]*archetype, 0),
 			maskToArcIndex: make(map[bitmask256]int),
+			archetypes:     make([]*archetype, 0, 16),
 		},
 	}
-	for i := range initialCapacity {
-		w.entities.freeIDs[i] = uint32(initialCapacity - 1 - i)
-		w.entities.metas[i].archetypeIndex = -1
-		w.entities.metas[i].index = -1
-		w.entities.metas[i].version = 0
+	// Initialize metas
+	for i := range w.entities.metas {
+		w.entities.metas[i] = entityMeta{
+			archetypeIndex: -1,
+			index:          -1,
+			version:        0,
+		}
 	}
-	// Create the empty archetype
+	// Initialize freeIDs in reverse (high to low)
+	for i := 0; i < initialCapacity; i++ {
+		w.entities.freeIDs[i] = uint32(initialCapacity - 1 - i)
+	}
+	// Create empty archetype
 	var emptyMask bitmask256
-	w.getOrCreateArchetype(emptyMask, []compSpec{})
-	w.archetypes.archetypeVersion = 1
-	w.entities.nextEntityVer = 1
+	emptyArch := &archetype{
+		index:     0,
+		mask:      emptyMask,
+		size:      0,
+		entityIDs: make([]Entity, initialCapacity),
+		compOrder: []uint8{},
+	}
+	w.archetypes.archetypes = append(w.archetypes.archetypes, emptyArch)
+	w.archetypes.maskToArcIndex[emptyMask] = 0
 	return w
 }
 
-// CreateEntity creates a new entity with no components.
+// CreateEntity creates a new empty entity in the world.
 func (w *World) CreateEntity() Entity {
 	a := w.archetypes.archetypes[0] // empty archetype
-	w.mutationVersion++
 	return w.createEntity(a)
 }
 
-// CreateEntities creates a batch of entities with no components and returns their IDs.
+// CreateEntities creates a batch of empty entities in the world.
 func (w *World) CreateEntities(count int) []Entity {
 	if count == 0 {
 		return nil
 	}
-	a := w.archetypes.archetypes[0]
+	a := w.archetypes.archetypes[0] // empty archetype
 	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
@@ -178,7 +189,7 @@ func (w *World) CreateEntities(count int) []Entity {
 	return a.entityIDs[startSize : startSize+count]
 }
 
-// RemoveEntity removes an entity, recycling its ID.
+// RemoveEntity removes a single entity from the world.
 func (w *World) RemoveEntity(e Entity) {
 	if !w.IsValid(e) {
 		return
@@ -193,23 +204,19 @@ func (w *World) RemoveEntity(e Entity) {
 	w.mutationVersion++
 }
 
-// RemoveEntities removes multiple entities.
-func (w *World) RemoveEntities(ents []Entity) {
-	for _, e := range ents {
+// RemoveEntities removes a batch of entities from the world.
+func (w *World) RemoveEntities(entities []Entity) {
+	for _, e := range entities {
 		w.RemoveEntity(e)
 	}
 }
 
-// ClearEntities removes all entities from the world.
+// ClearEntities removes all entities from the world, recycling their IDs.
+// This operation does not release memory but resets archetypes to size 0.
 func (w *World) ClearEntities() {
-	for i := range w.entities.metas {
-		w.entities.metas[i].archetypeIndex = -1
-		w.entities.metas[i].index = -1
-		w.entities.metas[i].version = 0
-	}
 	w.entities.freeIDs = w.entities.freeIDs[:0]
-	for i := 0; i < w.entities.capacity; i++ {
-		w.entities.freeIDs = append(w.entities.freeIDs, uint32(w.entities.capacity-1-i))
+	for i := uint32(0); i < uint32(w.entities.capacity); i++ {
+		w.entities.freeIDs = append(w.entities.freeIDs, i)
 	}
 	for _, a := range w.archetypes.archetypes {
 		a.size = 0
@@ -218,12 +225,11 @@ func (w *World) ClearEntities() {
 	w.mutationVersion++
 }
 
-// IsValid checks if an entity reference is still valid (i.e., it has not been
-// removed). It verifies that the entity's ID is within bounds and that its
-// version matches the current version stored in the world's metadata.
+// IsValid checks if the entity is currently alive in the world.
+// It verifies both the ID bounds and version match to detect recycled entities.
 //
 // Parameters:
-//   - e: The Entity to validate.
+//   - e: The Entity to check.
 //
 // Returns:
 //   - true if the entity is valid, false otherwise.
@@ -359,23 +365,12 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 	w.mutationVersion++
 }
 
-// memCopy copies size bytes from src to dst using word-by-word copy for performance.
+// memCopy copies size bytes from src to dst using built-in copy for performance.
 func memCopy(dst, src unsafe.Pointer, size uintptr) {
-	wordSize := unsafe.Sizeof(uintptr(0))
-	words := size / wordSize
-	d := dst
-	s := src
-	for i := range words {
-		_ = i
-		*(*uintptr)(d) = *(*uintptr)(s)
-		d = unsafe.Add(d, wordSize)
-		s = unsafe.Add(s, wordSize)
+	if size == 0 {
+		return
 	}
-	rem := size % wordSize
-	for i := range rem {
-		_ = i
-		*(*byte)(d) = *(*byte)(s)
-		d = unsafe.Add(d, 1)
-		s = unsafe.Add(s, 1)
-	}
+	dstBytes := unsafe.Slice((*byte)(dst), size)
+	srcBytes := unsafe.Slice((*byte)(src), size)
+	copy(dstBytes, srcBytes)
 }

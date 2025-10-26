@@ -1,4 +1,3 @@
-// query.go
 package teishoku
 
 // queryCache provides a reusable mechanism for caching the results of a filter
@@ -21,6 +20,7 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 		world:          w,
 		mask:           m,
 		matchingArches: make([]*archetype, 0, 4),
+		cachedEntities: make([]Entity, 0, w.entities.capacity),
 	}
 }
 
@@ -43,11 +43,7 @@ func (c *queryCache) updateCachedEntities() {
 	for _, a := range c.matchingArches {
 		total += a.size
 	}
-	if cap(c.cachedEntities) < total {
-		c.cachedEntities = make([]Entity, total)
-	} else {
-		c.cachedEntities = c.cachedEntities[:total]
-	}
+	c.cachedEntities = c.cachedEntities[:total]
 	idx := 0
 	for _, a := range c.matchingArches {
 		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])

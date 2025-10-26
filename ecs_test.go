@@ -257,11 +257,110 @@ func TestFilter2RemoveEntities(t *testing.T) {
 	}
 }
 
-// Add more filter tests if necessary...
+// World Creation Benchmarks
+func BenchmarkCreateWorld(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = NewWorld(size)
+			}
+		})
+	}
+}
 
-// Benchmarks
+// Expansion Benchmarks
+func BenchmarkAutoExpand(b *testing.B) {
+	initialSizes := []int{1000, 10000, 100000}
+	expandMultiplier := 2
+	for _, initSize := range initialSizes {
+		name := fmt.Sprintf("%dK_init_x%d", initSize/1000, expandMultiplier)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			targetEntities := initSize * expandMultiplier
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(initSize)
+				builder := NewBuilder[Position](&w)
+				b.StartTimer()
+				for j := 0; j < targetEntities; j++ {
+					builder.NewEntity()
+				}
+			}
+		})
+	}
+}
 
-func BenchmarkWorldNewEntities(b *testing.B) {
+// World Entity Creation Benchmarks
+func BenchmarkWorldCreateEntity(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					w.CreateEntity()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkWorldCreateEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				b.StartTimer()
+				w.CreateEntities(size)
+			}
+		})
+	}
+}
+
+// Builder Benchmarks
+func BenchmarkBuilderNewEntity(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](&w)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					builder.NewEntity()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderNewEntities(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -281,6 +380,238 @@ func BenchmarkWorldNewEntities(b *testing.B) {
 	}
 }
 
+func BenchmarkBuilderNewEntitiesWithValueSet(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			val := Position{1, 2}
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](&w)
+				b.StartTimer()
+				builder.NewEntitiesWithValueSet(size, val)
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderNewEntitiesWithValueSet2(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			pos := Position{1, 2}
+			vel := Velocity{3, 4}
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder2 := NewBuilder2[Position, Velocity](&w)
+				b.StartTimer()
+				builder2.NewEntitiesWithValueSet(size, pos, vel)
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderSet(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				ents := make([]Entity, size)
+				for j := 0; j < size; j++ {
+					ents[j] = w.CreateEntity()
+				}
+				builder := NewBuilder[Position](&w)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					builder.Set(ents[j], Position{})
+				}
+			}
+		})
+	}
+}
+
+// Component Operation Benchmarks
+func BenchmarkBuilderGetComponent(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](&w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				builder.Get(ents[i%size])
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderGetComponent2(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder2[Position, Velocity](&w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				builder.Get(ents[i%size])
+			}
+		})
+	}
+}
+
+func BenchmarkGlobalGetComponent(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](&w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				GetComponent[Position](&w, ents[i%size])
+			}
+		})
+	}
+}
+
+func BenchmarkGlobalGetComponent2(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder2[Position, Velocity](&w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				GetComponent2[Position, Velocity](&w, ents[i%size])
+			}
+		})
+	}
+}
+
+func BenchmarkSetComponentExisting(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			w := NewWorld(size)
+			builder := NewBuilder[Position](&w)
+			builder.NewEntities(size)
+			ents := builder.arch.entityIDs[:size]
+			val := Position{1, 2}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				SetComponent(&w, ents[i%size], val)
+			}
+		})
+	}
+}
+
+func BenchmarkSetComponentNew(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			val := Velocity{3, 4}
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](&w)
+				dummyBuilder := NewBuilder2[Position, Velocity](&w)
+				dummy := dummyBuilder.NewEntity()
+				w.RemoveEntity(dummy)
+				builder.NewEntities(size)
+				ents := builder.arch.entityIDs[:size]
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					SetComponent(&w, ents[j], val)
+				}
+			}
+		})
+	}
+}
+
+// Removal Benchmarks
+func BenchmarkRemoveComponent(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder2 := NewBuilder2[Position, Velocity](&w)
+				dummyBuilder := NewBuilder[Position](&w)
+				dummy := dummyBuilder.NewEntity()
+				w.RemoveEntity(dummy)
+				builder2.NewEntities(size)
+				ents := builder2.arch.entityIDs[:size]
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					RemoveComponent[Velocity](&w, ents[j])
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkWorldRemoveEntity(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
@@ -295,7 +626,33 @@ func BenchmarkWorldRemoveEntity(b *testing.B) {
 				w := NewWorld(size)
 				builder := NewBuilder[Position](&w)
 				builder.NewEntities(size)
-				ents := builder.arch.entityIDs[:size]
+				ents := make([]Entity, size)
+				copy(ents, builder.arch.entityIDs[:size])
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					w.RemoveEntity(ents[j])
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkWorldRemoveEntities(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				builder := NewBuilder[Position](&w)
+				builder.NewEntities(size)
+				ents := make([]Entity, size)
+				copy(ents, builder.arch.entityIDs[:size])
 				b.StartTimer()
 				for j := 0; j < size; j++ {
 					w.RemoveEntity(ents[j])

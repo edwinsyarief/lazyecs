@@ -20,7 +20,6 @@ type Filter[T any] struct {
 	curIdx       int // index into the current archetype's entity/component array
 	compSize     uintptr
 	curArchSize  int
-	curEnt       Entity
 	compID       uint8
 }
 
@@ -92,7 +91,6 @@ func (f *Filter[T]) Reset() {
 func (f *Filter[T]) Next() bool {
 	f.curIdx++
 	if f.curIdx < f.curArchSize {
-		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
 	f.curMatchIdx++
@@ -104,7 +102,6 @@ func (f *Filter[T]) Next() bool {
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
-	f.curEnt = f.curEntityIDs[0]
 	return true
 }
 
@@ -114,7 +111,7 @@ func (f *Filter[T]) Next() bool {
 // Returns:
 //   - The current Entity.
 func (f *Filter[T]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns a pointer to the component of type `T` for the current entity
@@ -138,7 +135,7 @@ func (f *Filter[T]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
