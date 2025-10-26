@@ -33,25 +33,25 @@ type WithPointer struct {
 // World Creation and Basic Operations
 func TestNewWorld(t *testing.T) {
 	w := NewWorld(TestCap)
-	if w.capacity != TestCap {
-		t.Errorf("expected capacity %d, got %d", TestCap, w.capacity)
+	if w.entities.capacity != TestCap {
+		t.Errorf("expected capacity %d, got %d", TestCap, w.entities.capacity)
 	}
-	if len(w.freeIDs) != TestCap {
-		t.Errorf("expected %d free IDs, got %d", TestCap, len(w.freeIDs))
+	if len(w.entities.freeIDs) != TestCap {
+		t.Errorf("expected %d free IDs, got %d", TestCap, len(w.entities.freeIDs))
 	}
-	if len(w.metas) != TestCap {
-		t.Errorf("expected %d metas, got %d", TestCap, len(w.metas))
+	if len(w.entities.metas) != TestCap {
+		t.Errorf("expected %d metas, got %d", TestCap, len(w.entities.metas))
 	}
-	if len(w.archetypes) != 1 {
-		t.Errorf("expected 1 archetypes, got %d", len(w.archetypes))
+	if len(w.archetypes.archetypes) != 1 {
+		t.Errorf("expected 1 archetypes, got %d", len(w.archetypes.archetypes))
 	}
 }
 
 func TestAutoExpand(t *testing.T) {
 	initialCap := 10
 	w := NewWorld(initialCap)
-	if w.capacity != initialCap || w.initialCapacity != initialCap {
-		t.Errorf("expected initial capacity %d, got %d/%d", initialCap, w.capacity, w.initialCapacity)
+	if w.entities.capacity != initialCap || w.entities.initialCapacity != initialCap {
+		t.Errorf("expected initial capacity %d, got %d/%d", initialCap, w.entities.capacity, w.entities.initialCapacity)
 	}
 	builder := NewBuilder[Position](&w)
 	// Create initial cap entities
@@ -70,14 +70,14 @@ func TestAutoExpand(t *testing.T) {
 		}
 	}
 	expectedCap := initialCap * 2
-	if w.capacity != expectedCap {
-		t.Errorf("expected expanded capacity %d, got %d", expectedCap, w.capacity)
+	if w.entities.capacity != expectedCap {
+		t.Errorf("expected expanded capacity %d, got %d", expectedCap, w.entities.capacity)
 	}
-	if len(w.metas) != expectedCap {
-		t.Errorf("expected metas len %d, got %d", expectedCap, len(w.metas))
+	if len(w.entities.metas) != expectedCap {
+		t.Errorf("expected metas len %d, got %d", expectedCap, len(w.entities.metas))
 	}
-	if len(w.freeIDs) != expectedCap-(initialCap+extra) {
-		t.Errorf("expected freeIDs len %d, got %d", expectedCap-(initialCap+extra), len(w.freeIDs))
+	if len(w.entities.freeIDs) != expectedCap-(initialCap+extra) {
+		t.Errorf("expected freeIDs len %d, got %d", expectedCap-(initialCap+extra), len(w.entities.freeIDs))
 	}
 	// Verify archetype resized
 	a := builder.arch
@@ -104,8 +104,8 @@ func TestGetCompTypeID(t *testing.T) {
 	if id1 == id2 {
 		t.Errorf("expected different IDs for different types, got %d", id1)
 	}
-	if w.nextCompTypeID != 2 {
-		t.Errorf("expected nextCompTypeID 2, got %d", w.nextCompTypeID)
+	if w.components.nextCompTypeID != 2 {
+		t.Errorf("expected nextCompTypeID 2, got %d", w.components.nextCompTypeID)
 	}
 }
 
@@ -118,8 +118,8 @@ func TestGetOrCreateArchetype(t *testing.T) {
 	if a1 == nil {
 		t.Fatal("archetype not created")
 	}
-	if len(w.archetypes) != 2 {
-		t.Errorf("expected 2 archetype, got %d", len(w.archetypes))
+	if len(w.archetypes.archetypes) != 2 {
+		t.Errorf("expected 2 archetype, got %d", len(w.archetypes.archetypes))
 	}
 	a2 := w.getOrCreateArchetype(mask, specs)
 	if a1 != a2 {
@@ -135,16 +135,16 @@ func TestBuilderNewEntity(t *testing.T) {
 	if !w.IsValid(ent) {
 		t.Error("entity should be valid")
 	}
-	if w.metas[ent.ID].archetypeIndex == -1 {
+	if w.entities.metas[ent.ID].archetypeIndex == -1 {
 		t.Error("archetypeIndex not set")
 	}
-	if w.metas[ent.ID].index != 0 {
-		t.Errorf("expected index 0, got %d", w.metas[ent.ID].index)
+	if w.entities.metas[ent.ID].index != 0 {
+		t.Errorf("expected index 0, got %d", w.entities.metas[ent.ID].index)
 	}
-	if w.metas[ent.ID].version != ent.Version {
+	if w.entities.metas[ent.ID].version != ent.Version {
 		t.Error("version mismatch")
 	}
-	a := w.archetypes[w.metas[ent.ID].archetypeIndex]
+	a := w.archetypes.archetypes[w.entities.metas[ent.ID].archetypeIndex]
 	if a.size != 1 {
 		t.Errorf("expected size 1, got %d", a.size)
 	}
@@ -222,10 +222,10 @@ func TestWorldCreateEntity(t *testing.T) {
 	if !w.IsValid(ent) {
 		t.Errorf("created entity is invalid")
 	}
-	if len(w.archetypes) != 1 {
-		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	if len(w.archetypes.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes.archetypes))
 	}
-	a := w.archetypes[0]
+	a := w.archetypes.archetypes[0]
 	if a.size != 1 {
 		t.Errorf("expected archetype size 1, got %d", a.size)
 	}
@@ -269,10 +269,10 @@ func TestWorldCreateEntities(t *testing.T) {
 			t.Errorf("entity %d has unexpected component", i)
 		}
 	}
-	if len(w.archetypes) != 1 {
-		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	if len(w.archetypes.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes.archetypes))
 	}
-	a := w.archetypes[0]
+	a := w.archetypes.archetypes[0]
 	if a.size != 5 {
 		t.Errorf("expected archetype size 5, got %d", a.size)
 	}
@@ -292,13 +292,13 @@ func TestWorldCreateEntitiesExpand(t *testing.T) {
 			t.Errorf("entity %d invalid", i)
 		}
 	}
-	if w.capacity != 2 {
-		t.Errorf("expected capacity 2 after expand, got %d", w.capacity)
+	if w.entities.capacity != 2 {
+		t.Errorf("expected capacity 2 after expand, got %d", w.entities.capacity)
 	}
-	if len(w.archetypes) != 1 {
-		t.Errorf("expected 1 archetype, got %d", len(w.archetypes))
+	if len(w.archetypes.archetypes) != 1 {
+		t.Errorf("expected 1 archetype, got %d", len(w.archetypes.archetypes))
 	}
-	a := w.archetypes[0]
+	a := w.archetypes.archetypes[0]
 	if cap(a.entityIDs) != 2 {
 		t.Errorf("expected archetype entityIDs cap 2, got %d", cap(a.entityIDs))
 	}
@@ -395,7 +395,7 @@ func TestRemoveEntity(t *testing.T) {
 	if a.entityIDs[0] != ent2 {
 		t.Error("ent2 not swapped")
 	}
-	if w.metas[ent2.ID].index != 0 {
+	if w.entities.metas[ent2.ID].index != 0 {
 		t.Error("ent2 index not updated")
 	}
 	// remove stale
@@ -428,15 +428,15 @@ func TestClearEntities(t *testing.T) {
 	builder := NewBuilder[Position](&w)
 	builder.NewEntities(5)
 	w.ClearEntities()
-	if len(w.freeIDs) != TestCap {
-		t.Errorf("expected %d free IDs after clear, got %d", TestCap, len(w.freeIDs))
+	if len(w.entities.freeIDs) != TestCap {
+		t.Errorf("expected %d free IDs after clear, got %d", TestCap, len(w.entities.freeIDs))
 	}
-	for _, meta := range w.metas {
+	for _, meta := range w.entities.metas {
 		if meta.version != 0 || meta.archetypeIndex != -1 {
 			t.Error("meta not reset")
 		}
 	}
-	for _, a := range w.archetypes {
+	for _, a := range w.archetypes.archetypes {
 		if a.size != 0 {
 			t.Error("archetype size not reset")
 		}
@@ -522,7 +522,7 @@ func TestFilter2(t *testing.T) {
 
 func TestFilterRemoveEntities(t *testing.T) {
 	w := NewWorld(10)
-	initialFree := len(w.freeIDs)
+	initialFree := len(w.entities.freeIDs)
 	builderPos := NewBuilder[Position](&w)
 	posEnts := make([]Entity, 3)
 	for i := 0; i < 3; i++ {
@@ -551,8 +551,8 @@ func TestFilterRemoveEntities(t *testing.T) {
 			t.Error("vel entity invalid after remove")
 		}
 	}
-	if len(w.freeIDs) != initialFree-2 {
-		t.Errorf("expected freeIDs %d, got %d", initialFree-2, len(w.freeIDs))
+	if len(w.entities.freeIDs) != initialFree-2 {
+		t.Errorf("expected freeIDs %d, got %d", initialFree-2, len(w.entities.freeIDs))
 	}
 	// Check filter after remove
 	count := 0
@@ -566,7 +566,7 @@ func TestFilterRemoveEntities(t *testing.T) {
 
 func TestFilter2RemoveEntities(t *testing.T) {
 	w := NewWorld(10)
-	initialFree := len(w.freeIDs)
+	initialFree := len(w.entities.freeIDs)
 	builderPV := NewBuilder2[Position, Velocity](&w)
 	pvEnts := make([]Entity, 2)
 	for i := 0; i < 2; i++ {
@@ -595,8 +595,8 @@ func TestFilter2RemoveEntities(t *testing.T) {
 			t.Error("pos entity invalid after remove")
 		}
 	}
-	if len(w.freeIDs) != initialFree-3 {
-		t.Errorf("expected freeIDs %d, got %d", initialFree-3, len(w.freeIDs))
+	if len(w.entities.freeIDs) != initialFree-3 {
+		t.Errorf("expected freeIDs %d, got %d", initialFree-3, len(w.entities.freeIDs))
 	}
 	// Check filter after remove
 	count := 0

@@ -21,9 +21,9 @@ func GetComponent[T any](w *World, e Entity) *T {
 	if !w.IsValid(e) {
 		return nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id := w.getCompTypeID(reflect.TypeFor[T]())
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
@@ -49,10 +49,10 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
 	if (a.mask[i] & (uint64(1) << uint64(o))) != 0 {
@@ -65,8 +65,8 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	newMask := a.mask
 	newMask.set(id)
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
@@ -74,15 +74,15 @@ func SetComponent[T any](w *World, e Entity, val T) {
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{
 				id:   cid,
-				typ:  w.compIDToType[cid],
-				size: w.compIDToSize[cid],
+				typ:  w.components.compIDToType[cid],
+				size: w.components.compIDToSize[cid],
 			}
 			count++
 		}
 		tempSpecs[count] = compSpec{
 			id:   id,
-			typ:  w.compIDToType[id],
-			size: w.compIDToSize[id],
+			typ:  w.components.compIDToType[id],
+			size: w.components.compIDToSize[id],
 		}
 		count++
 		specs := tempSpecs[:count]
@@ -121,10 +121,10 @@ func RemoveComponent[T any](w *World, e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t := reflect.TypeFor[T]()
 	id := w.getCompTypeID(t)
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
@@ -134,8 +134,8 @@ func RemoveComponent[T any](w *World, e Entity) {
 	newMask := a.mask
 	newMask.unset(id)
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
@@ -146,8 +146,8 @@ func RemoveComponent[T any](w *World, e Entity) {
 			}
 			tempSpecs[count] = compSpec{
 				id:   cid,
-				typ:  w.compIDToType[cid],
-				size: w.compIDToSize[cid],
+				typ:  w.components.compIDToType[cid],
+				size: w.components.compIDToSize[cid],
 			}
 			count++
 		}

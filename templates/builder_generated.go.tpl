@@ -38,7 +38,7 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}mask.set(id{{.Index}})
 	{{end}}
 	specs := []compSpec{
-		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.compIDToSize[id{{.Index}}]},
+		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.components.compIDToSize[id{{.Index}}]},
 		{{end}}
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
@@ -71,22 +71,22 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -103,25 +103,25 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])
 		*(*{{.TypeName}})(ptr{{.Index}}) = {{.BuilderVarName}}
 		{{end}}
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -141,8 +141,8 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	if !w.IsValid(e) {
 		return {{.ReturnNil}}
 	}
-	meta := w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}id{{.Index}} := b.id{{.Index}}
 	i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
@@ -166,8 +166,8 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := &w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}id{{.Index}} := b.id{{.Index}}
 	i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
@@ -186,17 +186,17 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	}
 	{{end}}
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		{{range .Components}}if !has{{.Index}} {
-			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.compIDToType[id{{.Index}}], size: w.compIDToSize[id{{.Index}}]}
+			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.components.compIDToType[id{{.Index}}], size: w.components.compIDToSize[id{{.Index}}]}
 			count++
 		}
 		{{end}}

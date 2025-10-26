@@ -21,14 +21,14 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 	if !w.IsValid(e) {
 		return nil, nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in GetComponent2")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -59,7 +59,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 
@@ -69,7 +69,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	if id2 == id1 {
 		panic("ecs: duplicate component types in SetComponent2")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -95,21 +95,21 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	}
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		if !has1 {
-			tempSpecs[count] = compSpec{id: id1, typ: w.compIDToType[id1], size: w.compIDToSize[id1]}
+			tempSpecs[count] = compSpec{id: id1, typ: w.components.compIDToType[id1], size: w.components.compIDToSize[id1]}
 			count++
 		}
 		if !has2 {
-			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
+			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
 
@@ -148,7 +148,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 
@@ -158,7 +158,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	if id2 == id1 {
 		panic("ecs: duplicate component types in RemoveComponent2")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -175,8 +175,8 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	newMask.unset(id2)
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -184,7 +184,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 			if cid == id1 || cid == id2 {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]
@@ -222,7 +222,7 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 	if !w.IsValid(e) {
 		return nil, nil, nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -230,7 +230,7 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in GetComponent3")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -265,7 +265,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -277,7 +277,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in SetComponent3")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -311,25 +311,25 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	}
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		if !has1 {
-			tempSpecs[count] = compSpec{id: id1, typ: w.compIDToType[id1], size: w.compIDToSize[id1]}
+			tempSpecs[count] = compSpec{id: id1, typ: w.components.compIDToType[id1], size: w.components.compIDToSize[id1]}
 			count++
 		}
 		if !has2 {
-			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
+			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
 		if !has3 {
-			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
+			tempSpecs[count] = compSpec{id: id3, typ: w.components.compIDToType[id3], size: w.components.compIDToSize[id3]}
 			count++
 		}
 
@@ -370,7 +370,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -382,7 +382,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in RemoveComponent3")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -403,8 +403,8 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	newMask.unset(id3)
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -412,7 +412,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 			if cid == id1 || cid == id2 || cid == id3 {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]
@@ -450,7 +450,7 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 	if !w.IsValid(e) {
 		return nil, nil, nil, nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -459,7 +459,7 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in GetComponent4")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -498,7 +498,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -512,7 +512,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in SetComponent4")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -554,29 +554,29 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	}
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		if !has1 {
-			tempSpecs[count] = compSpec{id: id1, typ: w.compIDToType[id1], size: w.compIDToSize[id1]}
+			tempSpecs[count] = compSpec{id: id1, typ: w.components.compIDToType[id1], size: w.components.compIDToSize[id1]}
 			count++
 		}
 		if !has2 {
-			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
+			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
 		if !has3 {
-			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
+			tempSpecs[count] = compSpec{id: id3, typ: w.components.compIDToType[id3], size: w.components.compIDToSize[id3]}
 			count++
 		}
 		if !has4 {
-			tempSpecs[count] = compSpec{id: id4, typ: w.compIDToType[id4], size: w.compIDToSize[id4]}
+			tempSpecs[count] = compSpec{id: id4, typ: w.components.compIDToType[id4], size: w.components.compIDToSize[id4]}
 			count++
 		}
 
@@ -619,7 +619,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -633,7 +633,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in RemoveComponent4")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -658,8 +658,8 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	newMask.unset(id4)
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -667,7 +667,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]
@@ -705,7 +705,7 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 	if !w.IsValid(e) {
 		return nil, nil, nil, nil, nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -715,7 +715,7 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in GetComponent5")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -758,7 +758,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -774,7 +774,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in SetComponent5")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -824,33 +824,33 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	}
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		if !has1 {
-			tempSpecs[count] = compSpec{id: id1, typ: w.compIDToType[id1], size: w.compIDToSize[id1]}
+			tempSpecs[count] = compSpec{id: id1, typ: w.components.compIDToType[id1], size: w.components.compIDToSize[id1]}
 			count++
 		}
 		if !has2 {
-			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
+			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
 		if !has3 {
-			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
+			tempSpecs[count] = compSpec{id: id3, typ: w.components.compIDToType[id3], size: w.components.compIDToSize[id3]}
 			count++
 		}
 		if !has4 {
-			tempSpecs[count] = compSpec{id: id4, typ: w.compIDToType[id4], size: w.compIDToSize[id4]}
+			tempSpecs[count] = compSpec{id: id4, typ: w.components.compIDToType[id4], size: w.components.compIDToSize[id4]}
 			count++
 		}
 		if !has5 {
-			tempSpecs[count] = compSpec{id: id5, typ: w.compIDToType[id5], size: w.compIDToSize[id5]}
+			tempSpecs[count] = compSpec{id: id5, typ: w.components.compIDToType[id5], size: w.components.compIDToSize[id5]}
 			count++
 		}
 
@@ -895,7 +895,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -911,7 +911,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in RemoveComponent5")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -940,8 +940,8 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	newMask.unset(id5)
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -949,7 +949,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 || cid == id5 {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]
@@ -987,7 +987,7 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if !w.IsValid(e) {
 		return nil, nil, nil, nil, nil, nil
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -998,7 +998,7 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in GetComponent6")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -1045,7 +1045,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -1063,7 +1063,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in SetComponent6")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -1121,37 +1121,37 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	}
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		if !has1 {
-			tempSpecs[count] = compSpec{id: id1, typ: w.compIDToType[id1], size: w.compIDToSize[id1]}
+			tempSpecs[count] = compSpec{id: id1, typ: w.components.compIDToType[id1], size: w.components.compIDToSize[id1]}
 			count++
 		}
 		if !has2 {
-			tempSpecs[count] = compSpec{id: id2, typ: w.compIDToType[id2], size: w.compIDToSize[id2]}
+			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
 		if !has3 {
-			tempSpecs[count] = compSpec{id: id3, typ: w.compIDToType[id3], size: w.compIDToSize[id3]}
+			tempSpecs[count] = compSpec{id: id3, typ: w.components.compIDToType[id3], size: w.components.compIDToSize[id3]}
 			count++
 		}
 		if !has4 {
-			tempSpecs[count] = compSpec{id: id4, typ: w.compIDToType[id4], size: w.compIDToSize[id4]}
+			tempSpecs[count] = compSpec{id: id4, typ: w.components.compIDToType[id4], size: w.components.compIDToSize[id4]}
 			count++
 		}
 		if !has5 {
-			tempSpecs[count] = compSpec{id: id5, typ: w.compIDToType[id5], size: w.compIDToSize[id5]}
+			tempSpecs[count] = compSpec{id: id5, typ: w.components.compIDToType[id5], size: w.components.compIDToSize[id5]}
 			count++
 		}
 		if !has6 {
-			tempSpecs[count] = compSpec{id: id6, typ: w.compIDToType[id6], size: w.compIDToSize[id6]}
+			tempSpecs[count] = compSpec{id: id6, typ: w.components.compIDToType[id6], size: w.components.compIDToSize[id6]}
 			count++
 		}
 
@@ -1198,7 +1198,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
@@ -1216,7 +1216,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in RemoveComponent6")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i1 := id1 >> 6
 	o1 := id1 & 63
 	i2 := id2 >> 6
@@ -1249,8 +1249,8 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	newMask.unset(id6)
 
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -1258,7 +1258,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 || cid == id5 || cid == id6 {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]

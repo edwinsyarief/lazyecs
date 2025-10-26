@@ -33,7 +33,7 @@ func NewBuilder[T any](w *World) *Builder[T] {
 	id := w.getCompTypeID(t)
 	var mask bitmask256
 	mask.set(id)
-	sp := compSpec{id: id, typ: t, size: w.compIDToSize[id]}
+	sp := compSpec{id: id, typ: t, size: w.components.compIDToSize[id]}
 	arch := w.getOrCreateArchetype(mask, []compSpec{sp})
 	return &Builder[T]{world: w, arch: arch, compID: id}
 }
@@ -69,22 +69,22 @@ func (b *Builder[T]) NewEntities(count int) {
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -101,24 +101,24 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		ptr := unsafe.Pointer(uintptr(a.compPointers[b.compID]) + uintptr(startSize+k)*a.compSizes[b.compID])
 		*(*T)(ptr) = comp
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -138,8 +138,8 @@ func (b *Builder[T]) Get(e Entity) *T {
 	if !w.IsValid(e) {
 		return nil
 	}
-	meta := w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	id := b.compID
 	i := id >> 6
 	o := id & 63
@@ -156,8 +156,8 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := &w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	id := b.compID
 	i := id >> 6
 	o := id & 63
@@ -170,16 +170,16 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	newMask := a.mask
 	newMask.set(id)
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
-		tempSpecs[count] = compSpec{id: id, typ: w.compIDToType[id], size: w.compIDToSize[id]}
+		tempSpecs[count] = compSpec{id: id, typ: w.components.compIDToType[id], size: w.components.compIDToSize[id]}
 		count++
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetype(newMask, specs)
