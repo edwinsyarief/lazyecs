@@ -80,6 +80,8 @@ func (f *Filter2[T1, T2]) Reset() {
 
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -89,25 +91,24 @@ func (f *Filter2[T1, T2]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter2[T1, T2]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			f.curBase1 = a.compPointers[f.id1]
-			f.curBase2 = a.compPointers[f.id2]
-
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase1 = a.compPointers[f.id1]
+	f.curBase2 = a.compPointers[f.id2]
+
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	f.curEnt = f.curEntityIDs[0]
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -239,6 +240,8 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -248,26 +251,25 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter3[T1, T2, T3]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			f.curBase1 = a.compPointers[f.id1]
-			f.curBase2 = a.compPointers[f.id2]
-			f.curBase3 = a.compPointers[f.id3]
-
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase1 = a.compPointers[f.id1]
+	f.curBase2 = a.compPointers[f.id2]
+	f.curBase3 = a.compPointers[f.id3]
+
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	f.curEnt = f.curEntityIDs[0]
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -408,6 +410,8 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -417,27 +421,26 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter4[T1, T2, T3, T4]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			f.curBase1 = a.compPointers[f.id1]
-			f.curBase2 = a.compPointers[f.id2]
-			f.curBase3 = a.compPointers[f.id3]
-			f.curBase4 = a.compPointers[f.id4]
-
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase1 = a.compPointers[f.id1]
+	f.curBase2 = a.compPointers[f.id2]
+	f.curBase3 = a.compPointers[f.id3]
+	f.curBase4 = a.compPointers[f.id4]
+
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	f.curEnt = f.curEntityIDs[0]
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -587,6 +590,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -596,28 +601,27 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			f.curBase1 = a.compPointers[f.id1]
-			f.curBase2 = a.compPointers[f.id2]
-			f.curBase3 = a.compPointers[f.id3]
-			f.curBase4 = a.compPointers[f.id4]
-			f.curBase5 = a.compPointers[f.id5]
-
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase1 = a.compPointers[f.id1]
+	f.curBase2 = a.compPointers[f.id2]
+	f.curBase3 = a.compPointers[f.id3]
+	f.curBase4 = a.compPointers[f.id4]
+	f.curBase5 = a.compPointers[f.id5]
+
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	f.curEnt = f.curEntityIDs[0]
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
@@ -776,6 +780,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -785,29 +791,28 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			f.curBase1 = a.compPointers[f.id1]
-			f.curBase2 = a.compPointers[f.id2]
-			f.curBase3 = a.compPointers[f.id3]
-			f.curBase4 = a.compPointers[f.id4]
-			f.curBase5 = a.compPointers[f.id5]
-			f.curBase6 = a.compPointers[f.id6]
-
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		f.curEnt = f.curEntityIDs[f.curIdx]
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase1 = a.compPointers[f.id1]
+	f.curBase2 = a.compPointers[f.id2]
+	f.curBase3 = a.compPointers[f.id3]
+	f.curBase4 = a.compPointers[f.id4]
+	f.curBase5 = a.compPointers[f.id5]
+	f.curBase6 = a.compPointers[f.id6]
+
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	f.curEnt = f.curEntityIDs[0]
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
