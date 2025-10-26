@@ -10,7 +10,6 @@ type Filter{{.N}}[{{.Types}}] struct {
 	{{range .Components}}compSize{{.Index}} uintptr
 	{{end}}
 	curArchSize  int
-	curEnt       Entity
 	{{range .Components}}id{{.Index}}       uint8
 	{{end}}
 }
@@ -66,6 +65,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 		{{end}}
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
@@ -75,30 +76,27 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
-			{{end}}
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
-		f.curEnt = f.curEntityIDs[f.curIdx]
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
+	{{end}}
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the {{.N}} components ({{.TypeVars}}) for the
@@ -121,7 +119,7 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1

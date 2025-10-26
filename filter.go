@@ -9,9 +9,6 @@ import (
 // specific set of components. It is the primary mechanism for implementing
 // game logic (systems). The filter iterates directly over the component arrays
 // within matching archetypes, providing maximum performance.
-//
-// This is the filter for entities with one component. Generated filters for
-// multiple components (e.g., Filter2, Filter3) follow a similar pattern.
 type Filter[T any] struct {
 	queryCache
 	curBase      unsafe.Pointer

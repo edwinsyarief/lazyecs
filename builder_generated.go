@@ -107,7 +107,6 @@ func (b *Builder2[T1, T2]) NewEntities(count int) {
 //   - count: The number of entities to create.
 //   - comp1: The initial value for the component T1.
 //   - comp2: The initial value for the component T2.
-
 func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2) {
 	if count == 0 {
 		return
@@ -372,7 +371,6 @@ func (b *Builder3[T1, T2, T3]) NewEntities(count int) {
 //   - comp1: The initial value for the component T1.
 //   - comp2: The initial value for the component T2.
 //   - comp3: The initial value for the component T3.
-
 func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3) {
 	if count == 0 {
 		return
@@ -666,7 +664,6 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntities(count int) {
 //   - comp2: The initial value for the component T2.
 //   - comp3: The initial value for the component T3.
 //   - comp4: The initial value for the component T4.
-
 func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4) {
 	if count == 0 {
 		return
@@ -989,7 +986,6 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntities(count int) {
 //   - comp3: The initial value for the component T3.
 //   - comp4: The initial value for the component T4.
 //   - comp5: The initial value for the component T5.
-
 func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5) {
 	if count == 0 {
 		return
@@ -1341,7 +1337,6 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntities(count int) {
 //   - comp4: The initial value for the component T4.
 //   - comp5: The initial value for the component T5.
 //   - comp6: The initial value for the component T6.
-
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2, comp3 T3, comp4 T4, comp5 T5, comp6 T6) {
 	if count == 0 {
 		return
