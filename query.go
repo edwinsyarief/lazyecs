@@ -1,3 +1,4 @@
+// query.go
 package teishoku
 
 // queryCache provides a reusable mechanism for caching the results of a filter
@@ -29,7 +30,7 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 func (c *queryCache) updateMatching() {
 	c.matchingArches = c.matchingArches[:0]
 	for _, a := range c.world.archetypes.archetypes {
-		if a.mask.contains(c.mask) {
+		if a.size > 0 && a.mask.contains(c.mask) {
 			c.matchingArches = append(c.matchingArches, a)
 		}
 	}
