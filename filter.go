@@ -10,14 +10,14 @@ import (
 // game logic (systems). The filter iterates directly over the component arrays
 // within matching archetypes, providing maximum performance.
 type Filter[T any] struct {
-	queryCache
 	curBase      unsafe.Pointer
 	curEntityIDs []Entity
-	curMatchIdx  int // index into matchingArches
-	curIdx       int // index into the current archetype's entity/component array
-	compSize     uintptr
-	curArchSize  int
-	compID       uint8
+	queryCache
+	curMatchIdx int // index into matchingArches
+	curIdx      int // index into the current archetype's entity/component array
+	compSize    uintptr
+	curArchSize int
+	compID      uint8
 }
 
 // NewFilter creates a new `Filter` that iterates over all entities possessing
@@ -46,7 +46,8 @@ func NewFilter[T any](w *World) *Filter[T] {
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component type, equivalent to calling `NewFilter`.
 func (f *Filter[T]) New(w *World) *Filter[T] {
 	return NewFilter[T](w)
 }
@@ -146,8 +147,17 @@ func (f *Filter[T]) RemoveEntities() {
 	f.Reset()
 }
 
-// Entities returns all entities that match the filter.
-// Note: The returned slice is owned by the Filter and may be invalidated on next Entities call or world mutation. Copy if needed for long-term use.
+// Entities returns a slice containing all entities that match the filter's
+// query. This method retrieves a cached list of entities, which is updated only
+// when the filter is reset or detects that the world's archetypes have changed.
+//
+// The returned slice is owned by the filter and will be invalidated if the
+// world is modified (e.g., by creating or deleting entities) or when the filter
+// is reset. If you need to retain the list of entities for long-term use, make
+// a copy of the slice.
+//
+// Returns:
+//   - A slice of matching entities.
 func (f *Filter[T]) Entities() []Entity {
 	return f.queryCache.Entities()
 }

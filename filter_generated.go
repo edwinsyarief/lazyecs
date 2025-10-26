@@ -58,7 +58,8 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter2`.
 func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
 	return NewFilter2[T1, T2](w)
 }
@@ -85,7 +86,8 @@ func (f *Filter2[T1, T2]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -110,6 +112,9 @@ func (f *Filter2[T1, T2]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter2[T1, T2]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }
@@ -214,7 +219,8 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter3`.
 func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
 	return NewFilter3[T1, T2, T3](w)
 }
@@ -242,7 +248,8 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -268,6 +275,9 @@ func (f *Filter3[T1, T2, T3]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter3[T1, T2, T3]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }
@@ -380,7 +390,8 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter4`.
 func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
 	return NewFilter4[T1, T2, T3, T4](w)
 }
@@ -409,7 +420,8 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -436,6 +448,9 @@ func (f *Filter4[T1, T2, T3, T4]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter4[T1, T2, T3, T4]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }
@@ -556,7 +571,8 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter5`.
 func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5] {
 	return NewFilter5[T1, T2, T3, T4, T5](w)
 }
@@ -586,7 +602,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -614,6 +631,9 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter5[T1, T2, T3, T4, T5]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }
@@ -742,7 +762,8 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter6`.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4, T5, T6] {
 	return NewFilter6[T1, T2, T3, T4, T5, T6](w)
 }
@@ -773,7 +794,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -802,6 +824,9 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }

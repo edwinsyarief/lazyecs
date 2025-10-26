@@ -14,7 +14,16 @@ type queryCache struct {
 	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
 }
 
-// newQueryCache creates a new query cache.
+// newQueryCache creates and initializes a new `queryCache`. It sets up the
+// cache with the specified world and component mask and pre-allocates slices
+// for matching archetypes and entities to reduce future allocations.
+//
+// Parameters:
+//   - w: The `World` to associate with the cache.
+//   - m: The `bitmask256` representing the component layout to be matched.
+//
+// Returns:
+//   - An initialized `queryCache` instance.
 func newQueryCache(w *World, m bitmask256) queryCache {
 	return queryCache{
 		world:          w,
@@ -37,7 +46,11 @@ func (c *queryCache) updateMatching() {
 	c.lastVersion = c.world.archetypes.archetypeVersion
 }
 
-// updateCachedEntities rebuilds the cached list of entities.
+// updateCachedEntities rebuilds the cached list of entities by collecting all
+// entity IDs from the archetypes currently matching the filter's query. This
+// method is called when the cache is stale to ensure the entity list is
+// up-to-date with the world state. After rebuilding, it updates the cache's
+// mutation version to match the world's current version.
 func (c *queryCache) updateCachedEntities() {
 	total := 0
 	for _, a := range c.matchingArches {
@@ -52,12 +65,25 @@ func (c *queryCache) updateCachedEntities() {
 	c.lastMutationVersion = c.world.mutationVersion
 }
 
-// IsStale checks if the cache is out of sync with the world state.
+// IsStale checks if the cache is out of sync with the world's state by
+// comparing the cache's last known version numbers with the world's current
+// versions. A cache is considered stale if either the archetype structure has
+// changed (e.g., a new archetype was created) or if entities have been created
+// or deleted.
+//
+// Returns:
+//   - true if the cache is stale and needs to be updated, false otherwise.
 func (c *queryCache) IsStale() bool {
 	return c.world.archetypes.archetypeVersion != c.lastVersion || c.world.mutationVersion != c.lastMutationVersion
 }
 
-// Entities returns all entities that match the filter.
+// Entities returns a slice of all entities that match the cached query. If the
+// cache is detected as stale (i.e., out of sync with the world state), it will
+// first update its internal lists of matching archetypes and entities before
+// returning the result. This ensures the returned slice is always up-to-date.
+//
+// Returns:
+//   - A slice of `Entity` objects that match the query.
 func (c *queryCache) Entities() []Entity {
 	if c.IsStale() {
 		c.updateMatching()

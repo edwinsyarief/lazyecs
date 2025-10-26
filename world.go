@@ -68,6 +68,27 @@ func (a *archetype) resizeTo(newCap int, w *World) {
 	}
 }
 
+type componentRegistry struct {
+	compIDToType   [MaxComponentTypes]reflect.Type
+	compTypeMap    map[reflect.Type]uint8
+	compIDToSize   [MaxComponentTypes]uintptr
+	nextCompTypeID uint16 // counter for assigning new component type IDs
+}
+
+type entityRegistry struct {
+	freeIDs         []uint32     // stack of recycled entity IDs
+	metas           []entityMeta // stores metadata for each entity, indexed by entity ID
+	capacity        int          // current maximum number of entities
+	initialCapacity int          // initial capacity, used for expansion
+	nextEntityVer   uint32       // version for the next created entity
+}
+
+type archetypeRegistry struct {
+	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
+	archetypes       []*archetype       // list of all archetypes in the world
+	archetypeVersion uint32             // incremented when a new archetype is created
+}
+
 // World is the central container for all entities, components, and archetypes.
 // It manages the entire state of the ECS, including entity creation, deletion,
 // and component management. All operations are performed within the context of a
@@ -83,24 +104,6 @@ type World struct {
 	components      componentRegistry
 	mutationVersion uint32 // incremented on entity mutations
 }
-type componentRegistry struct {
-	compIDToType   [MaxComponentTypes]reflect.Type
-	compTypeMap    map[reflect.Type]uint8
-	compIDToSize   [MaxComponentTypes]uintptr
-	nextCompTypeID uint16 // counter for assigning new component type IDs
-}
-type entityRegistry struct {
-	freeIDs         []uint32     // stack of recycled entity IDs
-	metas           []entityMeta // stores metadata for each entity, indexed by entity ID
-	capacity        int          // current maximum number of entities
-	initialCapacity int          // initial capacity, used for expansion
-	nextEntityVer   uint32       // version for the next created entity
-}
-type archetypeRegistry struct {
-	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
-	archetypes       []*archetype       // list of all archetypes in the world
-	archetypeVersion uint32             // incremented when a new archetype is created
-}
 
 // NewWorld creates and initializes a new World with a specified initial
 // capacity for entities. It pre-allocates memory for the entity metadata and
@@ -111,7 +114,7 @@ type archetypeRegistry struct {
 //     Choosing a suitable capacity can prevent re-allocations during runtime.
 //
 // Returns:
-//   - A pointer to the newly created World.
+//   - The newly created World.
 func NewWorld(initialCapacity int) World {
 	w := World{
 		resources: &Resources{},
@@ -225,11 +228,14 @@ func (w *World) ClearEntities() {
 	w.mutationVersion++
 }
 
-// IsValid checks if the entity is currently alive in the world.
-// It verifies both the ID bounds and version match to detect recycled entities.
+// IsValid checks if an entity reference is currently alive and valid within the
+// world. An entity is considered valid if its ID is within bounds and its
+// version matches the world's current version for that ID. This prevents
+// "stale" entity references from accessing incorrect data after an entity has
+// been deleted and its ID recycled.
 //
 // Parameters:
-//   - e: The Entity to check.
+//   - e: The Entity to validate.
 //
 // Returns:
 //   - true if the entity is valid, false otherwise.

@@ -45,7 +45,8 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter{{.N}}`.
 func (f *Filter{{.N}}[{{.TypeVars}}]) New(w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	return NewFilter{{.N}}[{{.TypeVars}}](w)
 }
@@ -71,7 +72,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
@@ -95,6 +97,9 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
 	return f.curEntityIDs[f.curIdx]
 }

@@ -38,7 +38,8 @@ func NewBuilder[T any](w *World) *Builder[T] {
 	return &Builder[T]{world: w, arch: arch, compID: id}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component type, equivalent to calling `NewBuilder`.
 func (b *Builder[T]) New(w *World) *Builder[T] {
 	return NewBuilder[T](w)
 }
@@ -150,7 +151,19 @@ func (b *Builder[T]) Get(e Entity) *T {
 	return (*T)(ptr)
 }
 
-// Set replaces the existing component value if it exists, or adds the component to the entity if it doesn't have it.
+// Set adds or updates the component `T` for a given entity with the specified
+// value.
+//
+// If the entity already has the component, its value is updated. If it does
+// not, the component is added, which may trigger an archetype change for the
+// entity. This operation is slower than `Get` because it may involve moving
+// the entity between archetypes.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
+//
+// Parameters:
+//   - e: The entity to modify.
+//   - comp: The component value to set.
 func (b *Builder[T]) Set(e Entity, comp T) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -199,7 +212,12 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	meta.index = newIdx
 }
 
-// SetBatch sets the component value for multiple entities.
+// SetBatch efficiently sets the component value for a slice of entities. It
+// iterates over the provided entities and calls `Set` for each one.
+//
+// Parameters:
+//   - entities: A slice of entities to modify.
+//   - comp: The component value to set for each entity.
 func (b *Builder[T]) SetBatch(entities []Entity, comp T) {
 	for _, e := range entities {
 		b.Set(e, comp)

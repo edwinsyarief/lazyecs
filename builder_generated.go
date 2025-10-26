@@ -55,13 +55,15 @@ func NewBuilder2[T1 any, T2 any](w *World) *Builder2[T1, T2] {
 	return &Builder2[T1, T2]{world: w, arch: arch, id1: id1, id2: id2}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder2`.
 func (b *Builder2[T1, T2]) New(w *World) *Builder2[T1, T2] {
 	return NewBuilder2[T1, T2](w)
 }
 
 // NewEntity creates a single new entity with the 2 components defined by the
-// builder: T1, T2.
+// builder: T1, T2. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -71,7 +73,8 @@ func (b *Builder2[T1, T2]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the 2 components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -171,12 +174,18 @@ func (b *Builder2[T1, T2]) Get(e Entity) (*T1, *T2) {
 	return (*T1)(ptr1), (*T2)(ptr2)
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components (T1, T2) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
+//   - e: The entity to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
 func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -250,12 +259,13 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
 //
 // Parameters:
-//   - entities: The entities slices to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
+//   - entities: A slice of entities to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
 
 func (b *Builder2[T1, T2]) SetBatch(entities []Entity, v1 T1, v2 T2) {
 	for _, e := range entities {
@@ -318,13 +328,15 @@ func NewBuilder3[T1 any, T2 any, T3 any](w *World) *Builder3[T1, T2, T3] {
 	return &Builder3[T1, T2, T3]{world: w, arch: arch, id1: id1, id2: id2, id3: id3}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder3`.
 func (b *Builder3[T1, T2, T3]) New(w *World) *Builder3[T1, T2, T3] {
 	return NewBuilder3[T1, T2, T3](w)
 }
 
 // NewEntity creates a single new entity with the 3 components defined by the
-// builder: T1, T2, T3.
+// builder: T1, T2, T3. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -334,7 +346,8 @@ func (b *Builder3[T1, T2, T3]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the 3 components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -441,13 +454,19 @@ func (b *Builder3[T1, T2, T3]) Get(e Entity) (*T1, *T2, *T3) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components (T1, T2, T3) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
+//   - e: The entity to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
 func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -536,13 +555,14 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
 //
 // Parameters:
-//   - entities: The entities slices to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
+//   - entities: A slice of entities to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
 
 func (b *Builder3[T1, T2, T3]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3) {
 	for _, e := range entities {
@@ -610,13 +630,15 @@ func NewBuilder4[T1 any, T2 any, T3 any, T4 any](w *World) *Builder4[T1, T2, T3,
 	return &Builder4[T1, T2, T3, T4]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder4`.
 func (b *Builder4[T1, T2, T3, T4]) New(w *World) *Builder4[T1, T2, T3, T4] {
 	return NewBuilder4[T1, T2, T3, T4](w)
 }
 
 // NewEntity creates a single new entity with the 4 components defined by the
-// builder: T1, T2, T3, T4.
+// builder: T1, T2, T3, T4. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -626,7 +648,8 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the 4 components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -740,14 +763,20 @@ func (b *Builder4[T1, T2, T3, T4]) Get(e Entity) (*T1, *T2, *T3, *T4) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components (T1, T2, T3, T4) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
+//   - e: The entity to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
 func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -851,14 +880,15 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
 //
 // Parameters:
-//   - entities: The entities slices to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
+//   - entities: A slice of entities to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
 
 func (b *Builder4[T1, T2, T3, T4]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	for _, e := range entities {
@@ -931,13 +961,15 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 	return &Builder5[T1, T2, T3, T4, T5]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder5`.
 func (b *Builder5[T1, T2, T3, T4, T5]) New(w *World) *Builder5[T1, T2, T3, T4, T5] {
 	return NewBuilder5[T1, T2, T3, T4, T5](w)
 }
 
 // NewEntity creates a single new entity with the 5 components defined by the
-// builder: T1, T2, T3, T4, T5.
+// builder: T1, T2, T3, T4, T5. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -947,7 +979,8 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the 5 components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -1068,15 +1101,21 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5) {
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components (T1, T2, T3, T4, T5) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
-//   - comp5: The initial value for the component T5.
+//   - e: The entity to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
+//   - v5: The component value to set for type T5.
 func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -1195,15 +1234,16 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
 //
 // Parameters:
-//   - entities: The entities slices to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
-//   - comp5: The initial value for the component T5.
+//   - entities: A slice of entities to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
+//   - v5: The component value to set for type T5.
 
 func (b *Builder5[T1, T2, T3, T4, T5]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
 	for _, e := range entities {
@@ -1281,13 +1321,15 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 	return &Builder6[T1, T2, T3, T4, T5, T6]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, id6: id6}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder6`.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) New(w *World) *Builder6[T1, T2, T3, T4, T5, T6] {
 	return NewBuilder6[T1, T2, T3, T4, T5, T6](w)
 }
 
 // NewEntity creates a single new entity with the 6 components defined by the
-// builder: T1, T2, T3, T4, T5, T6.
+// builder: T1, T2, T3, T4, T5, T6. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -1297,7 +1339,8 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the 6 components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -1425,16 +1468,22 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Get(e Entity) (*T1, *T2, *T3, *T4, *T
 	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components (T1, T2, T3, T4, T5, T6) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
-//   - comp5: The initial value for the component T5.
-//   - comp6: The initial value for the component T6.
+//   - e: The entity to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
+//   - v5: The component value to set for type T5.
+//   - v6: The component value to set for type T6.
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
 	w := b.world
 	if !w.IsValid(e) {
@@ -1568,16 +1617,17 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
 //
 // Parameters:
-//   - entities: The entities slices to set the components for.
-//   - comp1: The initial value for the component T1.
-//   - comp2: The initial value for the component T2.
-//   - comp3: The initial value for the component T3.
-//   - comp4: The initial value for the component T4.
-//   - comp5: The initial value for the component T5.
-//   - comp6: The initial value for the component T6.
+//   - entities: A slice of entities to modify.
+//   - v1: The component value to set for type T1.
+//   - v2: The component value to set for type T2.
+//   - v3: The component value to set for type T3.
+//   - v4: The component value to set for type T4.
+//   - v5: The component value to set for type T5.
+//   - v6: The component value to set for type T6.
 
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
 	for _, e := range entities {

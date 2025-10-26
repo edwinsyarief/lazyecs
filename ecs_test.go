@@ -422,7 +422,7 @@ func BenchmarkBuilderNewEntitiesWithValueSet2(b *testing.B) {
 	}
 }
 
-func BenchmarkBuilderSet(b *testing.B) {
+func BenchmarkBuilderSetComponent(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -442,6 +442,32 @@ func BenchmarkBuilderSet(b *testing.B) {
 				b.StartTimer()
 				for j := 0; j < size; j++ {
 					builder.Set(ents[j], Position{})
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkBuilderSetComponent2(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		name := fmt.Sprintf("%dK", size/1000)
+		if size == 1000000 {
+			name = "1M"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				w := NewWorld(size)
+				ents := make([]Entity, size)
+				for j := 0; j < size; j++ {
+					ents[j] = w.CreateEntity()
+				}
+				builder := NewBuilder2[Position, Velocity](&w)
+				b.StartTimer()
+				for j := 0; j < size; j++ {
+					builder.Set(ents[j], Position{}, Velocity{})
 				}
 			}
 		})
@@ -491,7 +517,7 @@ func BenchmarkBuilderGetComponent2(b *testing.B) {
 	}
 }
 
-func BenchmarkGlobalGetComponent(b *testing.B) {
+func BenchmarkAPIGetComponent(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -512,7 +538,7 @@ func BenchmarkGlobalGetComponent(b *testing.B) {
 	}
 }
 
-func BenchmarkGlobalGetComponent2(b *testing.B) {
+func BenchmarkAPIGetComponent2(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -533,7 +559,7 @@ func BenchmarkGlobalGetComponent2(b *testing.B) {
 	}
 }
 
-func BenchmarkSetComponentExisting(b *testing.B) {
+func BenchmarkAPISetComponentExisting(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -555,7 +581,7 @@ func BenchmarkSetComponentExisting(b *testing.B) {
 	}
 }
 
-func BenchmarkSetComponentNew(b *testing.B) {
+func BenchmarkAPISetComponentNew(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -584,7 +610,7 @@ func BenchmarkSetComponentNew(b *testing.B) {
 }
 
 // Removal Benchmarks
-func BenchmarkRemoveComponent(b *testing.B) {
+func BenchmarkAPIRemoveComponent(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
