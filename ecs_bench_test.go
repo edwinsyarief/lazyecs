@@ -24,7 +24,7 @@ func BenchmarkCreateWorld(b *testing.B) {
 
 // Expansion Benchmarks
 func BenchmarkAutoExpand(b *testing.B) {
-	initialSizes := []int{1000, 10000, 100000}
+	initialSizes := []int{1000, 10000, 100000, 1000000}
 	expandMultiplier := 2
 	for _, initSize := range initialSizes {
 		name := fmt.Sprintf("%dK_init_x%d", initSize/1000, expandMultiplier)
