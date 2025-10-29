@@ -266,7 +266,7 @@ func BenchmarkBuilderGetComponent2(b *testing.B) {
 	}
 }
 
-func BenchmarkAPIGetComponent(b *testing.B) {
+func BenchmarkFunctionsGetComponent(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -287,7 +287,7 @@ func BenchmarkAPIGetComponent(b *testing.B) {
 	}
 }
 
-func BenchmarkAPIGetComponent2(b *testing.B) {
+func BenchmarkFunctionsGetComponent2(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -308,7 +308,7 @@ func BenchmarkAPIGetComponent2(b *testing.B) {
 	}
 }
 
-func BenchmarkAPISetComponentExisting(b *testing.B) {
+func BenchmarkFunctionsSetComponentExisting(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -330,7 +330,7 @@ func BenchmarkAPISetComponentExisting(b *testing.B) {
 	}
 }
 
-func BenchmarkAPISetComponentNew(b *testing.B) {
+func BenchmarkFunctionsSetComponentNew(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -359,7 +359,7 @@ func BenchmarkAPISetComponentNew(b *testing.B) {
 }
 
 // Removal Benchmarks
-func BenchmarkAPIRemoveComponent(b *testing.B) {
+func BenchmarkFunctionsRemoveComponent(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
