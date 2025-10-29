@@ -216,19 +216,36 @@ Notably, many core operations like creating entities, accessing components, and 
 
 | Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Create World** | 9.66 | 6.72 | 11.97 | 4.72 |
-| **Auto Expand** | 27.60 | 27.12 | 30.27 | N/A |
-| **Create Entity** | 6.98 | 6.20 | 5.67 | 5.61 |
-| **New Entities (Batch)** | 2.62 | 2.55 | 2.27 | 2.43 |
-| **New Entities With Value Set (Batch)** | 4.52 | 4.51 | 4.54 | 4.12 |
-| **Get Component** | 4.49 | 4.46 | 4.59 | 4.58 |
-| **Set Component Existing** | 25.31 | 25.35 | 25.40 | 25.54 |
-| **Set Component New** | 78.85 | 75.55 | 73.69 | 73.78 |
-| **Remove Component** | 77.73 | 73.80 | 72.28 | 72.06 |
-| **Remove Entity** | 12.49 | 12.98 | 11.37 | 11.11 |
-| **Filter & Remove (Batch)** | 4.75 | 4.75 | 4.20 | 4.15 |
-| **Filter & Iterate** | 0.95 | 0.94 | 0.93 | 0.93 |
-| **Clear Entities** | 3.25 | 3.31 | 2.65 | 2.62 |
+| **Create World** | 8.06 | 7.22 | 12.08 | 4.23 |
+| **Auto Expand** | 26.29 | 27.27 | 24.03 | 22.23 |
+| **World: Create Entity** | 6.83 | 5.99 | 5.68 | 5.61 |
+| **World: Create Entities (Batch)** | 2.64 | 2.56 | 2.28 | 2.34 |
+| **World: Remove Entity** | 15.09 | 16.07 | 17.53 | 17.17 |
+| **World: Remove Entities (Batch)**| 14.91 | 15.19 | 17.64 | 16.89 |
+| **World: Clear Entities** | 1.49 | 1.31 | 0.94 | 0.89 |
+| **Builder: New Entity** | 6.92 | 7.20 | 5.98 | 5.47 |
+| **Builder: New Entities (Batch)** | 2.76 | 2.61 | 2.75 | 2.43 |
+| **Builder: New Entities w/ Value Set (Batch)** | 4.52 | 4.54 | 4.88 | 4.11 |
+| **Builder: New Entities w/ Value Set 2 (Batch)**| 6.29 | 6.60 | 6.73 | 5.53 |
+| **Builder: Set Component** | 48.90 | 49.10 | 47.88 | 46.69 |
+| **Builder: Set Component 2** | 56.46 | 57.05 | 55.27 | 54.13 |
+| **Builder: Get Component** | 4.41 | 4.42 | 4.44 | 4.48 |
+| **Builder: Get Component 2** | 5.46 | 5.47 | 5.48 | 5.44 |
+| **Functions: Get Component** | 20.26 | 20.09 | 20.13 | 20.10 |
+| **Functions: Get Component 2** | 38.13 | 38.10 | 38.15 | 38.21 |
+| **Functions: Set Component Existing** | 25.19 | 25.33 | 25.37 | 25.36 |
+| **Functions: Set Component New** | 78.10 | 74.83 | 74.11 | 73.08 |
+| **Functions: Remove Component** | 78.04 | 75.38 | 75.40 | 72.43 |
+| **Filter: Remove Entities** | 4.81 | 4.52 | 4.68 | 4.06 |
+| **Filter: Remove Entities 2** | 4.82 | 4.56 | 4.71 | 4.10 |
+| **Filter & Iterate** | 0.94 | 0.94 | 0.93 | 0.93 |
+| **Filter & Iterate (2 components)** | 0.95 | 0.94 | 0.94 | 0.93 |
+| **Filter & Iterate (3 components)** | 0.95 | 0.93 | 0.93 | 0.93 |
+| **Filter & Iterate (4 components)** | 0.95 | 0.94 | 0.93 | 0.93 |
+| **Filter & Iterate (5 components)** | 0.95 | 0.93 | 0.94 | 0.93 |
+| **Filter & Iterate (6 components)** | 0.95 | 0.94 | 0.94 | 0.93 |
+| **Filter: Get Entities (Cached)** | 2.46 | 2.46 | 2.46 | 2.46 |
+| **Filter: Get Entities (Uncached)** | 346.30 | 252.60 | 267.91 | 390.28 |
 
 ### Event Bus Benchmark
 
@@ -300,6 +317,56 @@ BenchmarkBuilderSetComponent2/100K-4                  	     217	   5527015 ns/op
 BenchmarkBuilderSetComponent2/1M-4                    	      21	  54132131 ns/op	       0 B/op	       0 allocs/op
 BenchmarkBuilderGetComponent/1K-4                     	272134158	         4.409 ns/op	       0 B/op	       0 allocs/op
 BenchmarkBuilderGetComponent/10K-4                    	271559527	         4.415 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/100K-4                   	270368102	         4.441 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/1M-4                     	268511968	         4.478 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/1K-4                    	219847201	         5.463 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/10K-4                   	219547078	         5.470 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/100K-4                  	219339015	         5.484 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/1M-4                    	220231581	         5.443 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent/1K-4                   	59928711	        20.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent/10K-4                  	59552412	        20.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent/100K-4                 	59446690	        20.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent/1M-4                   	59697913	        20.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent2/1K-4                  	31533368	        38.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent2/10K-4                 	31475983	        38.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent2/100K-4                	31436338	        38.15 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsGetComponent2/1M-4                  	31529899	        38.21 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentExisting/1K-4           	46264540	        25.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentExisting/10K-4          	47154074	        25.33 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentExisting/100K-4         	47273604	        25.37 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentExisting/1M-4           	46404804	        25.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentNew/1K-4                	   15576	     78096 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentNew/10K-4               	    1634	    748340 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentNew/100K-4              	     162	   7410951 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsSetComponentNew/1M-4                	      15	  73075242 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsRemoveComponent/1K-4                	   15333	     78038 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsRemoveComponent/10K-4               	    1591	    753752 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsRemoveComponent/100K-4              	     163	   7539667 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFunctionsRemoveComponent/1M-4                	      16	  72432325 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/1K-4                       	   79942	     15093 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/10K-4                      	    8854	    160734 ns/op	       1 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/100K-4                     	     684	   1753272 ns/op	       7 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/1M-4                       	      69	  17169730 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/1K-4                     	   79728	     14906 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/10K-4                    	    8713	    151913 ns/op	       1 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/100K-4                   	     678	   1764058 ns/op	       7 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/1M-4                     	      69	  16888842 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/1K-4                      	  814066	      1492 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/10K-4                     	   91455	     13123 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/100K-4                    	   12568	     94474 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/1M-4                      	    1342	    894994 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1K-4                    	  248462	      4811 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/10K-4                   	   26332	     45231 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/100K-4                  	    2776	    467860 ns/op	      10 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1M-4                    	     294	   4058059 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1K-4                   	  248853	      4821 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/10K-4                  	   26223	     45641 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/100K-4                 	    2758	    471492 ns/op	       8 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1M-4                   	     292	   4099803 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1K-4                           	 1267078	       944.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/10K-4                          	  128126	      9365 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/100K-4                         	   12782	     93346 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1M-4                           	    1286	    934779 ns/op	       0 B/op	       0 allocs/op
 BenchmarkFilter2Iterate/1K-4                          	 1268396	       945.8 ns/op	       0 B/op	       0 allocs/op
 BenchmarkFilter2Iterate/10K-4                         	  128301	      9360 ns/op	       0 B/op	       0 allocs/op
 BenchmarkFilter2Iterate/100K-4                        	   12831	     93676 ns/op	       0 B/op	       0 allocs/op
