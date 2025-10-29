@@ -38,9 +38,13 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 // the world's archetype layout has changed.
 func (c *queryCache) updateMatching() {
 	c.matchingArches = c.matchingArches[:0]
+	isZeroMask := c.mask == bitmask256{}
+
 	for _, a := range c.world.archetypes.archetypes {
-		if a.size > 0 && a.mask.contains(c.mask) {
-			c.matchingArches = append(c.matchingArches, a)
+		if a.size > 0 {
+			if (isZeroMask && a.mask == c.mask) || (!isZeroMask && a.mask.contains(c.mask)) {
+				c.matchingArches = append(c.matchingArches, a)
+			}
 		}
 	}
 	c.lastVersion = c.world.archetypes.archetypeVersion
