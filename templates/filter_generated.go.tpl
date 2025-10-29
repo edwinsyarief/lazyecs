@@ -2,16 +2,13 @@
 // have the {{.N}} components: {{.TypeVars}}.
 type Filter{{.N}}[{{.Types}}] struct {
 	queryCache
-	{{range .Components}}curBase{{.Index}} unsafe.Pointer
-	{{end}}
+	curBases     [{{.N}}]unsafe.Pointer
 	curEntityIDs []Entity
 	curMatchIdx  int // index into matchingArches
 	curIdx       int // index into the current archetype's entity/component array
-	{{range .Components}}compSize{{.Index}} uintptr
-	{{end}}
+	compSizes    [{{.N}}]uintptr
 	curArchSize  int
-	{{range .Components}}id{{.Index}}       uint8
-	{{end}}
+	ids          [{{.N}}]uint8
 }
 
 // NewFilter{{.N}} creates a new `Filter` that iterates over all entities
@@ -33,11 +30,11 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	{{end}}
 	f := &Filter{{.N}}[{{.TypeVars}}]{
 		queryCache: newQueryCache(w, m),
-		{{range $i, $e := .Components}}id{{$e.Index}}: id{{$e.Index}},
-		{{end}}curMatchIdx: 0,
+		ids: [{{.N}}]uint8{ {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}{{end}} },
+		curMatchIdx: 0,
 		curIdx:      -1,
 	}
-	{{range .Components}}f.compSize{{.Index}} = w.components.compIDToSize[id{{.Index}}]
+	{{range $i, $e := .Components}}f.compSizes[{{$i}}] = w.components.compIDToSize[id{{$e.Index}}]
 	{{end}}
 	f.updateMatching()
 	f.updateCachedEntities()
@@ -62,8 +59,9 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 	f.curIdx = -1
 	if len(f.matchingArches) > 0 {
 		a := f.matchingArches[0]
-		{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
-		{{end}}
+		for i := 0; i < {{.N}}; i++ {
+			f.curBases[i] = a.compPointers[f.ids[i]]
+		}
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
 	} else {
@@ -87,8 +85,9 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
 		return false
 	}
 	a := f.matchingArches[f.curMatchIdx]
-	{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
-	{{end}}
+	for i := 0; i < {{.N}}; i++ {
+		f.curBases[i] = a.compPointers[f.ids[i]]
+	}
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
@@ -111,7 +110,7 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data ({{.ReturnTypes}}).
 func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(f.curBase{{.Index}}) + uintptr(f.curIdx)*f.compSize{{.Index}})
+	{{range $i, $e := .Components}}{{$e.PtrName}} := unsafe.Pointer(uintptr(f.curBases[{{$i}}]) + uintptr(f.curIdx)*f.compSizes[{{$i}}])
 	{{end}}
 	return {{.ReturnPtrs}}
 }
