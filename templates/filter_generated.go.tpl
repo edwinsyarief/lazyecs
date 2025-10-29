@@ -1,22 +1,16 @@
 // Filter{{.N}} provides a fast, cache-friendly iterator over all entities that
 // have the {{.N}} components: {{.TypeVars}}.
 type Filter{{.N}}[{{.Types}}] struct {
-	world               *World
-	{{range .Components}}curBase{{.Index}}            unsafe.Pointer
+	queryCache
+	{{range .Components}}curBase{{.Index}} unsafe.Pointer
 	{{end}}
-	matchingArches      []*archetype
-	curEntityIDs        []Entity
-	cachedEntities      []Entity
-	mask                bitmask256
-	curMatchIdx         int // index into matchingArches
-	curIdx              int // index into the current archetype's entity/component array
-	{{range .Components}}compSize{{.Index}}            uintptr
+	curEntityIDs []Entity
+	curMatchIdx  int // index into matchingArches
+	curIdx       int // index into the current archetype's entity/component array
+	{{range .Components}}compSize{{.Index}} uintptr
 	{{end}}
-	curArchSize         int
-	curEnt              Entity
-	lastVersion         uint32 // world.archetypeVersion when matchingArches was last updated
-	lastMutationVersion uint32 // world.mutationVersion when cachedEntities was last updated
-	{{range .Components}}id{{.Index}}            uint8
+	curArchSize  int
+	{{range .Components}}id{{.Index}}       uint8
 	{{end}}
 }
 
@@ -37,8 +31,13 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	var m bitmask256
 	{{range .Components}}m.set(id{{.Index}})
 	{{end}}
-	f := &Filter{{.N}}[{{.TypeVars}}]{world: w, mask: m, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}, curMatchIdx: 0, curIdx: -1, matchingArches: make([]*archetype, 0, 4)}
-	{{range .Components}}f.compSize{{.Index}} = w.compIDToSize[id{{.Index}}]
+	f := &Filter{{.N}}[{{.TypeVars}}]{
+		queryCache: newQueryCache(w, m),
+		{{range $i, $e := .Components}}id{{$e.Index}}: id{{$e.Index}},
+		{{end}}curMatchIdx: 0,
+		curIdx:      -1,
+	}
+	{{range .Components}}f.compSize{{.Index}} = w.components.compIDToSize[id{{.Index}}]
 	{{end}}
 	f.updateMatching()
 	f.updateCachedEntities()
@@ -46,46 +45,16 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	return f
 }
 
-// New is a convenience function that creates a new filter instance.
+// New is a convenience method that constructs a new `Filter` instance for the
+// same component types, equivalent to calling `NewFilter{{.N}}`.
 func (f *Filter{{.N}}[{{.TypeVars}}]) New(w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	return NewFilter{{.N}}[{{.TypeVars}}](w)
-}
-
-// updateMatching rebuilds the filter's list of archetypes that match its
-// component mask.
-func (f *Filter{{.N}}[{{.TypeVars}}]) updateMatching() {
-	f.matchingArches = f.matchingArches[:0]
-	for _, a := range f.world.archetypes {
-		if a.mask.contains(f.mask) {
-			f.matchingArches = append(f.matchingArches, a)
-		}
-	}
-	f.lastVersion = f.world.archetypeVersion
-}
-
-// updateCachedEntities rebuilds the cached list of entities.
-func (f *Filter{{.N}}[{{.TypeVars}}]) updateCachedEntities() {
-	total := 0
-	for _, a := range f.matchingArches {
-		total += a.size
-	}
-	if cap(f.cachedEntities) < total {
-		f.cachedEntities = make([]Entity, total)
-	} else {
-		f.cachedEntities = f.cachedEntities[:total]
-	}
-	idx := 0
-	for _, a := range f.matchingArches {
-		copy(f.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
-		idx += a.size
-	}
-	f.lastMutationVersion = f.world.mutationVersion
 }
 
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
 	}
@@ -97,39 +66,42 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
 		{{end}}
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
+	} else {
+		f.curArchSize = 0
 	}
 }
 
 // Next advances the filter to the next matching entity. It returns true if an
-// entity was found, and false if the iteration is complete.
+// entity was found, and false if the iteration is complete. This method must
+// be called before accessing the entity or its components.
 //
 // Returns:
 //   - true if another matching entity was found, false otherwise.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
-	for {
-		f.curIdx++
-		if f.curIdx >= f.curArchSize {
-			f.curMatchIdx++
-			if f.curMatchIdx >= len(f.matchingArches) {
-				return false
-			}
-			a := f.matchingArches[f.curMatchIdx]
-			{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
-			{{end}}
-			f.curEntityIDs = a.entityIDs
-			f.curArchSize = a.size
-			f.curIdx = -1
-			continue
-		}
-		f.curEnt = f.curEntityIDs[f.curIdx]
+	f.curIdx++
+	if f.curIdx < f.curArchSize {
 		return true
 	}
+	f.curMatchIdx++
+	if f.curMatchIdx >= len(f.matchingArches) {
+		return false
+	}
+	a := f.matchingArches[f.curMatchIdx]
+	{{range .Components}}f.curBase{{.Index}} = a.compPointers[f.id{{.Index}}]
+	{{end}}
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
+	f.curIdx = 0
+	return true
 }
 
 // Entity returns the current `Entity` in the iteration. This should only be
 // called after `Next()` has returned true.
+//
+// Returns:
+//   - The current Entity.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
-	return f.curEnt
+	return f.curEntityIDs[f.curIdx]
 }
 
 // Get returns pointers to the {{.N}} components ({{.TypeVars}}) for the
@@ -148,17 +120,17 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
-	if f.world.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
-		for i := range a.size {
+		for i := 0; i < a.size; i++ {
 			ent := a.entityIDs[i]
-			meta := &f.world.metas[ent.ID]
+			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
 			meta.index = -1
 			meta.version = 0
-			f.world.freeIDs = append(f.world.freeIDs, ent.ID)
+			f.world.entities.freeIDs = append(f.world.entities.freeIDs, ent.ID)
 		}
 		a.size = 0
 	}
@@ -168,9 +140,5 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
 
 // Entities returns all entities that match the filter.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entities() []Entity {
-	if f.world.archetypeVersion != f.lastVersion || f.world.mutationVersion != f.lastMutationVersion {
-		f.updateMatching()
-		f.updateCachedEntities()
-	}
-	return f.cachedEntities
+	return f.queryCache.Entities()
 }

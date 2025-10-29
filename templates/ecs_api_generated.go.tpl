@@ -14,13 +14,13 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 	if !w.IsValid(e) {
 		return {{.ReturnNil}}
 	}
-	meta := w.metas[e.ID]
+	meta := w.entities.metas[e.ID]
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(reflect.TypeFor[{{.TypeName}}]())
 	{{end}}
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in GetComponent{{.N}}")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
 	{{end}}
@@ -48,7 +48,7 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
@@ -56,7 +56,7 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in SetComponent{{.N}}")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
 	{{end}}
@@ -74,17 +74,17 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	}
 	{{end}}
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		{{range .Components}}if !has{{.Index}} {
-			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.compIDToType[id{{.Index}}], size: w.compIDToSize[id{{.Index}}]}
+			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.components.compIDToType[id{{.Index}}], size: w.components.compIDToSize[id{{.Index}}]}
 			count++
 		}
 		{{end}}
@@ -121,7 +121,7 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
+	meta := &w.entities.metas[e.ID]
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
@@ -129,7 +129,7 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in RemoveComponent{{.N}}")
 	}
-	a := w.archetypes[meta.archetypeIndex]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
 	{{end}}
@@ -142,8 +142,8 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 	{{range .Components}}newMask.unset(id{{.Index}})
 	{{end}}
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
@@ -151,7 +151,7 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 			if {{.IsRemovedID}} {
 				continue
 			}
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		specs := tempSpecs[:count]

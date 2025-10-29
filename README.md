@@ -19,7 +19,15 @@ A high-performance, archetype-based, and easy-to-use Entity Component System (EC
 
 This guide covers the primary workflow for setting up and using `Teishoku`.
 
-### 1. Define Components
+### 1. Set up Go Modules
+
+First, get the teishoku.
+
+```bash
+go get github.com/edwinsyarief/teishoku
+```
+
+### 2. Define Components
 
 Components are simple Go structs that hold the data for your entities. They should contain only data, not logic.
 
@@ -206,40 +214,40 @@ Notably, many core operations like creating entities, accessing components, and 
 
 ### Entity Benchmark
 
-| Action Name                             | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
-| :-------------------------------------- | :------ | :------- | :-------- | :------ |
-| **Create World**                        | 5.87    | 5.50     | 4.16      | 3.34    |
-| **Auto Expand**                         | 25.67   | 27.68    | 39.28     | N/A     |
-| **Create Entity**                       | 6.67    | 7.36     | 5.60      | 5.46    |
-| **New Entities (Batch)**                | 2.70    | 2.60     | 2.37      | 2.36    |
-| **New Entities With Value Set (Batch)** | 4.58    | 4.76     | 4.31      | 4.24    |
-| **Get Component**                       | 4.59    | 4.59     | 4.62      | 4.67    |
-| **Set Component Existing**              | 25.49   | 25.39    | 25.50     | 25.54   |
-| **Set Component New**                   | 78.85   | 75.55    | 73.69     | 73.78   |
-| **Remove Component**                    | 77.73   | 73.80    | 72.28     | 72.06   |
-| **Remove Entity**                       | 12.49   | 12.98    | 11.37     | 11.11   |
-| **Filter & Remove (Batch)**             | 4.75    | 4.75     | 4.20      | 4.15    |
-| **Filter & Iterate**                    | 2.36    | 2.35     | 2.34      | 2.33    |
-| **Clear Entities**                      | 3.25    | 3.31     | 2.65      | 2.62    |
+| Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Create World** | 9.66 | 6.72 | 11.97 | 4.72 |
+| **Auto Expand** | 27.60 | 27.12 | 30.27 | N/A |
+| **Create Entity** | 6.98 | 6.20 | 5.67 | 5.61 |
+| **New Entities (Batch)** | 2.62 | 2.55 | 2.27 | 2.43 |
+| **New Entities With Value Set (Batch)** | 4.52 | 4.51 | 4.54 | 4.12 |
+| **Get Component** | 4.49 | 4.46 | 4.59 | 4.58 |
+| **Set Component Existing** | 25.31 | 25.35 | 25.40 | 25.54 |
+| **Set Component New** | 78.85 | 75.55 | 73.69 | 73.78 |
+| **Remove Component** | 77.73 | 73.80 | 72.28 | 72.06 |
+| **Remove Entity** | 12.49 | 12.98 | 11.37 | 11.11 |
+| **Filter & Remove (Batch)** | 4.75 | 4.75 | 4.20 | 4.15 |
+| **Filter & Iterate** | 0.95 | 0.94 | 0.93 | 0.93 |
+| **Clear Entities** | 3.25 | 3.31 | 2.65 | 2.62 |
 
 ### Event Bus Benchmark
 
-| Action Name                 | 1K (ns)  | 10K (ns) | 100K (ns) | 1M (ns)  |
-| :-------------------------- | :------- | :------- | :-------- | :------- |
-| **Subscribe**               | 0.000044 | 0.000253 | 0.006287  | 0.06433  |
-| **Publish (No Handlers)**   | 0.000018 | 0.000090 | 0.000921  | 0.009018 |
-| **Publish (One Handler)**   | 0.000019 | 0.000183 | 0.001852  | 0.01839  |
-| **Publish (Many Handlers)** | 1.89     | 1.88     | 1.88      | 1.88     |
+| Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Subscribe** | 0.000044 | 0.000253 | 0.006287 | 0.06433 |
+| **Publish (No Handlers)** | 0.000018 | 0.000090 | 0.000921 | 0.009018 |
+| **Publish (One Handler)** | 0.000019 | 0.000183 | 0.001852 | 0.01839 |
+| **Publish (Many Handlers)** | 1.89 | 1.88 | 1.88 | 1.88 |
 
 ### Resources Benchmark
 
-| Action Name | 1K (ns)  | 10K (ns) | 100K (ns) | 1M (ns)  |
-| :---------- | :------- | :------- | :-------- | :------- |
-| **Add**     | 0.000116 | 0.000978 | 0.01219   | 0.1637   |
-| **Has**     | 0.000001 | 0.000004 | 0.000031  | 0.000309 |
-| **Get**     | 0.000001 | 0.000003 | 0.000031  | 0.000309 |
-| **Remove**  | 0.000053 | 0.000464 | 0.005955  | 0.1185   |
-| **Clear**   | 15.92    | 14.03    | 13.55     | 22.72    |
+| Action Name | 1K (ns) | 10K (ns) | 100K (ns) | 1M (ns) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Add** | 0.000116 | 0.000978 | 0.01219 | 0.1637 |
+| **Has** | 0.000001 | 0.000004 | 0.000031 | 0.000309 |
+| **Get** | 0.000001 | 0.000003 | 0.000031 | 0.000309 |
+| **Remove** | 0.000053 | 0.000464 | 0.005955 | 0.1185 |
+| **Clear** | 15.92 | 14.03 | 13.55 | 22.72 |
 
 <details>
 
@@ -249,78 +257,164 @@ Notably, many core operations like creating entities, accessing components, and 
 goos: linux
 goarch: amd64
 pkg: github.com/edwinsyarief/teishoku
-cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkCreateWorld/1K-4                	          140716	          8887 ns/op	   43184 B/op	      12 allocs/op
-BenchmarkCreateWorld/10K-4               	           20086	         62327 ns/op	  374962 B/op	      12 allocs/op
-BenchmarkCreateWorld/100K-4              	            2406	       1267950 ns/op	 3610810 B/op	      12 allocs/op
-BenchmarkCreateWorld/1M-4                	             291	       4125979 ns/op	36018360 B/op	      12 allocs/op
-BenchmarkAutoExpand/1K_init_x2-4         	           44095	         27007 ns/op	  143385 B/op	       7 allocs/op
-BenchmarkAutoExpand/10K_init_x2-4        	            4136	        275411 ns/op	 1269786 B/op	       7 allocs/op
-BenchmarkAutoExpand/100K_init_x2-4       	             452	       3115612 ns/op	13508650 B/op	       7 allocs/op
-BenchmarkWorldCreateEntity/1K-4          	           45007	         26238 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntity/10K-4         	            5431	        229213 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntity/100K-4        	             548	       2219992 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntity/1M-4          	              56	      21124371 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntities/1K-4        	          435333	          2751 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntities/10K-4       	           47692	         25647 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntities/100K-4      	            5294	        228120 ns/op	       0 B/op	       0 allocs/op
-BenchmarkWorldCreateEntities/1M-4        	             528	       2277886 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntity/1K-4           	          173992	          6854 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntity/10K-4          	           16599	         72558 ns/op	       2 B/op	       0 allocs/op
-BenchmarkBuilderNewEntity/100K-4         	            2140	        580388 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntity/1M-4           	             218	       5484554 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntities/1K-4         	          424062	          2818 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntities/10K-4        	           44530	         26943 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderNewEntities/100K-4       	            5230	        265738 ns/op	       1 B/op	       0 allocs/op
-BenchmarkBuilderNewEntities/1M-4         	             501	       2367360 ns/op	       0 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet/1K-4    	          256276	          4680 ns/op	       0 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet/10K-4   	           24685	         48438 ns/op	       1 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet/100K-4  	            2349	        450988 ns/op	       0 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet/1M-4    	             283	       4233496 ns/op	       0 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet2/1K-4   	          189168	          6341 ns/op	       0 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet2/10K-4  	           17635	         68803 ns/op	       1 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet2/100K-4 	            1825	        752577 ns/op	      16 B/op	       0 allocs/op
-BenchmarkNewEntitiesWithValueSet2/1M-4   	             214	       5540356 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderSet/1K-4                 	           25635	         47603 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBuilderSet/10K-4                	            2560	        472272 ns/op	       2 B/op	       0 allocs/op
-BenchmarkBuilderSet/100K-4               	             258	       4652498 ns/op	      10 B/op	       0 allocs/op
-BenchmarkBuilderSet/1M-4                 	              26	      44938009 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGetComponent/1K-4               	       253979222	         4.723 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGetComponent/10K-4              	       252842235	         4.731 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGetComponent/100K-4             	       252429990	         4.754 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGetComponent/1M-4               	       249598573	         4.782 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSetComponentExisting/1K-4       	        46708654	         25.31 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSetComponentExisting/10K-4      	        47373886	         25.35 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSetComponentExisting/100K-4     	        47299298	         25.40 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishOneHandler/10K-4          1000000000	     0.0002000 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishOneHandler/100K-4         1000000000	      0.001849 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishOneHandler/1M-4           1000000000	       0.01882 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishManyHandlers/1K-4         	  630625	          1890 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishManyHandlers/10K-4        	   63984	         18722 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishManyHandlers/100K-4       	    6388	        187971 ns/op	       0 B/op	       0 allocs/op
-BenchmarkEventBusPublishManyHandlers/1M-4         	     637	       1883845 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesAdd/1K-4                        	1000000000	     0.0001165 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesAdd/10K-4                       	1000000000	     0.0009914 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesAdd/100K-4                      	1000000000	       0.01085 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesAdd/1M-4                        	1000000000	        0.1615 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesHas/1K-4                        	1000000000	     0.0000009 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesHas/10K-4                       	1000000000	     0.0000081 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesHas/100K-4                      	1000000000	     0.0000317 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesHas/1M-4                        	1000000000	     0.0003173 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesGet/1K-4                        	1000000000	     0.0000005 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesGet/10K-4                       	1000000000	     0.0000034 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesGet/100K-4                      	1000000000	     0.0000467 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesGet/1M-4                        	1000000000	     0.0003088 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesRemove/1K-4                     	1000000000	     0.0000450 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesRemove/10K-4                    	1000000000	     0.0005381 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesRemove/100K-4                   	1000000000	      0.005864 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesRemove/1M-4                     	1000000000	        0.1144 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesClear/1K-4                      	     76438	         16029 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesClear/10K-4                     	     10000	        137853 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesClear/100K-4                    	       848	       1408777 ns/op	       0 B/op	       0 allocs/op
-BenchmarkResourcesClear/1M-4                      	       100	      20839845 ns/op	       0 B/op	       0 allocs/op
+cpu: AMD EPYC 7763 64-Core Processor
+BenchmarkCreateWorld/1K-4                           	   114622    	      9658 ns/op	   43304 B/op	      12 allocs/op
+BenchmarkCreateWorld/10K-4                          	    16155    	     67151 ns/op	  375082 B/op	      12 allocs/op
+BenchmarkCreateWorld/100K-4                         	     2937    	   1197027 ns/op	 3610934 B/op	      12 allocs/op
+BenchmarkCreateWorld/1M-4                           	      266    	   4717612 ns/op	36018481 B/op	      12 allocs/op
+BenchmarkAutoExpand/1K_init_x2-4                    	    43407    	     27601 ns/op	  143385 B/op	       7 allocs/op
+BenchmarkAutoExpand/10K_init_x2-4                   	     4327    	    271219 ns/op	 1269785 B/op	       7 allocs/op
+BenchmarkAutoExpand/100K_init_x2-4                  	      334    	   3027116 ns/op	13508662 B/op	       7 allocs/op
+BenchmarkWorldCreateEntity/1K-4                     	   170476    	      6983 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntity/10K-4                    	    19592    	     61972 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntity/100K-4                   	     2125    	    566800 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntity/1M-4                     	      213    	   5611298 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntities/1K-4                   	   452203    	      2623 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntities/10K-4                  	    46761    	     25508 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntities/100K-4                 	     5259    	    227454 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldCreateEntities/1M-4                   	      487    	   2432403 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntity/1K-4                      	   173772    	      6867 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntity/10K-4                     	    18586    	     63954 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntity/100K-4                    	     2154    	    605095 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntity/1M-4                      	      219    	   5439640 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntities/1K-4                    	   437331    	      2775 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntities/10K-4                   	    44544    	     26916 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntities/100K-4                  	     4278    	    279544 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntities/1M-4                    	      483    	   2465351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet/1K-4        	   266686    	      4517 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet/10K-4         	    26703    	     45098 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet/100K-4        	     2806    	    453834 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet/1M-4          	      291    	   4123506 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet2/1K-4         	   191287    	      6218 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet2/10K-4        	    19129    	     62668 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet2/100K-4       	     1861    	    669168 ns/op	       9 B/op	       0 allocs/op
+BenchmarkBuilderNewEntitiesWithValueSet2/1M-4         	      216    	   5514310 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent/1K-4                     	    24388    	     49221 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent/10K-4                    	     2438    	    496310 ns/op	       1 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent/100K-4                   	      248    	   4785353 ns/op	       6 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent/1M-4                     	       25    	  46832357 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent2/1K-4                    	    21103    	     56590 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent2/10K-4                   	     2120    	    575084 ns/op	       2 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent2/100K-4                  	      217    	   5454010 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderSetComponent2/1M-4                    	       21    	  54210554 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/1K-4                   	272050629	         4.485 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/10K-4                    	270414163	         4.456 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/100K-4                   	269171257	         4.594 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent/1M-4                     	262302666	         4.515 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/1K-4                    	219502479	         5.480 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/10K-4                   	217562380	         5.482 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/100K-4                  	219184404	         5.498 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBuilderGetComponent2/1M-4                    	219834985	         5.476 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent/1K-4                         	 59609725	         20.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent/10K-4                        	 59502032	         20.08 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent/100K-4                       	 58154128	         20.15 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent/1M-4                         	 59389701	         20.20 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent2/1K-4                        	 31508949	         38.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent2/10K-4                       	 31260826	         38.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent2/100K-4                      	 31042326	         38.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIGetComponent2/1M-4                        	 30975897	         38.20 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentExisting/1K-4                 	 49117706	         24.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentExisting/10K-4                	 48387937	         24.69 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentExisting/100K-4               	 48414714	         24.87 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentExisting/1M-4                 	 48078220	         24.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentNew/1K-4                      	    15642	         76999 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentNew/10K-4                     	     1654	        736261 ns/op	       1 B/op	       0 allocs/op
+BenchmarkAPISetComponentNew/100K-4                    	      169	       7072539 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPISetComponentNew/1M-4                      	       16	      70091263 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIRemoveComponent/1K-4                      	    15195	         77890 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIRemoveComponent/10K-4                     	     1628	        746177 ns/op	       1 B/op	       0 allocs/op
+BenchmarkAPIRemoveComponent/100K-4                    	      168	       7096780 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAPIRemoveComponent/1M-4                      	       16	      70699278 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/1K-4                       	    83506	         14224 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/10K-4                      	     7264	        156207 ns/op	       3 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/100K-4                     	      699	       1699303 ns/op	       4 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntity/1M-4                       	       70	      16561800 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/1K-4                     	    80126	         14921 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/10K-4                    	     7869	        158211 ns/op	       1 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/100K-4                   	      692	       1719255 ns/op	      15 B/op	       0 allocs/op
+BenchmarkWorldRemoveEntities/1M-4                     	       70	      16407098 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/1K-4                      	   826634	          1469 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/10K-4                     	    93787	         12948 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/100K-4                    	    12739	         95643 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWorldClearEntities/1M-4                      	     1342	        895446 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1K-4                    	   248090	          4815 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/10K-4                   	    26745	         45017 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/100K-4                  	     2599	        460801 ns/op	       6 B/op	       0 allocs/op
+BenchmarkFilterRemoveEntities/1M-4                    	      294	       4068298 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1K-4                   	   250203	          4813 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/10K-4                  	    25930	         46543 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/100K-4                 	     2880	        450651 ns/op	       3 B/op	       0 allocs/op
+BenchmarkFilter2RemoveEntities/1M-4                   	      292	       4090299 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1K-4                           	  1270090	         949.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/10K-4                          	   128017	          9363 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/100K-4                         	    12843	         93388 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterIterate/1M-4                           	     1284	        935041 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/1K-4                          	  1269235	         945.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/10K-4                         	   127970	          9352 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/100K-4                        	    12846	         93530 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter2Iterate/1M-4                          	     1282	        935320 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter3Iterate/1K-4                          	  1262577	         946.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter3Iterate/10K-4                         	   127974	          9354 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter3Iterate/100K-4                        	    12843	         93498 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter3Iterate/1M-4                          	     1274	        934757 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter4Iterate/1K-4                          	   545881	          2194 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter4Iterate/10K-4                         	    55075	         21800 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter4Iterate/100K-4                        	     5493	        217879 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter4Iterate/1M-4                          	      550	       2181720 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter5Iterate/1K-4                          	   541797	          2196 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter5Iterate/10K-4                         	    54843	         21812 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter5Iterate/100K-4                        	     5505	        217763 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter5Iterate/1M-4                          	      549	       2183428 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter6Iterate/1K-4                          	   479412	          2195 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter6Iterate/10K-4                         	    55032	         21779 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter6Iterate/100K-4                        	     5467	        217714 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilter6Iterate/1M-4                          	      549	       2196629 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesCached/1K-4                 	486276482	         2.454 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesCached/10K-4                	487772611	         2.462 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesCached/100K-4               	489392029	         2.460 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesCached/1M-4                 	484420545	         2.454 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesUncached/1K-4               	  3285620	         360.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesUncached/10K-4              	   376084	          3040 ns/op	       1 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesUncached/100K-4             	    38862	         32212 ns/op	     155 B/op	       0 allocs/op
+BenchmarkFilterGetEntitiesUncached/1M-4               	     3192	        375796 ns/op	   18809 B/op	       0 allocs/op
+BenchmarkEventBusSubscribe/1K-4                       	1000000000	     0.0000520 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusSubscribe/10K-4                      	1000000000	     0.0002770 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusSubscribe/100K-4                     	1000000000	      0.007043 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusSubscribe/1M-4                       	1000000000	       0.06678 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishNoHandlers/1K-4               	1000000000	     0.0000162 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishNoHandlers/10K-4              	1000000000	     0.0000935 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishNoHandlers/100K-4             	1000000000	     0.0008634 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishNoHandlers/1M-4               	1000000000	      0.008419 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishOneHandler/1K-4               	1000000000	     0.0000187 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishOneHandler/10K-4              	1000000000	     0.0001926 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishOneHandler/100K-4             	1000000000	      0.001853 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishOneHandler/1M-4               	1000000000	       0.01842 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishManyHandlers/1K-4             	    633637	          1891 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishManyHandlers/10K-4            	     64172	         18703 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishManyHandlers/100K-4           	      6356	        188291 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEventBusPublishManyHandlers/1M-4             	       636	       1883910 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesAdd/1K-4                            	1000000000	     0.0001207 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesAdd/10K-4                           	1000000000	      0.001028 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesAdd/100K-4                          	1000000000	       0.01261 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesAdd/1M-4                            	1000000000	        0.1693 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesHas/1K-4                            	1000000000	     0.0000009 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesHas/10K-4                           	1000000000	     0.0000081 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesHas/100K-4                          	1000000000	     0.0000313 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesHas/1M-4                            	1000000000	     0.0003230 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesGet/1K-4                            	1000000000	     0.0000010 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesGet/10K-4                           	1000000000	     0.0000081 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesGet/100K-4                          	1000000000	     0.0000314 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesGet/1M-4                            	1000000000	     0.0003091 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesRemove/1K-4                         	1000000000	     0.0000455 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesRemove/10K-4                        	1000000000	     0.0004957 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesRemove/100K-4                       	1000000000	      0.006140 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesRemove/1M-4                         	1000000000	        0.1137 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesClear/1K-4                          	     76160	         15426 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesClear/10K-4                         	     10000	        140566 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesClear/100K-4                        	       807	       1450460 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourcesClear/1M-4                          	       100	      24029756 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok  	github.com/edwinsyarief/teishoku	534.130s
+ok  	github.com/edwinsyarief/teishoku	933.305s
 ```
 
 </details>

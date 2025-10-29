@@ -38,20 +38,22 @@ func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}mask.set(id{{.Index}})
 	{{end}}
 	specs := []compSpec{
-		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.compIDToSize[id{{.Index}}]},
+		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.components.compIDToSize[id{{.Index}}]},
 		{{end}}
 	}
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}}
 }
 
-// New is a convenience function that creates a new builder instance.
+// New is a convenience method that constructs a new `Builder` instance for the
+// same component types, equivalent to calling `NewBuilder{{.N}}`.
 func (b *Builder{{.N}}[{{.TypeVars}}]) New(w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	return NewBuilder{{.N}}[{{.TypeVars}}](w)
 }
 
 // NewEntity creates a single new entity with the {{.N}} components defined by the
-// builder: {{.TypeVars}}.
+// builder: {{.TypeVars}}. This method is highly optimized and should not cause
+// any garbage collection overhead.
 //
 // Returns:
 //   - The newly created Entity.
@@ -61,7 +63,8 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntity() Entity {
 
 // NewEntities creates a batch of `count` entities with the {{.N}} components
 // defined by the builder. This is the most performant method for creating many
-// entities at once.
+// entities at once. This method does not return the created entities to avoid
+// allocations. Use a `Filter` to query for and initialize them afterward.
 //
 // Parameters:
 //   - count: The number of entities to create.
@@ -71,22 +74,22 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -103,25 +106,25 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 	}
 	w := b.world
 	a := b.arch
-	for len(w.freeIDs) < count {
+	for len(w.entities.freeIDs) < count {
 		w.expand()
 	}
 	startSize := a.size
 	a.size += count
-	popped := w.freeIDs[len(w.freeIDs)-count:]
-	w.freeIDs = w.freeIDs[:len(w.freeIDs)-count]
+	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
+	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
 	for k := range count {
 		id := popped[k]
-		meta := &w.metas[id]
+		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
 		meta.index = startSize + k
-		meta.version = w.nextEntityVer
+		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
 		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])
 		*(*{{.TypeName}})(ptr{{.Index}}) = {{.BuilderVarName}}
 		{{end}}
-		w.nextEntityVer++
+		w.entities.nextEntityVer++
 	}
 }
 
@@ -141,8 +144,8 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	if !w.IsValid(e) {
 		return {{.ReturnNil}}
 	}
-	meta := w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}id{{.Index}} := b.id{{.Index}}
 	i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
@@ -155,19 +158,25 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	return {{.ReturnPtrs}}
 }
 
-// Set replaces the existing component values if they exist, or adds the components to the entity if it doesn't have them.
+// Set adds or updates the components ({{.TypeVars}}) for a given entity with
+// the specified values.
+//
+// If the entity already has all the components, their values are updated. If
+// any are missing, they are added, which may trigger an archetype change.
+//
+// It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
-//   - entity: The entity to set the components for.
-{{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
+//   - e: The entity to modify.
+{{range .Components}}//   - v{{.Index}}: The component value to set for type {{.TypeName}}.
 {{end}}
 func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	w := b.world
 	if !w.IsValid(e) {
 		return
 	}
-	meta := &w.metas[e.ID]
-	a := w.archetypes[meta.archetypeIndex]
+	meta := &w.entities.metas[e.ID]
+	a := w.archetypes.archetypes[meta.archetypeIndex]
 	{{range .Components}}id{{.Index}} := b.id{{.Index}}
 	i{{.Index}} := id{{.Index}} >> 6
 	o{{.Index}} := id{{.Index}} & 63
@@ -186,17 +195,17 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	}
 	{{end}}
 	var targetA *archetype
-	if idx, ok := w.maskToArcIndex[newMask]; ok {
-		targetA = w.archetypes[idx]
+	if idx, ok := w.archetypes.maskToArcIndex[newMask]; ok {
+		targetA = w.archetypes.archetypes[idx]
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
 		for _, cid := range a.compOrder {
-			tempSpecs[count] = compSpec{id: cid, typ: w.compIDToType[cid], size: w.compIDToSize[cid]}
+			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		{{range .Components}}if !has{{.Index}} {
-			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.compIDToType[id{{.Index}}], size: w.compIDToSize[id{{.Index}}]}
+			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.components.compIDToType[id{{.Index}}], size: w.components.compIDToSize[id{{.Index}}]}
 			count++
 		}
 		{{end}}
@@ -219,11 +228,12 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	meta.index = newIdx
 }
 
-// SetBatch sets the component values for multiple entities.
-// 
+// SetBatch efficiently sets the component values for a slice of entities.
+// It iterates over the entities and calls `Set` for each one.
+//
 // Parameters:
-//   - entities: The entities slices to set the components for.
-{{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
+//   - entities: A slice of entities to modify.
+{{range .Components}}//   - v{{.Index}}: The component value to set for type {{.TypeName}}.
 {{end}}
 func (b *Builder{{.N}}[{{.TypeVars}}]) SetBatch(entities []Entity, {{.SetVars}}) {
 	for _, e := range entities {
