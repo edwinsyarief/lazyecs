@@ -110,9 +110,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data ({{.ReturnTypes}}).
 func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
-	{{range $i, $e := .Components}}{{$e.PtrName}} := unsafe.Pointer(uintptr(f.curBases[{{$i}}]) + uintptr(f.curIdx)*f.compSizes[{{$i}}])
-	{{end}}
-	return {{.ReturnPtrs}}
+	return {{range $i, $e := .Components}}{{if $i}},
+		{{end}}(*{{$e.TypeName}})(unsafe.Add(f.curBases[{{$i}}], uintptr(f.curIdx)*f.compSizes[{{$i}}])){{end}}
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
