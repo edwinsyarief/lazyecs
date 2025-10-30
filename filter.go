@@ -118,8 +118,7 @@ func (f *Filter[T]) Entity() Entity {
 // Returns:
 //   - A pointer to the component data (*T).
 func (f *Filter[T]) Get() *T {
-	ptr := unsafe.Pointer(uintptr(f.curBase) + uintptr(f.curIdx)*f.compSize)
-	return (*T)(ptr)
+	return (*T)(unsafe.Add(f.curBase, uintptr(f.curIdx)*f.compSize))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's

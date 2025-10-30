@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// World Creation Benchmarks
+/* // World Creation Benchmarks
 func BenchmarkCreateWorld(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
@@ -519,7 +519,7 @@ func BenchmarkFilter2RemoveEntities(b *testing.B) {
 			}
 		})
 	}
-}
+} */
 
 // Filter Iteration Benchmarks
 func BenchmarkFilterIterate(b *testing.B) {
@@ -539,7 +539,7 @@ func BenchmarkFilterIterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter.Reset()
 				for filter.Next() {
-					//_ = filter.Get()
+					_ = filter.Get()
 				}
 			}
 		})
@@ -563,7 +563,7 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter2.Reset()
 				for filter2.Next() {
-					// _, _ = filter2.Get()
+					_, _ = filter2.Get()
 				}
 			}
 		})
@@ -587,7 +587,7 @@ func BenchmarkFilter3Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter3.Reset()
 				for filter3.Next() {
-					// _, _, _ = filter3.Get()
+					_, _, _ = filter3.Get()
 				}
 			}
 		})
@@ -611,7 +611,7 @@ func BenchmarkFilter4Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter4.Reset()
 				for filter4.Next() {
-					// _, _, _, _ = filter4.Get()
+					_, _, _, _ = filter4.Get()
 				}
 			}
 		})
@@ -635,7 +635,7 @@ func BenchmarkFilter5Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter5.Reset()
 				for filter5.Next() {
-					// _, _, _, _, _ = filter5.Get()
+					_, _, _, _, _ = filter5.Get()
 				}
 			}
 		})
@@ -659,14 +659,14 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				filter6.Reset()
 				for filter6.Next() {
-					// _, _, _, _, _, _ = filter6.Get()
+					_, _, _, _, _, _ = filter6.Get()
 				}
 			}
 		})
 	}
 }
 
-func BenchmarkFilterGetEntitiesCached(b *testing.B) {
+/* func BenchmarkFilterGetEntitiesCached(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -711,4 +711,4 @@ func BenchmarkFilterGetEntitiesUncached(b *testing.B) {
 			}
 		})
 	}
-}
+} */

@@ -120,10 +120,8 @@ func (f *Filter2[T1, T2]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data (*T1, *T2).
 func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
-	ptr1 := unsafe.Pointer(uintptr(f.curBases[0]) + uintptr(f.curIdx)*f.compSizes[0])
-	ptr2 := unsafe.Pointer(uintptr(f.curBases[1]) + uintptr(f.curIdx)*f.compSizes[1])
-
-	return (*T1)(ptr1), (*T2)(ptr2)
+	return (*T1)(unsafe.Add(f.curBases[0], uintptr(f.curIdx)*f.compSizes[0])),
+		(*T2)(unsafe.Add(f.curBases[1], uintptr(f.curIdx)*f.compSizes[1]))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
@@ -271,11 +269,9 @@ func (f *Filter3[T1, T2, T3]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3).
 func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
-	ptr1 := unsafe.Pointer(uintptr(f.curBases[0]) + uintptr(f.curIdx)*f.compSizes[0])
-	ptr2 := unsafe.Pointer(uintptr(f.curBases[1]) + uintptr(f.curIdx)*f.compSizes[1])
-	ptr3 := unsafe.Pointer(uintptr(f.curBases[2]) + uintptr(f.curIdx)*f.compSizes[2])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
+	return (*T1)(unsafe.Add(f.curBases[0], uintptr(f.curIdx)*f.compSizes[0])),
+		(*T2)(unsafe.Add(f.curBases[1], uintptr(f.curIdx)*f.compSizes[1])),
+		(*T3)(unsafe.Add(f.curBases[2], uintptr(f.curIdx)*f.compSizes[2]))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
@@ -426,12 +422,10 @@ func (f *Filter4[T1, T2, T3, T4]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4).
 func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
-	ptr1 := unsafe.Pointer(uintptr(f.curBases[0]) + uintptr(f.curIdx)*f.compSizes[0])
-	ptr2 := unsafe.Pointer(uintptr(f.curBases[1]) + uintptr(f.curIdx)*f.compSizes[1])
-	ptr3 := unsafe.Pointer(uintptr(f.curBases[2]) + uintptr(f.curIdx)*f.compSizes[2])
-	ptr4 := unsafe.Pointer(uintptr(f.curBases[3]) + uintptr(f.curIdx)*f.compSizes[3])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
+	return (*T1)(unsafe.Add(f.curBases[0], uintptr(f.curIdx)*f.compSizes[0])),
+		(*T2)(unsafe.Add(f.curBases[1], uintptr(f.curIdx)*f.compSizes[1])),
+		(*T3)(unsafe.Add(f.curBases[2], uintptr(f.curIdx)*f.compSizes[2])),
+		(*T4)(unsafe.Add(f.curBases[3], uintptr(f.curIdx)*f.compSizes[3]))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
@@ -585,13 +579,11 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5).
 func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
-	ptr1 := unsafe.Pointer(uintptr(f.curBases[0]) + uintptr(f.curIdx)*f.compSizes[0])
-	ptr2 := unsafe.Pointer(uintptr(f.curBases[1]) + uintptr(f.curIdx)*f.compSizes[1])
-	ptr3 := unsafe.Pointer(uintptr(f.curBases[2]) + uintptr(f.curIdx)*f.compSizes[2])
-	ptr4 := unsafe.Pointer(uintptr(f.curBases[3]) + uintptr(f.curIdx)*f.compSizes[3])
-	ptr5 := unsafe.Pointer(uintptr(f.curBases[4]) + uintptr(f.curIdx)*f.compSizes[4])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
+	return (*T1)(unsafe.Add(f.curBases[0], uintptr(f.curIdx)*f.compSizes[0])),
+		(*T2)(unsafe.Add(f.curBases[1], uintptr(f.curIdx)*f.compSizes[1])),
+		(*T3)(unsafe.Add(f.curBases[2], uintptr(f.curIdx)*f.compSizes[2])),
+		(*T4)(unsafe.Add(f.curBases[3], uintptr(f.curIdx)*f.compSizes[3])),
+		(*T5)(unsafe.Add(f.curBases[4], uintptr(f.curIdx)*f.compSizes[4]))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
@@ -748,14 +740,12 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5, *T6).
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
-	ptr1 := unsafe.Pointer(uintptr(f.curBases[0]) + uintptr(f.curIdx)*f.compSizes[0])
-	ptr2 := unsafe.Pointer(uintptr(f.curBases[1]) + uintptr(f.curIdx)*f.compSizes[1])
-	ptr3 := unsafe.Pointer(uintptr(f.curBases[2]) + uintptr(f.curIdx)*f.compSizes[2])
-	ptr4 := unsafe.Pointer(uintptr(f.curBases[3]) + uintptr(f.curIdx)*f.compSizes[3])
-	ptr5 := unsafe.Pointer(uintptr(f.curBases[4]) + uintptr(f.curIdx)*f.compSizes[4])
-	ptr6 := unsafe.Pointer(uintptr(f.curBases[5]) + uintptr(f.curIdx)*f.compSizes[5])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
+	return (*T1)(unsafe.Add(f.curBases[0], uintptr(f.curIdx)*f.compSizes[0])),
+		(*T2)(unsafe.Add(f.curBases[1], uintptr(f.curIdx)*f.compSizes[1])),
+		(*T3)(unsafe.Add(f.curBases[2], uintptr(f.curIdx)*f.compSizes[2])),
+		(*T4)(unsafe.Add(f.curBases[3], uintptr(f.curIdx)*f.compSizes[3])),
+		(*T5)(unsafe.Add(f.curBases[4], uintptr(f.curIdx)*f.compSizes[4])),
+		(*T6)(unsafe.Add(f.curBases[5], uintptr(f.curIdx)*f.compSizes[5]))
 }
 
 // RemoveEntities efficiently removes all entities that match the filter's
