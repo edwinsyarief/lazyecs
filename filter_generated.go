@@ -5,6 +5,13 @@ import (
 	"unsafe"
 )
 
+// precomp2 is a precomputed archetype iterator struct for 2-component filters.
+type precomp2 struct {
+	bases     [2]unsafe.Pointer
+	entityIDs []Entity
+	size      int
+}
+
 // Filter2 provides a fast, cache-friendly iterator over all entities that
 // have the 2 components: T1, T2.
 type Filter2[T1 any, T2 any] struct {
@@ -16,6 +23,7 @@ type Filter2[T1 any, T2 any] struct {
 	compSizes    [2]uintptr
 	curArchSize  int
 	ids          [2]uint8
+	precomp      []precomp2
 }
 
 // NewFilter2 creates a new `Filter` that iterates over all entities
@@ -42,12 +50,14 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 		ids:         [2]uint8{id1, id2},
 		curMatchIdx: 0,
 		curIdx:      -1,
+		precomp:     make([]precomp2, 0, 64),
 	}
 	f.compSizes[0] = w.components.compIDToSize[id1]
 	f.compSizes[1] = w.components.compIDToSize[id2]
 
-	f.updateMatching()
-	f.updateCachedEntities()
+	f.updateArches()
+	f.updateEntities()
+	f.buildPrecomp()
 	f.Reset()
 	return f
 }
@@ -58,22 +68,36 @@ func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
 	return NewFilter2[T1, T2](w)
 }
 
+// buildPrecomp precomputes the iterator data for matching archetypes.
+func (f *Filter2[T1, T2]) buildPrecomp() {
+	f.precomp = f.precomp[:0]
+	for _, a := range f.matchingArches {
+		var bs [2]unsafe.Pointer
+		bs[0] = a.compPointers[f.ids[0]]
+		bs[1] = a.compPointers[f.ids[1]]
+		f.precomp = append(f.precomp, precomp2{
+			bases:     bs,
+			entityIDs: a.entityIDs,
+			size:      a.size,
+		})
+	}
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter2[T1, T2]) Reset() {
-	if f.IsStale() {
-		f.updateMatching()
-		f.updateCachedEntities()
+	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
+		f.updateArches()
+		f.updateEntities()
+		f.buildPrecomp()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.matchingArches) > 0 {
-		a := f.matchingArches[0]
-		for i := 0; i < 2; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+	if len(f.precomp) > 0 {
+		it := f.precomp[0]
+		f.curBases = it.bases
+		f.curEntityIDs = it.entityIDs
+		f.curArchSize = it.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -91,15 +115,13 @@ func (f *Filter2[T1, T2]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	if f.curMatchIdx >= len(f.precomp) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < 2; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	it := f.precomp[f.curMatchIdx]
+	f.curBases = it.bases
+	f.curEntityIDs = it.entityIDs
+	f.curArchSize = it.size
 	f.curIdx = 0
 	return true
 }
@@ -128,8 +150,8 @@ func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter2[T1, T2]) RemoveEntities() {
-	if f.IsStale() {
-		f.updateMatching()
+	if f.needsArchesUpdate() {
+		f.updateArches()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
@@ -151,6 +173,13 @@ func (f *Filter2[T1, T2]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// precomp3 is a precomputed archetype iterator struct for 3-component filters.
+type precomp3 struct {
+	bases     [3]unsafe.Pointer
+	entityIDs []Entity
+	size      int
+}
+
 // Filter3 provides a fast, cache-friendly iterator over all entities that
 // have the 3 components: T1, T2, T3.
 type Filter3[T1 any, T2 any, T3 any] struct {
@@ -162,6 +191,7 @@ type Filter3[T1 any, T2 any, T3 any] struct {
 	compSizes    [3]uintptr
 	curArchSize  int
 	ids          [3]uint8
+	precomp      []precomp3
 }
 
 // NewFilter3 creates a new `Filter` that iterates over all entities
@@ -190,13 +220,15 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 		ids:         [3]uint8{id1, id2, id3},
 		curMatchIdx: 0,
 		curIdx:      -1,
+		precomp:     make([]precomp3, 0, 64),
 	}
 	f.compSizes[0] = w.components.compIDToSize[id1]
 	f.compSizes[1] = w.components.compIDToSize[id2]
 	f.compSizes[2] = w.components.compIDToSize[id3]
 
-	f.updateMatching()
-	f.updateCachedEntities()
+	f.updateArches()
+	f.updateEntities()
+	f.buildPrecomp()
 	f.Reset()
 	return f
 }
@@ -207,22 +239,37 @@ func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
 	return NewFilter3[T1, T2, T3](w)
 }
 
+// buildPrecomp precomputes the iterator data for matching archetypes.
+func (f *Filter3[T1, T2, T3]) buildPrecomp() {
+	f.precomp = f.precomp[:0]
+	for _, a := range f.matchingArches {
+		var bs [3]unsafe.Pointer
+		bs[0] = a.compPointers[f.ids[0]]
+		bs[1] = a.compPointers[f.ids[1]]
+		bs[2] = a.compPointers[f.ids[2]]
+		f.precomp = append(f.precomp, precomp3{
+			bases:     bs,
+			entityIDs: a.entityIDs,
+			size:      a.size,
+		})
+	}
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter3[T1, T2, T3]) Reset() {
-	if f.IsStale() {
-		f.updateMatching()
-		f.updateCachedEntities()
+	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
+		f.updateArches()
+		f.updateEntities()
+		f.buildPrecomp()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.matchingArches) > 0 {
-		a := f.matchingArches[0]
-		for i := 0; i < 3; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+	if len(f.precomp) > 0 {
+		it := f.precomp[0]
+		f.curBases = it.bases
+		f.curEntityIDs = it.entityIDs
+		f.curArchSize = it.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -240,15 +287,13 @@ func (f *Filter3[T1, T2, T3]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	if f.curMatchIdx >= len(f.precomp) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < 3; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	it := f.precomp[f.curMatchIdx]
+	f.curBases = it.bases
+	f.curEntityIDs = it.entityIDs
+	f.curArchSize = it.size
 	f.curIdx = 0
 	return true
 }
@@ -278,8 +323,8 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter3[T1, T2, T3]) RemoveEntities() {
-	if f.IsStale() {
-		f.updateMatching()
+	if f.needsArchesUpdate() {
+		f.updateArches()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
@@ -301,6 +346,13 @@ func (f *Filter3[T1, T2, T3]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// precomp4 is a precomputed archetype iterator struct for 4-component filters.
+type precomp4 struct {
+	bases     [4]unsafe.Pointer
+	entityIDs []Entity
+	size      int
+}
+
 // Filter4 provides a fast, cache-friendly iterator over all entities that
 // have the 4 components: T1, T2, T3, T4.
 type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
@@ -312,6 +364,7 @@ type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 	compSizes    [4]uintptr
 	curArchSize  int
 	ids          [4]uint8
+	precomp      []precomp4
 }
 
 // NewFilter4 creates a new `Filter` that iterates over all entities
@@ -342,14 +395,16 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 		ids:         [4]uint8{id1, id2, id3, id4},
 		curMatchIdx: 0,
 		curIdx:      -1,
+		precomp:     make([]precomp4, 0, 64),
 	}
 	f.compSizes[0] = w.components.compIDToSize[id1]
 	f.compSizes[1] = w.components.compIDToSize[id2]
 	f.compSizes[2] = w.components.compIDToSize[id3]
 	f.compSizes[3] = w.components.compIDToSize[id4]
 
-	f.updateMatching()
-	f.updateCachedEntities()
+	f.updateArches()
+	f.updateEntities()
+	f.buildPrecomp()
 	f.Reset()
 	return f
 }
@@ -360,22 +415,38 @@ func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
 	return NewFilter4[T1, T2, T3, T4](w)
 }
 
+// buildPrecomp precomputes the iterator data for matching archetypes.
+func (f *Filter4[T1, T2, T3, T4]) buildPrecomp() {
+	f.precomp = f.precomp[:0]
+	for _, a := range f.matchingArches {
+		var bs [4]unsafe.Pointer
+		bs[0] = a.compPointers[f.ids[0]]
+		bs[1] = a.compPointers[f.ids[1]]
+		bs[2] = a.compPointers[f.ids[2]]
+		bs[3] = a.compPointers[f.ids[3]]
+		f.precomp = append(f.precomp, precomp4{
+			bases:     bs,
+			entityIDs: a.entityIDs,
+			size:      a.size,
+		})
+	}
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter4[T1, T2, T3, T4]) Reset() {
-	if f.IsStale() {
-		f.updateMatching()
-		f.updateCachedEntities()
+	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
+		f.updateArches()
+		f.updateEntities()
+		f.buildPrecomp()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.matchingArches) > 0 {
-		a := f.matchingArches[0]
-		for i := 0; i < 4; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+	if len(f.precomp) > 0 {
+		it := f.precomp[0]
+		f.curBases = it.bases
+		f.curEntityIDs = it.entityIDs
+		f.curArchSize = it.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -393,15 +464,13 @@ func (f *Filter4[T1, T2, T3, T4]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	if f.curMatchIdx >= len(f.precomp) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < 4; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	it := f.precomp[f.curMatchIdx]
+	f.curBases = it.bases
+	f.curEntityIDs = it.entityIDs
+	f.curArchSize = it.size
 	f.curIdx = 0
 	return true
 }
@@ -432,8 +501,8 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
-	if f.IsStale() {
-		f.updateMatching()
+	if f.needsArchesUpdate() {
+		f.updateArches()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
@@ -455,6 +524,13 @@ func (f *Filter4[T1, T2, T3, T4]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// precomp5 is a precomputed archetype iterator struct for 5-component filters.
+type precomp5 struct {
+	bases     [5]unsafe.Pointer
+	entityIDs []Entity
+	size      int
+}
+
 // Filter5 provides a fast, cache-friendly iterator over all entities that
 // have the 5 components: T1, T2, T3, T4, T5.
 type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
@@ -466,6 +542,7 @@ type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 	compSizes    [5]uintptr
 	curArchSize  int
 	ids          [5]uint8
+	precomp      []precomp5
 }
 
 // NewFilter5 creates a new `Filter` that iterates over all entities
@@ -498,6 +575,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 		ids:         [5]uint8{id1, id2, id3, id4, id5},
 		curMatchIdx: 0,
 		curIdx:      -1,
+		precomp:     make([]precomp5, 0, 64),
 	}
 	f.compSizes[0] = w.components.compIDToSize[id1]
 	f.compSizes[1] = w.components.compIDToSize[id2]
@@ -505,8 +583,9 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	f.compSizes[3] = w.components.compIDToSize[id4]
 	f.compSizes[4] = w.components.compIDToSize[id5]
 
-	f.updateMatching()
-	f.updateCachedEntities()
+	f.updateArches()
+	f.updateEntities()
+	f.buildPrecomp()
 	f.Reset()
 	return f
 }
@@ -517,22 +596,39 @@ func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5]
 	return NewFilter5[T1, T2, T3, T4, T5](w)
 }
 
+// buildPrecomp precomputes the iterator data for matching archetypes.
+func (f *Filter5[T1, T2, T3, T4, T5]) buildPrecomp() {
+	f.precomp = f.precomp[:0]
+	for _, a := range f.matchingArches {
+		var bs [5]unsafe.Pointer
+		bs[0] = a.compPointers[f.ids[0]]
+		bs[1] = a.compPointers[f.ids[1]]
+		bs[2] = a.compPointers[f.ids[2]]
+		bs[3] = a.compPointers[f.ids[3]]
+		bs[4] = a.compPointers[f.ids[4]]
+		f.precomp = append(f.precomp, precomp5{
+			bases:     bs,
+			entityIDs: a.entityIDs,
+			size:      a.size,
+		})
+	}
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
-	if f.IsStale() {
-		f.updateMatching()
-		f.updateCachedEntities()
+	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
+		f.updateArches()
+		f.updateEntities()
+		f.buildPrecomp()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.matchingArches) > 0 {
-		a := f.matchingArches[0]
-		for i := 0; i < 5; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+	if len(f.precomp) > 0 {
+		it := f.precomp[0]
+		f.curBases = it.bases
+		f.curEntityIDs = it.entityIDs
+		f.curArchSize = it.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -550,15 +646,13 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	if f.curMatchIdx >= len(f.precomp) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < 5; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	it := f.precomp[f.curMatchIdx]
+	f.curBases = it.bases
+	f.curEntityIDs = it.entityIDs
+	f.curArchSize = it.size
 	f.curIdx = 0
 	return true
 }
@@ -590,8 +684,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
-	if f.IsStale() {
-		f.updateMatching()
+	if f.needsArchesUpdate() {
+		f.updateArches()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
@@ -613,6 +707,13 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// precomp6 is a precomputed archetype iterator struct for 6-component filters.
+type precomp6 struct {
+	bases     [6]unsafe.Pointer
+	entityIDs []Entity
+	size      int
+}
+
 // Filter6 provides a fast, cache-friendly iterator over all entities that
 // have the 6 components: T1, T2, T3, T4, T5, T6.
 type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
@@ -624,6 +725,7 @@ type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 	compSizes    [6]uintptr
 	curArchSize  int
 	ids          [6]uint8
+	precomp      []precomp6
 }
 
 // NewFilter6 creates a new `Filter` that iterates over all entities
@@ -658,6 +760,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 		ids:         [6]uint8{id1, id2, id3, id4, id5, id6},
 		curMatchIdx: 0,
 		curIdx:      -1,
+		precomp:     make([]precomp6, 0, 64),
 	}
 	f.compSizes[0] = w.components.compIDToSize[id1]
 	f.compSizes[1] = w.components.compIDToSize[id2]
@@ -666,8 +769,9 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	f.compSizes[4] = w.components.compIDToSize[id5]
 	f.compSizes[5] = w.components.compIDToSize[id6]
 
-	f.updateMatching()
-	f.updateCachedEntities()
+	f.updateArches()
+	f.updateEntities()
+	f.buildPrecomp()
 	f.Reset()
 	return f
 }
@@ -678,22 +782,40 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4,
 	return NewFilter6[T1, T2, T3, T4, T5, T6](w)
 }
 
+// buildPrecomp precomputes the iterator data for matching archetypes.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) buildPrecomp() {
+	f.precomp = f.precomp[:0]
+	for _, a := range f.matchingArches {
+		var bs [6]unsafe.Pointer
+		bs[0] = a.compPointers[f.ids[0]]
+		bs[1] = a.compPointers[f.ids[1]]
+		bs[2] = a.compPointers[f.ids[2]]
+		bs[3] = a.compPointers[f.ids[3]]
+		bs[4] = a.compPointers[f.ids[4]]
+		bs[5] = a.compPointers[f.ids[5]]
+		f.precomp = append(f.precomp, precomp6{
+			bases:     bs,
+			entityIDs: a.entityIDs,
+			size:      a.size,
+		})
+	}
+}
+
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
-	if f.IsStale() {
-		f.updateMatching()
-		f.updateCachedEntities()
+	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
+		f.updateArches()
+		f.updateEntities()
+		f.buildPrecomp()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.matchingArches) > 0 {
-		a := f.matchingArches[0]
-		for i := 0; i < 6; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
-		f.curEntityIDs = a.entityIDs
-		f.curArchSize = a.size
+	if len(f.precomp) > 0 {
+		it := f.precomp[0]
+		f.curBases = it.bases
+		f.curEntityIDs = it.entityIDs
+		f.curArchSize = it.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -711,15 +833,13 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.matchingArches) {
+	if f.curMatchIdx >= len(f.precomp) {
 		return false
 	}
-	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < 6; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
-	f.curEntityIDs = a.entityIDs
-	f.curArchSize = a.size
+	it := f.precomp[f.curMatchIdx]
+	f.curBases = it.bases
+	f.curEntityIDs = it.entityIDs
+	f.curArchSize = it.size
 	f.curIdx = 0
 	return true
 }
@@ -752,8 +872,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
-	if f.IsStale() {
-		f.updateMatching()
+	if f.needsArchesUpdate() {
+		f.updateArches()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
