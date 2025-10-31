@@ -28,25 +28,15 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 	return queryCache{
 		world:          w,
 		mask:           m,
-		matchingArches: make([]*archetype, 0, 64),
+		matchingArches: make([]*archetype, 0, 4),
 		cachedEntities: make([]Entity, 0, w.entities.capacity),
 	}
 }
 
-// needsArchesUpdate checks if the archetype cache is out of sync with the world's archetype structure.
-func (c *queryCache) needsArchesUpdate() bool {
-	return c.world.archetypes.archetypeVersion != c.lastVersion
-}
-
-// needsEntitiesUpdate checks if the entity list cache is out of sync with the world's mutation state.
-func (c *queryCache) needsEntitiesUpdate() bool {
-	return c.world.mutationVersion != c.lastMutationVersion
-}
-
-// updateArches rebuilds the filter's list of archetypes that match its
+// updateMatching rebuilds the filter's list of archetypes that match its
 // component mask. This is called automatically when the filter detects that
 // the world's archetype layout has changed.
-func (c *queryCache) updateArches() {
+func (c *queryCache) updateMatching() {
 	c.matchingArches = c.matchingArches[:0]
 	isZeroMask := c.mask == bitmask256{}
 
@@ -60,27 +50,35 @@ func (c *queryCache) updateArches() {
 	c.lastVersion = c.world.archetypes.archetypeVersion
 }
 
-// updateEntities rebuilds the cached list of entities by collecting all
+// updateCachedEntities rebuilds the cached list of entities by collecting all
 // entity IDs from the archetypes currently matching the filter's query. This
 // method is called when the cache is stale to ensure the entity list is
 // up-to-date with the world state. After rebuilding, it updates the cache's
 // mutation version to match the world's current version.
-func (c *queryCache) updateEntities() {
+func (c *queryCache) updateCachedEntities() {
 	total := 0
 	for _, a := range c.matchingArches {
 		total += a.size
 	}
-	if cap(c.cachedEntities) < total {
-		c.cachedEntities = make([]Entity, total)
-	} else {
-		c.cachedEntities = c.cachedEntities[:total]
-	}
+	c.cachedEntities = c.cachedEntities[:total]
 	idx := 0
 	for _, a := range c.matchingArches {
 		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
 		idx += a.size
 	}
 	c.lastMutationVersion = c.world.mutationVersion
+}
+
+// IsStale checks if the cache is out of sync with the world's state by
+// comparing the cache's last known version numbers with the world's current
+// versions. A cache is considered stale if either the archetype structure has
+// changed (e.g., a new archetype was created) or if entities have been created
+// or deleted.
+//
+// Returns:
+//   - true if the cache is stale and needs to be updated, false otherwise.
+func (c *queryCache) IsStale() bool {
+	return c.world.archetypes.archetypeVersion != c.lastVersion || c.world.mutationVersion != c.lastMutationVersion
 }
 
 // Entities returns a slice of all entities that match the cached query. If the
@@ -91,11 +89,9 @@ func (c *queryCache) updateEntities() {
 // Returns:
 //   - A slice of `Entity` objects that match the query.
 func (c *queryCache) Entities() []Entity {
-	if c.needsArchesUpdate() {
-		c.updateArches()
-	}
-	if c.needsEntitiesUpdate() {
-		c.updateEntities()
+	if c.IsStale() {
+		c.updateMatching()
+		c.updateCachedEntities()
 	}
 	return c.cachedEntities
 }

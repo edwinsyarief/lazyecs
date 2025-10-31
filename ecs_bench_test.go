@@ -2,7 +2,6 @@ package teishoku
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -664,105 +663,6 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 				}
 			}
 		})
-	}
-}
-
-type C1 struct{ Val float64 }
-type C2 struct{ Val float64 }
-type C3 struct{ Val float64 }
-type C4 struct{ Val float64 }
-type C5 struct{ Val float64 }
-
-const N = 1000000
-
-func BenchmarkQueryBasic1M(b *testing.B) {
-	w := NewWorld(N * 11 / 10) // Slightly more for 10x N with Position
-	builderPV := NewBuilder2[Position, Velocity](&w)
-	builderP := NewBuilder[Position](&w)
-	builderPV.NewEntities(N)
-	builderP.NewEntities(10 * N)
-	filter := NewFilter2[Position, Velocity](&w)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		filter.Reset()
-		for filter.Next() {
-			p, v := filter.Get()
-			p.X += v.DX
-			p.Y += v.DY
-		}
-	}
-}
-
-func BenchmarkQueryFragmentedInner1M(b *testing.B) {
-	w := NewWorld(N)
-	for i := 0; i < N; i++ {
-		e := w.CreateEntity()
-		SetComponent(&w, e, Position{})
-		SetComponent(&w, e, Velocity{})
-		mask := i % 32
-		if mask&1 != 0 {
-			SetComponent(&w, e, C1{})
-		}
-		if mask&2 != 0 {
-			SetComponent(&w, e, C2{})
-		}
-		if mask&4 != 0 {
-			SetComponent(&w, e, C3{})
-		}
-		if mask&8 != 0 {
-			SetComponent(&w, e, C4{})
-		}
-		if mask&16 != 0 {
-			SetComponent(&w, e, C5{})
-		}
-	}
-	filter := NewFilter2[Position, Velocity](&w)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		filter.Reset()
-		for filter.Next() {
-			p, v := filter.Get()
-			p.X += v.DX
-			p.Y += v.DY
-		}
-	}
-}
-
-func BenchmarkQueryFragmentedOuter1M(b *testing.B) {
-	w := NewWorld(N * 5) // For 4x N non-matching
-	builderPV := NewBuilder2[Position, Velocity](&w)
-	builderPV.NewEntities(N)
-	rng := rand.New(rand.NewSource(42))
-	for i := 0; i < 4*N; i++ {
-		e := w.CreateEntity()
-		SetComponent(&w, e, Position{})
-		mask := rng.Intn(256)
-		if mask&1 != 0 {
-			SetComponent(&w, e, C1{})
-		}
-		if mask&2 != 0 {
-			SetComponent(&w, e, C2{})
-		}
-		if mask&4 != 0 {
-			SetComponent(&w, e, C3{})
-		}
-		if mask&8 != 0 {
-			SetComponent(&w, e, C4{})
-		}
-		if mask&16 != 0 {
-			SetComponent(&w, e, C5{})
-		}
-		// Add 3 more for 8 components, but simplify to 5 for demo
-	}
-	filter := NewFilter2[Position, Velocity](&w)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		filter.Reset()
-		for filter.Next() {
-			p, v := filter.Get()
-			p.X += v.DX
-			p.Y += v.DY
-		}
 	}
 }
 

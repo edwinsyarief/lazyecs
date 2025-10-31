@@ -5,13 +5,6 @@ import (
 	"unsafe"
 )
 
-// precomp1 is a precomputed archetype iterator struct for single-component filters.
-type precomp1 struct {
-	base      unsafe.Pointer
-	entityIDs []Entity
-	size      int
-}
-
 // Filter provides a fast, cache-friendly iterator over all entities that have a
 // specific set of components. It is the primary mechanism for implementing
 // game logic (systems). The filter iterates directly over the component arrays
@@ -25,7 +18,6 @@ type Filter[T any] struct {
 	compSize    uintptr
 	curArchSize int
 	compID      uint8
-	precomp     []precomp1
 }
 
 // NewFilter creates a new `Filter` that iterates over all entities possessing
@@ -46,12 +38,10 @@ func NewFilter[T any](w *World) *Filter[T] {
 		compID:      id,
 		curMatchIdx: 0,
 		curIdx:      -1,
-		precomp:     make([]precomp1, 0, 64),
 	}
 	f.compSize = w.components.compIDToSize[id]
-	f.updateArches()
-	f.updateEntities()
-	f.buildPrecomp()
+	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -62,35 +52,22 @@ func (f *Filter[T]) New(w *World) *Filter[T] {
 	return NewFilter[T](w)
 }
 
-// buildPrecomp precomputes the iterator data for matching archetypes.
-func (f *Filter[T]) buildPrecomp() {
-	f.precomp = f.precomp[:0]
-	for _, a := range f.matchingArches {
-		f.precomp = append(f.precomp, precomp1{
-			base:      a.compPointers[f.compID],
-			entityIDs: a.entityIDs,
-			size:      a.size,
-		})
-	}
-}
-
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times. The filter
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter[T]) Reset() {
-	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
-		f.updateArches()
-		f.updateEntities()
-		f.buildPrecomp()
+	if f.IsStale() {
+		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.precomp) > 0 {
-		it := f.precomp[0]
-		f.curBase = it.base
-		f.curEntityIDs = it.entityIDs
-		f.curArchSize = it.size
+	if len(f.matchingArches) > 0 {
+		a := f.matchingArches[0]
+		f.curBase = a.compPointers[f.compID]
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -115,13 +92,13 @@ func (f *Filter[T]) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.precomp) {
+	if f.curMatchIdx >= len(f.matchingArches) {
 		return false
 	}
-	it := f.precomp[f.curMatchIdx]
-	f.curBase = it.base
-	f.curEntityIDs = it.entityIDs
-	f.curArchSize = it.size
+	a := f.matchingArches[f.curMatchIdx]
+	f.curBase = a.compPointers[f.compID]
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
 	f.curIdx = 0
 	return true
 }
@@ -151,8 +128,8 @@ func (f *Filter[T]) Get() *T {
 //
 // After this operation, the filter will be empty.
 func (f *Filter[T]) RemoveEntities() {
-	if f.needsArchesUpdate() {
-		f.updateArches()
+	if f.IsStale() {
+		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
@@ -184,12 +161,6 @@ func (f *Filter[T]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
-// precomp0 is a precomputed archetype iterator struct for zero-component filters.
-type precomp0 struct {
-	entityIDs []Entity
-	size      int
-}
-
 // Filter0 provides a fast, cache-friendly iterator over all entities that have a
 // no components.
 type Filter0 struct {
@@ -198,7 +169,6 @@ type Filter0 struct {
 	curMatchIdx int // index into matchingArches
 	curIdx      int // index into the current archetype's entity/component array
 	curArchSize int
-	precomp     []precomp0
 }
 
 // NewFilter0 creates a new `Filter` that iterates over all entities possessing
@@ -215,11 +185,9 @@ func NewFilter0(w *World) *Filter0 {
 		queryCache:  newQueryCache(w, m),
 		curMatchIdx: 0,
 		curIdx:      -1,
-		precomp:     make([]precomp0, 0, 64),
 	}
-	f.updateArches()
-	f.updateEntities()
-	f.buildPrecomp()
+	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -230,33 +198,21 @@ func (f *Filter0) New(w *World) *Filter0 {
 	return NewFilter0(w)
 }
 
-// buildPrecomp precomputes the iterator data for matching archetypes.
-func (f *Filter0) buildPrecomp() {
-	f.precomp = f.precomp[:0]
-	for _, a := range f.matchingArches {
-		f.precomp = append(f.precomp, precomp0{
-			entityIDs: a.entityIDs,
-			size:      a.size,
-		})
-	}
-}
-
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times. The filter
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter0) Reset() {
-	if f.needsArchesUpdate() || f.needsEntitiesUpdate() {
-		f.updateArches()
-		f.updateEntities()
-		f.buildPrecomp()
+	if f.IsStale() {
+		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
-	if len(f.precomp) > 0 {
-		it := f.precomp[0]
-		f.curEntityIDs = it.entityIDs
-		f.curArchSize = it.size
+	if len(f.matchingArches) > 0 {
+		a := f.matchingArches[0]
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -281,12 +237,12 @@ func (f *Filter0) Next() bool {
 		return true
 	}
 	f.curMatchIdx++
-	if f.curMatchIdx >= len(f.precomp) {
+	if f.curMatchIdx >= len(f.matchingArches) {
 		return false
 	}
-	it := f.precomp[f.curMatchIdx]
-	f.curEntityIDs = it.entityIDs
-	f.curArchSize = it.size
+	a := f.matchingArches[f.curMatchIdx]
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
 	f.curIdx = 0
 	return true
 }
@@ -307,8 +263,8 @@ func (f *Filter0) Entity() Entity {
 //
 // After this operation, the filter will be empty.
 func (f *Filter0) RemoveEntities() {
-	if f.needsArchesUpdate() {
-		f.updateArches()
+	if f.IsStale() {
+		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
 		for i := 0; i < a.size; i++ {
