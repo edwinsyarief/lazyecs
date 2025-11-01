@@ -20,6 +20,8 @@ type Filter{{.N}}[{{.Types}}] struct {
 // Returns:
 //   - A pointer to the newly created `Filter{{.N}}`.
 func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	{{range .Components}}id{{.Index}} := w.getCompTypeID(reflect.TypeFor[{{.TypeName}}]())
 	{{end}}
 	if {{.DuplicateIDs}} {
@@ -29,8 +31,8 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}m.set(id{{.Index}})
 	{{end}}
 	f := &Filter{{.N}}[{{.TypeVars}}]{
-		queryCache: newQueryCache(w, m),
-		ids: [{{.N}}]uint8{ {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}{{end}} },
+		queryCache:  newQueryCache(w, m),
+		ids:         [{{.N}}]uint8{ {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}{{end}} },
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
@@ -38,7 +40,7 @@ func NewFilter{{.N}}[{{.Types}}](w *World) *Filter{{.N}}[{{.TypeVars}}] {
 	{{end}}
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -51,6 +53,12 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) New(w *World) *Filter{{.N}}[{{.TypeVars}}]
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter{{.N}}[{{.TypeVars}}]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -118,6 +126,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -132,8 +142,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.

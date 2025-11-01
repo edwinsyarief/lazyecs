@@ -11,12 +11,17 @@
 // Returns:
 //   - Pointers to the component data ({{.ReturnTypes}}), or nils if not found.
 func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return {{.ReturnNil}}
 	}
 	meta := w.entities.metas[e.ID]
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(reflect.TypeFor[{{.TypeName}}]())
+	w.components.mu.RLock()
+	{{range .Components}}id{{.Index}} := w.getCompTypeIDNoLock(reflect.TypeFor[{{.TypeName}}]())
 	{{end}}
+	w.components.mu.RUnlock()
+
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in GetComponent{{.N}}")
 	}
@@ -27,9 +32,8 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 	if {{.MaskCheck}} {
 		return {{.ReturnNil}}
 	}
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
-	{{end}}
-	return {{.ReturnPtrs}}
+	return {{range $i, $e := .Components}}{{if $i}},
+		{{end}}(*{{$e.TypeName}})(unsafe.Add(a.compPointers[id{{$e.Index}}], uintptr(meta.index)*a.compSizes[id{{$e.Index}}])){{end}}
 }
 
 // SetComponent{{.N}} adds or updates the {{.N}} components ({{.TypeVars}}) on the
@@ -45,14 +49,19 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 {{range .Components}}//   - v{{.Index}}: The component data of type {{.TypeName}} to set.
 {{end}}
 func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	w.components.mu.RLock()
+	{{range .Components}}id{{.Index}} := w.getCompTypeIDNoLock(t{{.Index}})
 	{{end}}
+	w.components.mu.RUnlock()
+
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in SetComponent{{.N}}")
 	}
@@ -63,8 +72,8 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	{{range .Components}}has{{.Index}} := (a.mask[i{{.Index}}] & (uint64(1) << uint64(o{{.Index}}))) != 0
 	{{end}}
 	if {{.HasAll}} {
-		{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
-		*(*{{.TypeName}})({{.PtrName}}) = {{.VarName}}
+		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
+		*(*{{.TypeName}})(ptr{{.Index}}) = {{.VarName}}
 		{{end}}
 		return
 	}
@@ -79,6 +88,7 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -88,8 +98,9 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 			count++
 		}
 		{{end}}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -99,12 +110,13 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
-	*(*{{.TypeName}})({{.PtrName}}) = {{.VarName}}
+	{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
+	*(*{{.TypeName}})(ptr{{.Index}}) = {{.VarName}}
 	{{end}}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent{{.N}} removes the {{.N}} components ({{.TypeVars}}) from the
@@ -118,14 +130,19 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	w.components.mu.RLock()
+	{{range .Components}}id{{.Index}} := w.getCompTypeIDNoLock(t{{.Index}})
 	{{end}}
+	w.components.mu.RUnlock()
+
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in RemoveComponent{{.N}}")
 	}
@@ -147,6 +164,7 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if {{.IsRemovedID}} {
 				continue
@@ -154,8 +172,9 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -168,7 +187,8 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }

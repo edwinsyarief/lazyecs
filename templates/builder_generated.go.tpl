@@ -1,13 +1,3 @@
-// A Builder is a highly optimized factory for creating entities with a fixed set
-// of components. By pre-calculating the archetype, it makes entity creation an
-// extremely fast, allocation-free operation.
-//
-// Placeholders:
-// - .N: The number of components (e.g., 2, 3).
-// - .Types: The generic type parameters, e.g., "T1 any, T2 any".
-// - .TypeVars: The type names themselves, e.g., "T1, T2".
-// - .DuplicateIDs: A condition to check for duplicate component types, e.g., "id1 == id2".
-// - .Components: A slice of ComponentInfo structs, used for loops.
 // Builder{{.N}} provides a highly efficient, type-safe API for creating entities
 // with a predefined set of {{.N}} components: {{.TypeVars}}.
 type Builder{{.N}}[{{.Types}}] struct {
@@ -29,18 +19,23 @@ type Builder{{.N}}[{{.Types}}] struct {
 func NewBuilder{{.N}}[{{.Types}}](w *World) *Builder{{.N}}[{{.TypeVars}}] {
 	{{range .Components}}t{{.Index}} := reflect.TypeFor[{{.TypeName}}]()
 	{{end}}
-	{{range .Components}}id{{.Index}} := w.getCompTypeID(t{{.Index}})
+	w.components.mu.RLock()
+	{{range .Components}}id{{.Index}} := w.getCompTypeIDNoLock(t{{.Index}})
 	{{end}}
+	w.components.mu.RUnlock()
+
 	if {{.DuplicateIDs}} {
 		panic("ecs: duplicate component types in Builder{{.N}}")
 	}
 	var mask bitmask256
 	{{range .Components}}mask.set(id{{.Index}})
 	{{end}}
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{{range .Components}}{id: id{{.Index}}, typ: t{{.Index}}, size: w.components.compIDToSize[id{{.Index}}]},
 		{{end}}
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder{{.N}}[{{.TypeVars}}]{world: w, arch: arch, {{range $i, $e := .Components}}{{if $i}}, {{end}}id{{$e.Index}}: id{{$e.Index}}{{end}}}
 }
@@ -73,15 +68,17 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 		return
 	}
 	w := b.world
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expand()
+		w.expandNoLock()
 	}
 	startSize := a.size
 	a.size += count
 	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
 	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
+	for k := 0; k < count; k++ {
 		id := popped[k]
 		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
@@ -91,6 +88,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 		a.entityIDs[startSize+k] = ent
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion.Add(1)
 }
 
 // NewEntitiesWithValueSet creates a batch of `count` entities and initializes
@@ -105,15 +103,17 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 		return
 	}
 	w := b.world
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expand()
+		w.expandNoLock()
 	}
 	startSize := a.size
 	a.size += count
 	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
 	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
+	for k := 0; k < count; k++ {
 		id := popped[k]
 		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
@@ -121,77 +121,72 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])
-		*(*{{.TypeName}})(ptr{{.Index}}) = {{.BuilderVarName}}
+		{{range .Components}}*(*{{.TypeName}})(unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(startSize+k)*a.compSizes[b.id{{.Index}}])) = {{.BuilderVarName}}
 		{{end}}
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion.Add(1)
 }
 
-// Get retrieves pointers to the {{.N}} components ({{.TypeVars}}) for the
-// given entity.
+// Get retrieves pointers to the components for the given entity.
 //
-// If the entity is invalid or does not have all the required components, this
-// returns nil for all pointers.
+// If the entity is invalid or does not have all the components, this returns nils.
 //
 // Parameters:
 //   - e: The entity to get the components from.
 //
 // Returns:
-//   - Pointers to the component data ({{.ReturnTypes}}), or nils if not found.
+//   - Pointers to the component data, or nils if not found.
 func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 	w := b.world
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return {{.ReturnNil}}
 	}
 	meta := w.entities.metas[e.ID]
 	a := w.archetypes.archetypes[meta.archetypeIndex]
-	{{range .Components}}id{{.Index}} := b.id{{.Index}}
-	i{{.Index}} := id{{.Index}} >> 6
-	o{{.Index}} := id{{.Index}} & 63
+	{{range .Components}}i{{.Index}} := b.id{{.Index}} >> 6
+	o{{.Index}} := b.id{{.Index}} & 63
 	{{end}}
 	if {{.BuilderMaskCheck}} {
 		return {{.ReturnNil}}
 	}
-	{{range .Components}}{{.PtrName}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
-	{{end}}
-	return {{.ReturnPtrs}}
+	return {{range $i, $e := .Components}}{{if $i}},
+		{{end}}(*{{$e.TypeName}})(unsafe.Add(a.compPointers[b.id{{$e.Index}}], uintptr(meta.index)*a.compSizes[b.id{{$e.Index}}])){{end}}
 }
 
-// Set adds or updates the components ({{.TypeVars}}) for a given entity with
-// the specified values.
+// Set adds or updates the components for a given entity with the specified
+// values.
 //
-// If the entity already has all the components, their values are updated. If
-// any are missing, they are added, which may trigger an archetype change.
+// If the entity already has all the components, their values are updated. If not,
+// the missing components are added, which may trigger an archetype change.
 //
 // It is safe to call this on an invalid entity; the operation will be ignored.
 //
 // Parameters:
 //   - e: The entity to modify.
-{{range .Components}}//   - v{{.Index}}: The component value to set for type {{.TypeName}}.
+{{range .Components}}//   - v{{.Index}}: The value for {{.TypeName}}.
 {{end}}
 func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	w := b.world
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
 	a := w.archetypes.archetypes[meta.archetypeIndex]
-	{{range .Components}}id{{.Index}} := b.id{{.Index}}
-	i{{.Index}} := id{{.Index}} >> 6
-	o{{.Index}} := id{{.Index}} & 63
-	{{end}}
-	{{range .Components}}has{{.Index}} := (a.mask[i{{.Index}}] & (uint64(1) << uint64(o{{.Index}}))) != 0
+	{{range .Components}}has{{.Index}} := (a.mask[b.id{{.Index}}>>6] & (uint64(1) << uint64(b.id{{.Index}}&63))) != 0
 	{{end}}
 	if {{.SetHasVars}} {
-		{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(a.compPointers[id{{.Index}}]) + uintptr(meta.index)*a.compSizes[id{{.Index}}])
-		*(*{{.TypeName}})(ptr{{.Index}}) = v{{.Index}}
+		{{range .Components}}*(*{{.TypeName}})(unsafe.Pointer(uintptr(a.compPointers[b.id{{.Index}}]) + uintptr(meta.index)*a.compSizes[b.id{{.Index}}])) = v{{.Index}}
 		{{end}}
 		return
 	}
 	newMask := a.mask
 	{{range .Components}}if !has{{.Index}} {
-		newMask.set(id{{.Index}})
+		newMask.set(b.id{{.Index}})
 	}
 	{{end}}
 	var targetA *archetype
@@ -200,17 +195,19 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		{{range .Components}}if !has{{.Index}} {
-			tempSpecs[count] = compSpec{id: id{{.Index}}, typ: w.components.compIDToType[id{{.Index}}], size: w.components.compIDToSize[id{{.Index}}]}
+			tempSpecs[count] = compSpec{id: b.id{{.Index}}, typ: w.components.compIDToType[b.id{{.Index}}], size: w.components.compIDToSize[b.id{{.Index}}]}
 			count++
 		}
 		{{end}}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -220,12 +217,12 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
-	*(*{{.TypeName}})(ptr{{.Index}}) = v{{.Index}}
+	{{range .Components}}*(*{{.TypeName}})(unsafe.Pointer(uintptr(targetA.compPointers[b.id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[b.id{{.Index}}])) = v{{.Index}}
 	{{end}}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // SetBatch efficiently sets the component values for a slice of entities.
