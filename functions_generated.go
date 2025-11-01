@@ -24,8 +24,10 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 		return nil, nil
 	}
 	meta := w.entities.metas[e.ID]
-	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
-	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeIDNoLock(reflect.TypeFor[T2]())
+	w.components.mu.RUnlock()
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in GetComponent2")
@@ -39,10 +41,8 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 {
 		return nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-
-	return (*T1)(ptr1), (*T2)(ptr2)
+	return (*T1)(unsafe.Add(a.compPointers[id1], uintptr(meta.index)*a.compSizes[id1])),
+		(*T2)(unsafe.Add(a.compPointers[id2], uintptr(meta.index)*a.compSizes[id2]))
 }
 
 // SetComponent2 adds or updates the 2 components (T1, T2) on the
@@ -67,8 +67,10 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in SetComponent2")
@@ -104,6 +106,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -116,7 +119,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 			tempSpecs[count] = compSpec{id: id2, typ: w.components.compIDToType[id2], size: w.components.compIDToSize[id2]}
 			count++
 		}
-
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -159,8 +162,10 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in RemoveComponent2")
@@ -187,6 +192,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id1 || cid == id2 {
 				continue
@@ -194,6 +200,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -233,9 +240,11 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 		return nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
-	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
-	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
-	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeIDNoLock(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeIDNoLock(reflect.TypeFor[T3]())
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in GetComponent3")
@@ -251,11 +260,9 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 {
 		return nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
+	return (*T1)(unsafe.Add(a.compPointers[id1], uintptr(meta.index)*a.compSizes[id1])),
+		(*T2)(unsafe.Add(a.compPointers[id2], uintptr(meta.index)*a.compSizes[id2])),
+		(*T3)(unsafe.Add(a.compPointers[id3], uintptr(meta.index)*a.compSizes[id3]))
 }
 
 // SetComponent3 adds or updates the 3 components (T1, T2, T3) on the
@@ -282,9 +289,11 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in SetComponent3")
@@ -328,6 +337,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -344,7 +354,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 			tempSpecs[count] = compSpec{id: id3, typ: w.components.compIDToType[id3], size: w.components.compIDToSize[id3]}
 			count++
 		}
-
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -390,9 +400,11 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in RemoveComponent3")
@@ -423,6 +435,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id1 || cid == id2 || cid == id3 {
 				continue
@@ -430,6 +443,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -469,10 +483,12 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 		return nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
-	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
-	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
-	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
-	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeIDNoLock(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeIDNoLock(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeIDNoLock(reflect.TypeFor[T4]())
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in GetComponent4")
@@ -490,12 +506,10 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 {
 		return nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
+	return (*T1)(unsafe.Add(a.compPointers[id1], uintptr(meta.index)*a.compSizes[id1])),
+		(*T2)(unsafe.Add(a.compPointers[id2], uintptr(meta.index)*a.compSizes[id2])),
+		(*T3)(unsafe.Add(a.compPointers[id3], uintptr(meta.index)*a.compSizes[id3])),
+		(*T4)(unsafe.Add(a.compPointers[id4], uintptr(meta.index)*a.compSizes[id4]))
 }
 
 // SetComponent4 adds or updates the 4 components (T1, T2, T3, T4) on the
@@ -524,10 +538,12 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in SetComponent4")
@@ -579,6 +595,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -599,7 +616,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 			tempSpecs[count] = compSpec{id: id4, typ: w.components.compIDToType[id4], size: w.components.compIDToSize[id4]}
 			count++
 		}
-
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -648,10 +665,12 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in RemoveComponent4")
@@ -686,6 +705,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 {
 				continue
@@ -693,6 +713,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -732,11 +753,13 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 		return nil, nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
-	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
-	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
-	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
-	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
-	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeIDNoLock(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeIDNoLock(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeIDNoLock(reflect.TypeFor[T4]())
+	id5 := w.getCompTypeIDNoLock(reflect.TypeFor[T5]())
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in GetComponent5")
@@ -756,13 +779,11 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 {
 		return nil, nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
-	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
+	return (*T1)(unsafe.Add(a.compPointers[id1], uintptr(meta.index)*a.compSizes[id1])),
+		(*T2)(unsafe.Add(a.compPointers[id2], uintptr(meta.index)*a.compSizes[id2])),
+		(*T3)(unsafe.Add(a.compPointers[id3], uintptr(meta.index)*a.compSizes[id3])),
+		(*T4)(unsafe.Add(a.compPointers[id4], uintptr(meta.index)*a.compSizes[id4])),
+		(*T5)(unsafe.Add(a.compPointers[id5], uintptr(meta.index)*a.compSizes[id5]))
 }
 
 // SetComponent5 adds or updates the 5 components (T1, T2, T3, T4, T5) on the
@@ -793,11 +814,13 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in SetComponent5")
@@ -857,6 +880,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -881,7 +905,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 			tempSpecs[count] = compSpec{id: id5, typ: w.components.compIDToType[id5], size: w.components.compIDToSize[id5]}
 			count++
 		}
-
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -933,11 +957,13 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in RemoveComponent5")
@@ -976,6 +1002,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 || cid == id5 {
 				continue
@@ -983,6 +1010,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -1022,12 +1050,14 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 		return nil, nil, nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
-	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
-	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
-	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
-	id4 := w.getCompTypeID(reflect.TypeFor[T4]())
-	id5 := w.getCompTypeID(reflect.TypeFor[T5]())
-	id6 := w.getCompTypeID(reflect.TypeFor[T6]())
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(reflect.TypeFor[T1]())
+	id2 := w.getCompTypeIDNoLock(reflect.TypeFor[T2]())
+	id3 := w.getCompTypeIDNoLock(reflect.TypeFor[T3]())
+	id4 := w.getCompTypeIDNoLock(reflect.TypeFor[T4]())
+	id5 := w.getCompTypeIDNoLock(reflect.TypeFor[T5]())
+	id6 := w.getCompTypeIDNoLock(reflect.TypeFor[T6]())
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in GetComponent6")
@@ -1049,14 +1079,12 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 || (a.mask[i6]&(uint64(1)<<uint64(o6))) == 0 {
 		return nil, nil, nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[id1]) + uintptr(meta.index)*a.compSizes[id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[id2]) + uintptr(meta.index)*a.compSizes[id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[id3]) + uintptr(meta.index)*a.compSizes[id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[id4]) + uintptr(meta.index)*a.compSizes[id4])
-	ptr5 := unsafe.Pointer(uintptr(a.compPointers[id5]) + uintptr(meta.index)*a.compSizes[id5])
-	ptr6 := unsafe.Pointer(uintptr(a.compPointers[id6]) + uintptr(meta.index)*a.compSizes[id6])
-
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
+	return (*T1)(unsafe.Add(a.compPointers[id1], uintptr(meta.index)*a.compSizes[id1])),
+		(*T2)(unsafe.Add(a.compPointers[id2], uintptr(meta.index)*a.compSizes[id2])),
+		(*T3)(unsafe.Add(a.compPointers[id3], uintptr(meta.index)*a.compSizes[id3])),
+		(*T4)(unsafe.Add(a.compPointers[id4], uintptr(meta.index)*a.compSizes[id4])),
+		(*T5)(unsafe.Add(a.compPointers[id5], uintptr(meta.index)*a.compSizes[id5])),
+		(*T6)(unsafe.Add(a.compPointers[id6], uintptr(meta.index)*a.compSizes[id6]))
 }
 
 // SetComponent6 adds or updates the 6 components (T1, T2, T3, T4, T5, T6) on the
@@ -1089,12 +1117,14 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
-	id6 := w.getCompTypeID(t6)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	id6 := w.getCompTypeIDNoLock(t6)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in SetComponent6")
@@ -1162,6 +1192,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -1190,7 +1221,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 			tempSpecs[count] = compSpec{id: id6, typ: w.components.compIDToType[id6], size: w.components.compIDToSize[id6]}
 			count++
 		}
-
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -1245,12 +1276,14 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
-	id6 := w.getCompTypeID(t6)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	id6 := w.getCompTypeIDNoLock(t6)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in RemoveComponent6")
@@ -1293,6 +1326,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id1 || cid == id2 || cid == id3 || cid == id4 || cid == id5 || cid == id6 {
 				continue
@@ -1300,6 +1334,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}

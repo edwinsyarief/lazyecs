@@ -437,3 +437,45 @@ func memCopy(dst, src unsafe.Pointer, size uintptr) {
 	srcBytes := unsafe.Slice((*byte)(src), size)
 	copy(dstBytes, srcBytes)
 }
+
+func (w *World) getCompTypeIDNoLock(t reflect.Type) uint8 {
+	if id, ok := w.components.compTypeMap[t]; ok {
+		return id
+	}
+	if id, ok := w.components.compTypeMap[t]; ok {
+		return id
+	}
+	if w.components.nextCompTypeID >= MaxComponentTypes {
+		panic("ecs: too many component types")
+	}
+	id := uint8(w.components.nextCompTypeID)
+	w.components.compTypeMap[t] = id
+	w.components.compIDToType[id] = t
+	w.components.compIDToSize[id] = t.Size()
+	w.components.nextCompTypeID++
+	return id
+}
+
+func (w *World) getOrCreateArchetypeNoLock(mask bitmask256, specs []compSpec) *archetype {
+	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
+		return w.archetypes.archetypes[idx]
+	}
+	// build new archetype
+	a := &archetype{
+		index:     len(w.archetypes.archetypes),
+		mask:      mask,
+		size:      0,
+		entityIDs: make([]Entity, w.entities.capacity),
+		compOrder: make([]uint8, 0, len(specs)),
+	}
+	for _, sp := range specs {
+		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.entities.capacity, w.entities.capacity)
+		a.compPointers[sp.id] = slice.UnsafePointer()
+		a.compSizes[sp.id] = sp.size
+		a.compOrder = append(a.compOrder, sp.id)
+	}
+	w.archetypes.archetypes = append(w.archetypes.archetypes, a)
+	w.archetypes.maskToArcIndex[mask] = a.index
+	w.archetypes.archetypeVersion.Add(1)
+	return a
+}

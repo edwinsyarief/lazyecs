@@ -27,8 +27,10 @@ func NewBuilder2[T1 any, T2 any](w *World) *Builder2[T1, T2] {
 	t1 := reflect.TypeFor[T1]()
 	t2 := reflect.TypeFor[T2]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 {
 		panic("ecs: duplicate component types in Builder2")
@@ -37,10 +39,12 @@ func NewBuilder2[T1 any, T2 any](w *World) *Builder2[T1, T2] {
 	mask.set(id1)
 	mask.set(id2)
 
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{id: id1, typ: t1, size: w.components.compIDToSize[id1]},
 		{id: id2, typ: t2, size: w.components.compIDToSize[id2]},
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder2[T1, T2]{world: w, arch: arch, id1: id1, id2: id2}
 }
@@ -160,9 +164,8 @@ func (b *Builder2[T1, T2]) Get(e Entity) (*T1, *T2) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 {
 		return nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	return (*T1)(ptr1), (*T2)(ptr2)
+	return (*T1)(unsafe.Add(a.compPointers[b.id1], uintptr(meta.index)*a.compSizes[b.id1])),
+		(*T2)(unsafe.Add(a.compPointers[b.id2], uintptr(meta.index)*a.compSizes[b.id2]))
 }
 
 // Set adds or updates the components for a given entity with the specified
@@ -206,6 +209,7 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -218,6 +222,7 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 			tempSpecs[count] = compSpec{id: b.id2, typ: w.components.compIDToType[b.id2], size: w.components.compIDToSize[b.id2]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -276,9 +281,11 @@ func NewBuilder3[T1 any, T2 any, T3 any](w *World) *Builder3[T1, T2, T3] {
 	t2 := reflect.TypeFor[T2]()
 	t3 := reflect.TypeFor[T3]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 {
 		panic("ecs: duplicate component types in Builder3")
@@ -288,11 +295,13 @@ func NewBuilder3[T1 any, T2 any, T3 any](w *World) *Builder3[T1, T2, T3] {
 	mask.set(id2)
 	mask.set(id3)
 
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{id: id1, typ: t1, size: w.components.compIDToSize[id1]},
 		{id: id2, typ: t2, size: w.components.compIDToSize[id2]},
 		{id: id3, typ: t3, size: w.components.compIDToSize[id3]},
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder3[T1, T2, T3]{world: w, arch: arch, id1: id1, id2: id2, id3: id3}
 }
@@ -417,10 +426,9 @@ func (b *Builder3[T1, T2, T3]) Get(e Entity) (*T1, *T2, *T3) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 {
 		return nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3)
+	return (*T1)(unsafe.Add(a.compPointers[b.id1], uintptr(meta.index)*a.compSizes[b.id1])),
+		(*T2)(unsafe.Add(a.compPointers[b.id2], uintptr(meta.index)*a.compSizes[b.id2])),
+		(*T3)(unsafe.Add(a.compPointers[b.id3], uintptr(meta.index)*a.compSizes[b.id3]))
 }
 
 // Set adds or updates the components for a given entity with the specified
@@ -470,6 +478,7 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -486,6 +495,7 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 			tempSpecs[count] = compSpec{id: b.id3, typ: w.components.compIDToType[b.id3], size: w.components.compIDToSize[b.id3]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -549,10 +559,12 @@ func NewBuilder4[T1 any, T2 any, T3 any, T4 any](w *World) *Builder4[T1, T2, T3,
 	t3 := reflect.TypeFor[T3]()
 	t4 := reflect.TypeFor[T4]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 {
 		panic("ecs: duplicate component types in Builder4")
@@ -563,12 +575,14 @@ func NewBuilder4[T1 any, T2 any, T3 any, T4 any](w *World) *Builder4[T1, T2, T3,
 	mask.set(id3)
 	mask.set(id4)
 
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{id: id1, typ: t1, size: w.components.compIDToSize[id1]},
 		{id: id2, typ: t2, size: w.components.compIDToSize[id2]},
 		{id: id3, typ: t3, size: w.components.compIDToSize[id3]},
 		{id: id4, typ: t4, size: w.components.compIDToSize[id4]},
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder4[T1, T2, T3, T4]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4}
 }
@@ -698,11 +712,10 @@ func (b *Builder4[T1, T2, T3, T4]) Get(e Entity) (*T1, *T2, *T3, *T4) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 {
 		return nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4)
+	return (*T1)(unsafe.Add(a.compPointers[b.id1], uintptr(meta.index)*a.compSizes[b.id1])),
+		(*T2)(unsafe.Add(a.compPointers[b.id2], uintptr(meta.index)*a.compSizes[b.id2])),
+		(*T3)(unsafe.Add(a.compPointers[b.id3], uintptr(meta.index)*a.compSizes[b.id3])),
+		(*T4)(unsafe.Add(a.compPointers[b.id4], uintptr(meta.index)*a.compSizes[b.id4]))
 }
 
 // Set adds or updates the components for a given entity with the specified
@@ -758,6 +771,7 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -778,6 +792,7 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 			tempSpecs[count] = compSpec{id: b.id4, typ: w.components.compIDToType[b.id4], size: w.components.compIDToSize[b.id4]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -846,11 +861,13 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 	t4 := reflect.TypeFor[T4]()
 	t5 := reflect.TypeFor[T5]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 {
 		panic("ecs: duplicate component types in Builder5")
@@ -862,6 +879,7 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 	mask.set(id4)
 	mask.set(id5)
 
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{id: id1, typ: t1, size: w.components.compIDToSize[id1]},
 		{id: id2, typ: t2, size: w.components.compIDToSize[id2]},
@@ -869,6 +887,7 @@ func NewBuilder5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Builder5[T1,
 		{id: id4, typ: t4, size: w.components.compIDToSize[id4]},
 		{id: id5, typ: t5, size: w.components.compIDToSize[id5]},
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder5[T1, T2, T3, T4, T5]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5}
 }
@@ -1003,12 +1022,11 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Get(e Entity) (*T1, *T2, *T3, *T4, *T5) {
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 {
 		return nil, nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
-	ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(meta.index)*a.compSizes[b.id5])
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5)
+	return (*T1)(unsafe.Add(a.compPointers[b.id1], uintptr(meta.index)*a.compSizes[b.id1])),
+		(*T2)(unsafe.Add(a.compPointers[b.id2], uintptr(meta.index)*a.compSizes[b.id2])),
+		(*T3)(unsafe.Add(a.compPointers[b.id3], uintptr(meta.index)*a.compSizes[b.id3])),
+		(*T4)(unsafe.Add(a.compPointers[b.id4], uintptr(meta.index)*a.compSizes[b.id4])),
+		(*T5)(unsafe.Add(a.compPointers[b.id5], uintptr(meta.index)*a.compSizes[b.id5]))
 }
 
 // Set adds or updates the components for a given entity with the specified
@@ -1070,6 +1088,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -1094,6 +1113,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 			tempSpecs[count] = compSpec{id: b.id5, typ: w.components.compIDToType[b.id5], size: w.components.compIDToSize[b.id5]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -1167,12 +1187,14 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 	t5 := reflect.TypeFor[T5]()
 	t6 := reflect.TypeFor[T6]()
 
-	id1 := w.getCompTypeID(t1)
-	id2 := w.getCompTypeID(t2)
-	id3 := w.getCompTypeID(t3)
-	id4 := w.getCompTypeID(t4)
-	id5 := w.getCompTypeID(t5)
-	id6 := w.getCompTypeID(t6)
+	w.components.mu.RLock()
+	id1 := w.getCompTypeIDNoLock(t1)
+	id2 := w.getCompTypeIDNoLock(t2)
+	id3 := w.getCompTypeIDNoLock(t3)
+	id4 := w.getCompTypeIDNoLock(t4)
+	id5 := w.getCompTypeIDNoLock(t5)
+	id6 := w.getCompTypeIDNoLock(t6)
+	w.components.mu.RUnlock()
 
 	if id2 == id1 || id3 == id1 || id3 == id2 || id4 == id1 || id4 == id2 || id4 == id3 || id5 == id1 || id5 == id2 || id5 == id3 || id5 == id4 || id6 == id1 || id6 == id2 || id6 == id3 || id6 == id4 || id6 == id5 {
 		panic("ecs: duplicate component types in Builder6")
@@ -1185,6 +1207,7 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 	mask.set(id5)
 	mask.set(id6)
 
+	w.components.mu.RLock()
 	specs := []compSpec{
 		{id: id1, typ: t1, size: w.components.compIDToSize[id1]},
 		{id: id2, typ: t2, size: w.components.compIDToSize[id2]},
@@ -1193,6 +1216,7 @@ func NewBuilder6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Buil
 		{id: id5, typ: t5, size: w.components.compIDToSize[id5]},
 		{id: id6, typ: t6, size: w.components.compIDToSize[id6]},
 	}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, specs)
 	return &Builder6[T1, T2, T3, T4, T5, T6]{world: w, arch: arch, id1: id1, id2: id2, id3: id3, id4: id4, id5: id5, id6: id6}
 }
@@ -1332,13 +1356,12 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Get(e Entity) (*T1, *T2, *T3, *T4, *T
 	if (a.mask[i1]&(uint64(1)<<uint64(o1))) == 0 || (a.mask[i2]&(uint64(1)<<uint64(o2))) == 0 || (a.mask[i3]&(uint64(1)<<uint64(o3))) == 0 || (a.mask[i4]&(uint64(1)<<uint64(o4))) == 0 || (a.mask[i5]&(uint64(1)<<uint64(o5))) == 0 || (a.mask[i6]&(uint64(1)<<uint64(o6))) == 0 {
 		return nil, nil, nil, nil, nil, nil
 	}
-	ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(meta.index)*a.compSizes[b.id1])
-	ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(meta.index)*a.compSizes[b.id2])
-	ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(meta.index)*a.compSizes[b.id3])
-	ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(meta.index)*a.compSizes[b.id4])
-	ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(meta.index)*a.compSizes[b.id5])
-	ptr6 := unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(meta.index)*a.compSizes[b.id6])
-	return (*T1)(ptr1), (*T2)(ptr2), (*T3)(ptr3), (*T4)(ptr4), (*T5)(ptr5), (*T6)(ptr6)
+	return (*T1)(unsafe.Add(a.compPointers[b.id1], uintptr(meta.index)*a.compSizes[b.id1])),
+		(*T2)(unsafe.Add(a.compPointers[b.id2], uintptr(meta.index)*a.compSizes[b.id2])),
+		(*T3)(unsafe.Add(a.compPointers[b.id3], uintptr(meta.index)*a.compSizes[b.id3])),
+		(*T4)(unsafe.Add(a.compPointers[b.id4], uintptr(meta.index)*a.compSizes[b.id4])),
+		(*T5)(unsafe.Add(a.compPointers[b.id5], uintptr(meta.index)*a.compSizes[b.id5])),
+		(*T6)(unsafe.Add(a.compPointers[b.id6], uintptr(meta.index)*a.compSizes[b.id6]))
 }
 
 // Set adds or updates the components for a given entity with the specified
@@ -1406,6 +1429,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
@@ -1434,6 +1458,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 			tempSpecs[count] = compSpec{id: b.id6, typ: w.components.compIDToType[b.id6], size: w.components.compIDToSize[b.id6]}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -1474,7 +1499,6 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 //   - v4: The component value to set for type T4.
 //   - v5: The component value to set for type T5.
 //   - v6: The component value to set for type T6.
-
 func (b *Builder6[T1, T2, T3, T4, T5, T6]) SetBatch(entities []Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
 	for _, e := range entities {
 		b.Set(e, v1, v2, v3, v4, v5, v6)

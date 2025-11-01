@@ -24,15 +24,16 @@ func GetComponent[T any](w *World, e Entity) *T {
 		return nil
 	}
 	meta := w.entities.metas[e.ID]
-	id := w.getCompTypeID(reflect.TypeFor[T]())
+	w.components.mu.RLock()
+	id := w.getCompTypeIDNoLock(reflect.TypeFor[T]())
+	w.components.mu.RUnlock()
 	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
-	return (*T)(ptr)
+	return (*T)(unsafe.Add(a.compPointers[id], uintptr(meta.index)*a.compSizes[id]))
 }
 
 // SetComponent adds a component of type `T` with the given value to an entity,
@@ -55,7 +56,9 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	}
 	meta := &w.entities.metas[e.ID]
 	t := reflect.TypeFor[T]()
-	id := w.getCompTypeID(t)
+	w.components.mu.RLock()
+	id := w.getCompTypeIDNoLock(t)
+	w.components.mu.RUnlock()
 	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
@@ -75,6 +78,7 @@ func SetComponent[T any](w *World, e Entity, val T) {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{
 				id:   cid,
@@ -89,6 +93,7 @@ func SetComponent[T any](w *World, e Entity, val T) {
 			size: w.components.compIDToSize[id],
 		}
 		count++
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -130,7 +135,9 @@ func RemoveComponent[T any](w *World, e Entity) {
 	}
 	meta := &w.entities.metas[e.ID]
 	t := reflect.TypeFor[T]()
-	id := w.getCompTypeID(t)
+	w.components.mu.RLock()
+	id := w.getCompTypeIDNoLock(t)
+	w.components.mu.RUnlock()
 	a := w.archetypes.archetypes[meta.archetypeIndex]
 	i := id >> 6
 	o := id & 63
@@ -147,6 +154,7 @@ func RemoveComponent[T any](w *World, e Entity) {
 		// build specs only when creating new archetype
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			if cid == id {
 				continue
@@ -158,6 +166,7 @@ func RemoveComponent[T any](w *World, e Entity) {
 			}
 			count++
 		}
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}

@@ -30,10 +30,14 @@ type Builder[T any] struct {
 //   - A pointer to the configured `Builder[T]`.
 func NewBuilder[T any](w *World) *Builder[T] {
 	t := reflect.TypeFor[T]()
-	id := w.getCompTypeID(t)
+	w.components.mu.RLock()
+	id := w.getCompTypeIDNoLock(t)
+	w.components.mu.RUnlock()
 	var mask bitmask256
 	mask.set(id)
+	w.components.mu.RLock()
 	sp := compSpec{id: id, typ: t, size: w.components.compIDToSize[id]}
+	w.components.mu.RUnlock()
 	arch := w.getOrCreateArchetype(mask, []compSpec{sp})
 	return &Builder[T]{world: w, arch: arch, compID: id}
 }
@@ -155,8 +159,7 @@ func (b *Builder[T]) Get(e Entity) *T {
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
-	return (*T)(ptr)
+	return (*T)(unsafe.Add(a.compPointers[id], uintptr(meta.index)*a.compSizes[id]))
 }
 
 // Set adds or updates the component `T` for a given entity with the specified
@@ -198,12 +201,14 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	} else {
 		var tempSpecs [MaxComponentTypes]compSpec
 		count := 0
+		w.components.mu.RLock()
 		for _, cid := range a.compOrder {
 			tempSpecs[count] = compSpec{id: cid, typ: w.components.compIDToType[cid], size: w.components.compIDToSize[cid]}
 			count++
 		}
 		tempSpecs[count] = compSpec{id: id, typ: w.components.compIDToType[id], size: w.components.compIDToSize[id]}
 		count++
+		w.components.mu.RUnlock()
 		specs := tempSpecs[:count]
 		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
@@ -233,28 +238,4 @@ func (b *Builder[T]) SetBatch(entities []Entity, comp T) {
 	for _, e := range entities {
 		b.Set(e, comp)
 	}
-}
-
-func (w *World) getOrCreateArchetypeNoLock(mask bitmask256, specs []compSpec) *archetype {
-	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
-		return w.archetypes.archetypes[idx]
-	}
-	// build new archetype
-	a := &archetype{
-		index:     len(w.archetypes.archetypes),
-		mask:      mask,
-		size:      0,
-		entityIDs: make([]Entity, w.entities.capacity),
-		compOrder: make([]uint8, 0, len(specs)),
-	}
-	for _, sp := range specs {
-		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.entities.capacity, w.entities.capacity)
-		a.compPointers[sp.id] = slice.UnsafePointer()
-		a.compSizes[sp.id] = sp.size
-		a.compOrder = append(a.compOrder, sp.id)
-	}
-	w.archetypes.archetypes = append(w.archetypes.archetypes, a)
-	w.archetypes.maskToArcIndex[mask] = a.index
-	w.archetypes.archetypeVersion.Add(1)
-	return a
 }
