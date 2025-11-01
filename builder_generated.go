@@ -130,10 +130,8 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = comp1
-		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = comp2
+		*(*T1)(unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])) = comp1
+		*(*T2)(unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])) = comp2
 		w.entities.nextEntityVer++
 	}
 	w.mutationVersion.Add(1)
@@ -234,10 +232,8 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	ptr1 := unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])
-	*(*T1)(ptr1) = v1
-	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])
-	*(*T2)(ptr2) = v2
+	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
+	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
 	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
@@ -388,12 +384,9 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = comp1
-		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = comp2
-		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = comp3
+		*(*T1)(unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])) = comp1
+		*(*T2)(unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])) = comp2
+		*(*T3)(unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])) = comp3
 		w.entities.nextEntityVer++
 	}
 	w.mutationVersion.Add(1)
@@ -507,12 +500,9 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	ptr1 := unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])
-	*(*T1)(ptr1) = v1
-	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])
-	*(*T2)(ptr2) = v2
-	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])
-	*(*T3)(ptr3) = v3
+	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
+	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
+	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
 	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
@@ -670,14 +660,10 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, 
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = comp1
-		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = comp2
-		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = comp3
-		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = comp4
+		*(*T1)(unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])) = comp1
+		*(*T2)(unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])) = comp2
+		*(*T3)(unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])) = comp3
+		*(*T4)(unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])) = comp4
 		w.entities.nextEntityVer++
 	}
 	w.mutationVersion.Add(1)
@@ -804,14 +790,10 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	ptr1 := unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])
-	*(*T1)(ptr1) = v1
-	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])
-	*(*T2)(ptr2) = v2
-	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])
-	*(*T3)(ptr3) = v3
-	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])
-	*(*T4)(ptr4) = v4
+	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
+	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
+	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
+	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
 	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
@@ -976,16 +958,11 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = comp1
-		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = comp2
-		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = comp3
-		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = comp4
-		ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])
-		*(*T5)(ptr5) = comp5
+		*(*T1)(unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])) = comp1
+		*(*T2)(unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])) = comp2
+		*(*T3)(unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])) = comp3
+		*(*T4)(unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])) = comp4
+		*(*T5)(unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])) = comp5
 		w.entities.nextEntityVer++
 	}
 	w.mutationVersion.Add(1)
@@ -1125,16 +1102,11 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	ptr1 := unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])
-	*(*T1)(ptr1) = v1
-	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])
-	*(*T2)(ptr2) = v2
-	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])
-	*(*T3)(ptr3) = v3
-	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])
-	*(*T4)(ptr4) = v4
-	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])
-	*(*T5)(ptr5) = v5
+	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
+	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
+	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
+	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
+	*(*T5)(unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])) = v5
 	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
@@ -1306,18 +1278,12 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, co
 		meta.version = w.entities.nextEntityVer
 		ent := Entity{ID: id, Version: meta.version}
 		a.entityIDs[startSize+k] = ent
-		ptr1 := unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])
-		*(*T1)(ptr1) = comp1
-		ptr2 := unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])
-		*(*T2)(ptr2) = comp2
-		ptr3 := unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])
-		*(*T3)(ptr3) = comp3
-		ptr4 := unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])
-		*(*T4)(ptr4) = comp4
-		ptr5 := unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])
-		*(*T5)(ptr5) = comp5
-		ptr6 := unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(startSize+k)*a.compSizes[b.id6])
-		*(*T6)(ptr6) = comp6
+		*(*T1)(unsafe.Pointer(uintptr(a.compPointers[b.id1]) + uintptr(startSize+k)*a.compSizes[b.id1])) = comp1
+		*(*T2)(unsafe.Pointer(uintptr(a.compPointers[b.id2]) + uintptr(startSize+k)*a.compSizes[b.id2])) = comp2
+		*(*T3)(unsafe.Pointer(uintptr(a.compPointers[b.id3]) + uintptr(startSize+k)*a.compSizes[b.id3])) = comp3
+		*(*T4)(unsafe.Pointer(uintptr(a.compPointers[b.id4]) + uintptr(startSize+k)*a.compSizes[b.id4])) = comp4
+		*(*T5)(unsafe.Pointer(uintptr(a.compPointers[b.id5]) + uintptr(startSize+k)*a.compSizes[b.id5])) = comp5
+		*(*T6)(unsafe.Pointer(uintptr(a.compPointers[b.id6]) + uintptr(startSize+k)*a.compSizes[b.id6])) = comp6
 		w.entities.nextEntityVer++
 	}
 	w.mutationVersion.Add(1)
@@ -1470,18 +1436,12 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	ptr1 := unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])
-	*(*T1)(ptr1) = v1
-	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])
-	*(*T2)(ptr2) = v2
-	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])
-	*(*T3)(ptr3) = v3
-	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])
-	*(*T4)(ptr4) = v4
-	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])
-	*(*T5)(ptr5) = v5
-	ptr6 := unsafe.Pointer(uintptr(targetA.compPointers[b.id6]) + uintptr(newIdx)*targetA.compSizes[b.id6])
-	*(*T6)(ptr6) = v6
+	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
+	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
+	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
+	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
+	*(*T5)(unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])) = v5
+	*(*T6)(unsafe.Pointer(uintptr(targetA.compPointers[b.id6]) + uintptr(newIdx)*targetA.compSizes[b.id6])) = v6
 	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
