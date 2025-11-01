@@ -29,7 +29,7 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 		world:          w,
 		mask:           m,
 		matchingArches: make([]*archetype, 0, 4),
-		cachedEntities: nil,
+		cachedEntities: make([]Entity, 0, w.entities.capacity),
 	}
 }
 
@@ -60,16 +60,7 @@ func (c *queryCache) updateCachedEntities() {
 	for _, a := range c.matchingArches {
 		total += a.size
 	}
-	if c.cachedEntities == nil || cap(c.cachedEntities) < total {
-		capacity := c.world.entities.capacity
-		newCap := total
-		if capacity > newCap {
-			newCap = capacity
-		}
-		c.cachedEntities = make([]Entity, total, newCap)
-	} else {
-		c.cachedEntities = c.cachedEntities[:total]
-	}
+	c.cachedEntities = c.cachedEntities[:total]
 	idx := 0
 	for _, a := range c.matchingArches {
 		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
@@ -98,10 +89,8 @@ func (c *queryCache) IsStale() bool {
 // Returns:
 //   - A slice of `Entity` objects that match the query.
 func (c *queryCache) Entities() []Entity {
-	if c.world.archetypes.archetypeVersion != c.lastVersion {
-		c.updateMatching()
-	}
 	if c.IsStale() {
+		c.updateMatching()
 		c.updateCachedEntities()
 	}
 	return c.cachedEntities

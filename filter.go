@@ -41,6 +41,7 @@ func NewFilter[T any](w *World) *Filter[T] {
 	}
 	f.compSize = w.components.compIDToSize[id]
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -56,8 +57,9 @@ func (f *Filter[T]) New(w *World) *Filter[T] {
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter[T]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -126,7 +128,7 @@ func (f *Filter[T]) Get() *T {
 //
 // After this operation, the filter will be empty.
 func (f *Filter[T]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
@@ -185,6 +187,7 @@ func NewFilter0(w *World) *Filter0 {
 		curIdx:      -1,
 	}
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -200,8 +203,9 @@ func (f *Filter0) New(w *World) *Filter0 {
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter0) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -259,7 +263,7 @@ func (f *Filter0) Entity() Entity {
 //
 // After this operation, the filter will be empty.
 func (f *Filter0) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {

@@ -47,6 +47,7 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 	f.compSizes[1] = w.components.compIDToSize[id2]
 
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -60,8 +61,9 @@ func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter2[T1, T2]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -126,7 +128,7 @@ func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter2[T1, T2]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
@@ -194,6 +196,7 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 	f.compSizes[2] = w.components.compIDToSize[id3]
 
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -207,8 +210,9 @@ func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter3[T1, T2, T3]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -274,7 +278,7 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter3[T1, T2, T3]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
@@ -345,6 +349,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 	f.compSizes[3] = w.components.compIDToSize[id4]
 
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -358,8 +363,9 @@ func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter4[T1, T2, T3, T4]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -426,7 +432,7 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
@@ -500,6 +506,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 	f.compSizes[4] = w.components.compIDToSize[id5]
 
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -513,8 +520,9 @@ func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5]
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -582,7 +590,7 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
@@ -659,6 +667,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 	f.compSizes[5] = w.components.compIDToSize[id6]
 
 	f.updateMatching()
+	f.updateCachedEntities()
 	f.Reset()
 	return f
 }
@@ -672,8 +681,9 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4,
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
+		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -742,7 +752,7 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
-	if f.world.archetypes.archetypeVersion != f.lastVersion {
+	if f.IsStale() {
 		f.updateMatching()
 	}
 	for _, a := range f.matchingArches {
