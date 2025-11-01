@@ -60,8 +60,8 @@ func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
 	return NewFilter2[T1, T2](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop).
 func (f *Filter2[T1, T2]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
@@ -219,8 +219,8 @@ func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
 	return NewFilter3[T1, T2, T3](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop).
 func (f *Filter3[T1, T2, T3]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
@@ -382,8 +382,8 @@ func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
 	return NewFilter4[T1, T2, T3, T4](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop).
 func (f *Filter4[T1, T2, T3, T4]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
@@ -549,8 +549,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5]
 	return NewFilter5[T1, T2, T3, T4, T5](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop).
 func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
@@ -720,8 +720,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4,
 	return NewFilter6[T1, T2, T3, T4, T5, T6](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop).
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()

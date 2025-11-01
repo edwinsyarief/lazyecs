@@ -54,10 +54,10 @@ func (f *Filter[T]) New(w *World) *Filter[T] {
 	return NewFilter[T](w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times. The filter
-// will also automatically detect if new archetypes have been created since the
-// last iteration and update its internal list accordingly.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop). The filter will also
+// automatically detect if new archetypes have been created since the last
+// iteration and update its internal list accordingly.
 func (f *Filter[T]) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
@@ -210,10 +210,10 @@ func (f *Filter0) New(w *World) *Filter0 {
 	return NewFilter0(w)
 }
 
-// Reset rewinds the filter's iterator to the beginning. It should be called if
-// you need to iterate over the same set of entities multiple times. The filter
-// will also automatically detect if new archetypes have been created since the
-// last iteration and update its internal list accordingly.
+// Reset rewinds the filter's iterator to the beginning. It must be called
+// before re-iterating over a filter (e.g., in a loop). The filter will also
+// automatically detect if new archetypes have been created since the last
+// iteration and update its internal list accordingly.
 func (f *Filter0) Reset() {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()

@@ -97,7 +97,7 @@ type archetypeRegistry struct {
 // World is the central container for all entities, components, and archetypes.
 // It manages the entire state of the ECS, including entity creation, deletion,
 // and component management. All operations are performed within the context of a
-// World. The World is not thread-safe and should not be accessed from
+// World. The World is thread-safe and can be accessed from
 // multiple goroutines concurrently.
 type World struct {
 	// Resources provides a thread-safe, generic key-value store for global data
@@ -150,14 +150,24 @@ func NewWorld(initialCapacity int) World {
 	return w
 }
 
-// CreateEntity creates a new entity with no components.
+// CreateEntity creates a new entity with no components. It is the foundational
+// method for adding a new entity to the world, which can then be customized by
+// adding components.
+//
+// Returns:
+//   - The newly created Entity.
 func (w *World) CreateEntity() Entity {
 	var mask bitmask256
 	a := w.getOrCreateArchetype(mask, []compSpec{})
 	return w.createEntity(a)
 }
 
-// CreateEntities creates a batch of entities with no components.
+// CreateEntities creates a batch of entities with no components. This is a
+// highly efficient way to create multiple entities at once, as it minimizes
+// locking and overhead.
+//
+// Parameters:
+//   - count: The number of entities to create.
 func (w *World) CreateEntities(count int) {
 	if count == 0 {
 		return
@@ -208,7 +218,12 @@ func (w *World) RemoveEntity(e Entity) {
 	w.mutationVersion.Add(1)
 }
 
-// RemoveEntities removes a list of entities.
+// RemoveEntities removes a list of entities from the world in a single batch
+// operation. This is more efficient than removing them one by one, as it
+// reduces lock contention.
+//
+// Parameters:
+//   - ents: A slice of `Entity` objects to remove.
 func (w *World) RemoveEntities(ents []Entity) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -227,7 +242,9 @@ func (w *World) RemoveEntities(ents []Entity) {
 	w.mutationVersion.Add(1)
 }
 
-// ClearEntities removes all entities from the world.
+// ClearEntities removes all entities from the world, effectively resetting it
+// to an empty state. This is a fast operation that recycles all entity IDs and
+// clears all archetypes.
 func (w *World) ClearEntities() {
 	w.mu.Lock()
 	defer w.mu.Unlock()

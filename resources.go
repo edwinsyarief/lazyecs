@@ -11,7 +11,7 @@ import (
 //
 // Operations like Add, Get, Has, and Remove are designed to be O(1) and
 // minimize allocations, making it suitable for performance-sensitive
-// applications. It is not thread-safe.
+// applications.
 type Resources struct {
 	mu      sync.RWMutex
 	items   []any
