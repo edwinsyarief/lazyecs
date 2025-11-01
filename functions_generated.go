@@ -18,7 +18,9 @@ import (
 // Returns:
 //   - Pointers to the component data (*T1, *T2), or nils if not found.
 func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil, nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -56,7 +58,9 @@ func GetComponent2[T1 any, T2 any](w *World, e Entity) (*T1, *T2) {
 //   - v1: The component data of type T1 to set.
 //   - v2: The component data of type T2 to set.
 func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -114,7 +118,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 		}
 
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -129,9 +133,10 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[id2]) + uintptr(newIdx)*targetA.compSizes[id2])
 	*(*T2)(ptr2) = v2
 
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent2 removes the 2 components (T1, T2) from the
@@ -145,7 +150,9 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -188,7 +195,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -201,9 +208,10 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // GetComponent3 retrieves pointers to the 3 components of type
@@ -219,7 +227,9 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3), or nils if not found.
 func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -262,7 +272,9 @@ func GetComponent3[T1 any, T2 any, T3 any](w *World, e Entity) (*T1, *T2, *T3) {
 //   - v2: The component data of type T2 to set.
 //   - v3: The component data of type T3 to set.
 func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 T3) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -334,7 +346,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 		}
 
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -351,9 +363,10 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[id3]) + uintptr(newIdx)*targetA.compSizes[id3])
 	*(*T3)(ptr3) = v3
 
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent3 removes the 3 components (T1, T2, T3) from the
@@ -367,7 +380,9 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -416,7 +431,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -429,9 +444,10 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // GetComponent4 retrieves pointers to the 4 components of type
@@ -447,7 +463,9 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4), or nils if not found.
 func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2, *T3, *T4) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -495,7 +513,9 @@ func GetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) (*T1, *T2
 //   - v3: The component data of type T3 to set.
 //   - v4: The component data of type T4 to set.
 func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -581,7 +601,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 		}
 
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -600,9 +620,10 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[id4]) + uintptr(newIdx)*targetA.compSizes[id4])
 	*(*T4)(ptr4) = v4
 
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent4 removes the 4 components (T1, T2, T3, T4) from the
@@ -616,7 +637,9 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -671,7 +694,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -684,9 +707,10 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // GetComponent5 retrieves pointers to the 5 components of type
@@ -702,7 +726,9 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5), or nils if not found.
 func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil, nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -755,7 +781,9 @@ func GetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) (
 //   - v4: The component data of type T4 to set.
 //   - v5: The component data of type T5 to set.
 func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -855,7 +883,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 		}
 
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -876,9 +904,10 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[id5]) + uintptr(newIdx)*targetA.compSizes[id5])
 	*(*T5)(ptr5) = v5
 
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent5 removes the 5 components (T1, T2, T3, T4, T5) from the
@@ -892,7 +921,9 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -953,7 +984,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -966,9 +997,10 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // GetComponent6 retrieves pointers to the 6 components of type
@@ -984,7 +1016,9 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 // Returns:
 //   - Pointers to the component data (*T1, *T2, *T3, *T4, *T5, *T6), or nils if not found.
 func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) (*T1, *T2, *T3, *T4, *T5, *T6) {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil, nil, nil, nil, nil, nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -1042,7 +1076,9 @@ func GetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 //   - v5: The component data of type T5 to set.
 //   - v6: The component data of type T6 to set.
 func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity, v1 T1, v2 T2, v3 T3, v4 T4, v5 T5, v6 T6) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -1156,7 +1192,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 		}
 
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -1179,9 +1215,10 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	ptr6 := unsafe.Pointer(uintptr(targetA.compPointers[id6]) + uintptr(newIdx)*targetA.compSizes[id6])
 	*(*T6)(ptr6) = v6
 
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent6 removes the 6 components (T1, T2, T3, T4, T5, T6) from the
@@ -1195,7 +1232,9 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -1262,7 +1301,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -1275,7 +1314,8 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }

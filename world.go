@@ -2,6 +2,8 @@ package teishoku
 
 import (
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -86,14 +88,13 @@ type entityRegistry struct {
 type archetypeRegistry struct {
 	maskToArcIndex   map[bitmask256]int // lookup mask→archetype index
 	archetypes       []*archetype       // list of all archetypes in the world
-	archetypeVersion uint32             // incremented when a new archetype is created
+	archetypeVersion atomic.Uint32      // incremented when a new archetype is created
 }
 
 // World is the central container for all entities, components, and archetypes.
 // It manages the entire state of the ECS, including entity creation, deletion,
 // and component management. All operations are performed within the context of a
-// World. The World is not thread-safe and should not be accessed from
-// multiple goroutines concurrently.
+// World.
 type World struct {
 	// Resources provides a thread-safe, generic key-value store for global data
 	// that needs to be accessible from anywhere in the application, such as
@@ -102,7 +103,8 @@ type World struct {
 	archetypes      archetypeRegistry
 	entities        entityRegistry
 	components      componentRegistry
-	mutationVersion uint32 // incremented on entity mutations
+	mutationVersion atomic.Uint32 // incremented on entity mutations
+	mu              sync.RWMutex
 }
 
 // NewWorld creates and initializes a new World with a specified initial
@@ -126,53 +128,42 @@ func NewWorld(initialCapacity int) World {
 			initialCapacity: initialCapacity,
 			freeIDs:         make([]uint32, initialCapacity),
 			metas:           make([]entityMeta, initialCapacity),
-			nextEntityVer:   1, // start from 1, 0 means dead
 		},
 		archetypes: archetypeRegistry{
 			maskToArcIndex: make(map[bitmask256]int),
 			archetypes:     make([]*archetype, 0, 16),
 		},
 	}
-	// Initialize metas
-	for i := range w.entities.metas {
-		w.entities.metas[i] = entityMeta{
-			archetypeIndex: -1,
-			index:          -1,
-			version:        0,
-		}
+	for i := uint32(0); i < uint32(initialCapacity); i++ {
+		w.entities.freeIDs[i] = uint32(initialCapacity) - 1 - i
+		w.entities.metas[i].archetypeIndex = -1
+		w.entities.metas[i].index = -1
+		w.entities.metas[i].version = 0
 	}
-	// Initialize freeIDs in reverse (high to low)
-	for i := 0; i < initialCapacity; i++ {
-		w.entities.freeIDs[i] = uint32(initialCapacity - 1 - i)
-	}
-	// Create empty archetype
-	var emptyMask bitmask256
-	emptyArch := &archetype{
-		index:     0,
-		mask:      emptyMask,
-		size:      0,
-		entityIDs: make([]Entity, initialCapacity),
-		compOrder: []uint8{},
-	}
-	w.archetypes.archetypes = append(w.archetypes.archetypes, emptyArch)
-	w.archetypes.maskToArcIndex[emptyMask] = 0
+	w.entities.nextEntityVer = 1
+	var mask bitmask256
+	w.getOrCreateArchetype(mask, []compSpec{})
 	return w
 }
 
-// CreateEntity creates a new empty entity in the world.
+// CreateEntity creates a new entity with no components.
 func (w *World) CreateEntity() Entity {
-	a := w.archetypes.archetypes[0] // empty archetype
+	var mask bitmask256
+	a := w.getOrCreateArchetype(mask, []compSpec{})
 	return w.createEntity(a)
 }
 
-// CreateEntities creates a batch of empty entities in the world.
-func (w *World) CreateEntities(count int) []Entity {
+// CreateEntities creates a batch of entities with no components.
+func (w *World) CreateEntities(count int) {
 	if count == 0 {
-		return nil
+		return
 	}
-	a := w.archetypes.archetypes[0] // empty archetype
+	var mask bitmask256
+	a := w.getOrCreateArchetype(mask, []compSpec{})
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	for len(w.entities.freeIDs) < count {
-		w.expand()
+		w.expandNoLock()
 	}
 	startSize := a.size
 	a.size += count
@@ -188,48 +179,57 @@ func (w *World) CreateEntities(count int) []Entity {
 		a.entityIDs[startSize+k] = ent
 		w.entities.nextEntityVer++
 	}
-	w.mutationVersion++
-	return a.entityIDs[startSize : startSize+count]
+	w.mutationVersion.Add(1)
 }
 
-// RemoveEntity removes a single entity from the world.
+// RemoveEntity marks the entity as invalid and recycles its ID for future use.
+// All components associated with the entity are discarded. If the entity is
+// already invalid, this operation does nothing.
+//
+// Parameters:
+//   - e: The Entity to remove.
 func (w *World) RemoveEntity(e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
 	a := w.archetypes.archetypes[meta.archetypeIndex]
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = -1
 	meta.index = -1
 	meta.version = 0
 	w.entities.freeIDs = append(w.entities.freeIDs, e.ID)
-	w.mutationVersion++
+	w.mutationVersion.Add(1)
 }
 
-// RemoveEntities removes a batch of entities from the world.
-func (w *World) RemoveEntities(entities []Entity) {
-	for _, e := range entities {
-		w.RemoveEntity(e)
+// RemoveEntities removes a list of entities.
+func (w *World) RemoveEntities(ents []Entity) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, e := range ents {
+		if !w.IsValidNoLock(e) {
+			continue
+		}
+		meta := &w.entities.metas[e.ID]
+		a := w.archetypes.archetypes[meta.archetypeIndex]
+		w.removeFromArchetypeNoLock(a, meta)
+		meta.archetypeIndex = -1
+		meta.index = -1
+		meta.version = 0
+		w.entities.freeIDs = append(w.entities.freeIDs, e.ID)
 	}
+	w.mutationVersion.Add(1)
 }
 
-// ClearEntities removes all entities from the world, recycling their IDs.
-// This operation does not release memory but resets archetypes to size 0.
+// ClearEntities removes all entities from the world.
 func (w *World) ClearEntities() {
-	w.entities.freeIDs = w.entities.freeIDs[:0]
-	for i := uint32(0); i < uint32(w.entities.capacity); i++ {
-		w.entities.freeIDs = append(w.entities.freeIDs, i)
-	}
-	for _, a := range w.archetypes.archetypes {
-		a.size = 0
-	}
-	w.entities.nextEntityVer = 1
-	w.mutationVersion++
+	f := NewFilter0(w)
+	f.RemoveEntities()
 }
 
-// IsValid checks if an entity reference is currently alive and valid within the
-// world. An entity is considered valid if its ID is within bounds and its
+// IsValid checks if the given entity is currently alive by verifying that its
 // version matches the world's current version for that ID. This prevents
 // "stale" entity references from accessing incorrect data after an entity has
 // been deleted and its ID recycled.
@@ -240,6 +240,12 @@ func (w *World) ClearEntities() {
 // Returns:
 //   - true if the entity is valid, false otherwise.
 func (w *World) IsValid(e Entity) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.IsValidNoLock(e)
+}
+
+func (w *World) IsValidNoLock(e Entity) bool {
 	if int(e.ID) >= len(w.entities.metas) {
 		return false
 	}
@@ -260,6 +266,14 @@ func (w *World) Resources() *Resources {
 
 // register or fetch a component type ID for T.
 func (w *World) getCompTypeID(t reflect.Type) uint8 {
+	w.mu.RLock()
+	if id, ok := w.components.compTypeMap[t]; ok {
+		w.mu.RUnlock()
+		return id
+	}
+	w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if id, ok := w.components.compTypeMap[t]; ok {
 		return id
 	}
@@ -277,6 +291,15 @@ func (w *World) getCompTypeID(t reflect.Type) uint8 {
 // getOrCreateArchetype returns an archetype for the given mask;
 // if missing, allocates component storage arrays of length cap.
 func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archetype {
+	w.mu.RLock()
+	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
+		a := w.archetypes.archetypes[idx]
+		w.mu.RUnlock()
+		return a
+	}
+	w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
 		return w.archetypes.archetypes[idx]
 	}
@@ -297,12 +320,18 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 	}
 	w.archetypes.archetypes = append(w.archetypes.archetypes, a)
 	w.archetypes.maskToArcIndex[mask] = a.index
-	w.archetypes.archetypeVersion++
+	w.archetypes.archetypeVersion.Add(1)
 	return a
 }
 
 // expand automatically increases capacity by initialCapacity when full.
 func (w *World) expand() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.expandNoLock()
+}
+
+func (w *World) expandNoLock() {
 	oldCap := w.entities.capacity
 	newCap := oldCap * 2
 	if newCap == 0 {
@@ -333,8 +362,10 @@ func (w *World) expand() {
 // createEntity bumps an entity into the given archetype.
 // Zero allocations on hot path.
 func (w *World) createEntity(a *archetype) Entity {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if len(w.entities.freeIDs) == 0 {
-		w.expand()
+		w.expandNoLock()
 	}
 	// pop an ID
 	last := len(w.entities.freeIDs) - 1
@@ -349,12 +380,18 @@ func (w *World) createEntity(a *archetype) Entity {
 	a.entityIDs[a.size] = ent
 	a.size++
 	w.entities.nextEntityVer++
-	w.mutationVersion++
+	w.mutationVersion.Add(1)
 	return ent
 }
 
 // removeFromArchetype removes the entity from the archetype without freeing the ID or invalidating version.
 func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.removeFromArchetypeNoLock(a, meta)
+}
+
+func (w *World) removeFromArchetypeNoLock(a *archetype, meta *entityMeta) {
 	idx := meta.index
 	lastIdx := a.size - 1
 	if idx < lastIdx {
@@ -368,7 +405,7 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 		w.entities.metas[lastEnt.ID].index = idx
 	}
 	a.size--
-	w.mutationVersion++
+	w.mutationVersion.Add(1)
 }
 
 // memCopy copies size bytes from src to dst using built-in copy for performance.

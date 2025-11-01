@@ -1,6 +1,9 @@
 package teishoku
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
 // Resources provides a type-safe, high-performance container for managing
 // global, singleton-like objects. It ensures that only one resource of each
@@ -10,6 +13,7 @@ import "reflect"
 // minimize allocations, making it suitable for performance-sensitive
 // applications. It is not thread-safe.
 type Resources struct {
+	mu      sync.RWMutex
 	items   []any
 	types   map[reflect.Type]int
 	freeIds []int
@@ -31,6 +35,8 @@ func (r *Resources) Add(res any) int {
 		panic("cannot add nil resource")
 	}
 	t := reflect.TypeOf(res)
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.types == nil {
 		r.types = make(map[reflect.Type]int)
 	}
@@ -58,6 +64,8 @@ func (r *Resources) Add(res any) int {
 // Returns:
 //   - true if the resource exists, false otherwise.
 func (r *Resources) Has(id int) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return id >= 0 && id < len(r.items) && r.items[id] != nil
 }
 
@@ -70,10 +78,12 @@ func (r *Resources) Has(id int) bool {
 // Returns:
 //   - The resource as an `any` type, or nil if not found.
 func (r *Resources) Get(id int) any {
-	if !r.Has(id) {
-		return nil
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if id >= 0 && id < len(r.items) && r.items[id] != nil {
+		return r.items[id]
 	}
-	return r.items[id]
+	return nil
 }
 
 // Remove deletes a resource by its ID. If the resource exists, its ID is
@@ -82,7 +92,9 @@ func (r *Resources) Get(id int) any {
 // Parameters:
 //   - id: The ID of the resource to remove.
 func (r *Resources) Remove(id int) {
-	if !r.Has(id) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if id < 0 || id >= len(r.items) || r.items[id] == nil {
 		return
 	}
 	res := r.items[id]
@@ -95,6 +107,8 @@ func (r *Resources) Remove(id int) {
 // Clear removes all resources and resets the container to its initial state.
 // This is a fast operation that avoids re-allocating the internal maps and slices.
 func (r *Resources) Clear() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for i := range r.items {
 		r.items[i] = nil
 	}
@@ -114,6 +128,8 @@ func (r *Resources) Clear() {
 //     not found, returns (false, -1).
 func HasResource[T any](r *Resources) (bool, int) {
 	t := reflect.TypeOf((*T)(nil))
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if id, ok := r.types[t]; ok {
 		return true, id
 	}
@@ -130,6 +146,8 @@ func HasResource[T any](r *Resources) (bool, int) {
 //     returns (nil, -1).
 func GetResource[T any](r *Resources) (*T, int) {
 	t := reflect.TypeOf((*T)(nil))
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if id, ok := r.types[t]; ok {
 		res := r.items[id].(*T)
 		return res, id

@@ -47,7 +47,7 @@ func (c *queryCache) updateMatching() {
 			}
 		}
 	}
-	c.lastVersion = c.world.archetypes.archetypeVersion
+	c.lastVersion = c.world.archetypes.archetypeVersion.Load()
 }
 
 // updateCachedEntities rebuilds the cached list of entities by collecting all
@@ -60,13 +60,17 @@ func (c *queryCache) updateCachedEntities() {
 	for _, a := range c.matchingArches {
 		total += a.size
 	}
-	c.cachedEntities = c.cachedEntities[:total]
+	if cap(c.cachedEntities) < total {
+		c.cachedEntities = make([]Entity, total)
+	} else {
+		c.cachedEntities = c.cachedEntities[:total]
+	}
 	idx := 0
 	for _, a := range c.matchingArches {
 		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
 		idx += a.size
 	}
-	c.lastMutationVersion = c.world.mutationVersion
+	c.lastMutationVersion = c.world.mutationVersion.Load()
 }
 
 // IsStale checks if the cache is out of sync with the world's state by
@@ -78,7 +82,7 @@ func (c *queryCache) updateCachedEntities() {
 // Returns:
 //   - true if the cache is stale and needs to be updated, false otherwise.
 func (c *queryCache) IsStale() bool {
-	return c.world.archetypes.archetypeVersion != c.lastVersion || c.world.mutationVersion != c.lastMutationVersion
+	return c.world.archetypes.archetypeVersion.Load() != c.lastVersion || c.world.mutationVersion.Load() != c.lastMutationVersion
 }
 
 // Entities returns a slice of all entities that match the cached query. If the
@@ -89,6 +93,8 @@ func (c *queryCache) IsStale() bool {
 // Returns:
 //   - A slice of `Entity` objects that match the query.
 func (c *queryCache) Entities() []Entity {
+	c.world.mu.RLock()
+	defer c.world.mu.RUnlock()
 	if c.IsStale() {
 		c.updateMatching()
 		c.updateCachedEntities()

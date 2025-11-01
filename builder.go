@@ -69,15 +69,17 @@ func (b *Builder[T]) NewEntities(count int) {
 		return
 	}
 	w := b.world
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expand()
+		w.expandNoLock()
 	}
 	startSize := a.size
 	a.size += count
 	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
 	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
+	for k := 0; k < count; k++ {
 		id := popped[k]
 		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
@@ -87,6 +89,7 @@ func (b *Builder[T]) NewEntities(count int) {
 		a.entityIDs[startSize+k] = ent
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion.Add(1)
 }
 
 // NewEntitiesWithValueSet creates a batch of `count` entities and initializes
@@ -101,15 +104,17 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 		return
 	}
 	w := b.world
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expand()
+		w.expandNoLock()
 	}
 	startSize := a.size
 	a.size += count
 	popped := w.entities.freeIDs[len(w.entities.freeIDs)-count:]
 	w.entities.freeIDs = w.entities.freeIDs[:len(w.entities.freeIDs)-count]
-	for k := range count {
+	for k := 0; k < count; k++ {
 		id := popped[k]
 		meta := &w.entities.metas[id]
 		meta.archetypeIndex = a.index
@@ -121,6 +126,7 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 		*(*T)(ptr) = comp
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion.Add(1)
 }
 
 // Get retrieves a pointer to the component of type `T` for the given entity.
@@ -136,7 +142,9 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 //   - A pointer to the component data (*T), or nil if not found.
 func (b *Builder[T]) Get(e Entity) *T {
 	w := b.world
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -166,7 +174,9 @@ func (b *Builder[T]) Get(e Entity) *T {
 //   - comp: The component value to set.
 func (b *Builder[T]) Set(e Entity, comp T) {
 	w := b.world
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -195,7 +205,7 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 		tempSpecs[count] = compSpec{id: id, typ: w.components.compIDToType[id], size: w.components.compIDToSize[id]}
 		count++
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	newIdx := targetA.size
 	targetA.entityIDs[newIdx] = e
@@ -207,9 +217,10 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	}
 	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = comp
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // SetBatch efficiently sets the component value for a slice of entities. It
@@ -222,4 +233,28 @@ func (b *Builder[T]) SetBatch(entities []Entity, comp T) {
 	for _, e := range entities {
 		b.Set(e, comp)
 	}
+}
+
+func (w *World) getOrCreateArchetypeNoLock(mask bitmask256, specs []compSpec) *archetype {
+	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
+		return w.archetypes.archetypes[idx]
+	}
+	// build new archetype
+	a := &archetype{
+		index:     len(w.archetypes.archetypes),
+		mask:      mask,
+		size:      0,
+		entityIDs: make([]Entity, w.entities.capacity),
+		compOrder: make([]uint8, 0, len(specs)),
+	}
+	for _, sp := range specs {
+		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.entities.capacity, w.entities.capacity)
+		a.compPointers[sp.id] = slice.UnsafePointer()
+		a.compSizes[sp.id] = sp.size
+		a.compOrder = append(a.compOrder, sp.id)
+	}
+	w.archetypes.archetypes = append(w.archetypes.archetypes, a)
+	w.archetypes.maskToArcIndex[mask] = a.index
+	w.archetypes.archetypeVersion.Add(1)
+	return a
 }

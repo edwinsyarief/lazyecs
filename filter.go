@@ -30,6 +30,8 @@ type Filter[T any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter[T]`.
 func NewFilter[T any](w *World) *Filter[T] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id := w.getCompTypeID(reflect.TypeFor[T]())
 	var m bitmask256
 	m.set(id)
@@ -42,7 +44,7 @@ func NewFilter[T any](w *World) *Filter[T] {
 	f.compSize = w.components.compIDToSize[id]
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -57,6 +59,12 @@ func (f *Filter[T]) New(w *World) *Filter[T] {
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter[T]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter[T]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -128,6 +136,8 @@ func (f *Filter[T]) Get() *T {
 //
 // After this operation, the filter will be empty.
 func (f *Filter[T]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -142,8 +152,8 @@ func (f *Filter[T]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns a slice containing all entities that match the filter's
@@ -180,6 +190,8 @@ type Filter0 struct {
 // Returns:
 //   - A pointer to the newly created `Filter0`.
 func NewFilter0(w *World) *Filter0 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	var m bitmask256
 	f := &Filter0{
 		queryCache:  newQueryCache(w, m),
@@ -188,7 +200,7 @@ func NewFilter0(w *World) *Filter0 {
 	}
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -203,6 +215,12 @@ func (f *Filter0) New(w *World) *Filter0 {
 // will also automatically detect if new archetypes have been created since the
 // last iteration and update its internal list accordingly.
 func (f *Filter0) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter0) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -263,6 +281,8 @@ func (f *Filter0) Entity() Entity {
 //
 // After this operation, the filter will be empty.
 func (f *Filter0) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -277,8 +297,8 @@ func (f *Filter0) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns a slice containing all entities that match the filter's

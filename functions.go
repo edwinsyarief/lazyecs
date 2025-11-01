@@ -18,7 +18,9 @@ import (
 // Returns:
 //   - A pointer to the component data (*T), or nil if not found.
 func GetComponent[T any](w *World, e Entity) *T {
-	if !w.IsValid(e) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.IsValidNoLock(e) {
 		return nil
 	}
 	meta := w.entities.metas[e.ID]
@@ -46,7 +48,9 @@ func GetComponent[T any](w *World, e Entity) *T {
 //   - e: The Entity to modify.
 //   - val: The component data of type `T` to set.
 func SetComponent[T any](w *World, e Entity, val T) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -86,7 +90,7 @@ func SetComponent[T any](w *World, e Entity, val T) {
 		}
 		count++
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	// move to target
 	newIdx := targetA.size
@@ -102,10 +106,11 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = val
 	// remove from old
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	// update meta
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }
 
 // RemoveComponent removes the component of type `T` from the specified entity.
@@ -118,7 +123,9 @@ func SetComponent[T any](w *World, e Entity, val T) {
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 func RemoveComponent[T any](w *World, e Entity) {
-	if !w.IsValid(e) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.IsValidNoLock(e) {
 		return
 	}
 	meta := &w.entities.metas[e.ID]
@@ -152,7 +159,7 @@ func RemoveComponent[T any](w *World, e Entity) {
 			count++
 		}
 		specs := tempSpecs[:count]
-		targetA = w.getOrCreateArchetype(newMask, specs)
+		targetA = w.getOrCreateArchetypeNoLock(newMask, specs)
 	}
 	// move to target
 	newIdx := targetA.size
@@ -168,8 +175,9 @@ func RemoveComponent[T any](w *World, e Entity) {
 		memCopy(dst, src, a.compSizes[cid])
 	}
 	// remove from old
-	w.removeFromArchetype(a, meta)
+	w.removeFromArchetypeNoLock(a, meta)
 	// update meta
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
+	w.mutationVersion.Add(1)
 }

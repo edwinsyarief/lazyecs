@@ -27,6 +27,8 @@ type Filter2[T1 any, T2 any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter2`.
 func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 
@@ -48,7 +50,7 @@ func NewFilter2[T1 any, T2 any](w *World) *Filter2[T1, T2] {
 
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -61,6 +63,12 @@ func (f *Filter2[T1, T2]) New(w *World) *Filter2[T1, T2] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter2[T1, T2]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter2[T1, T2]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -128,6 +136,8 @@ func (f *Filter2[T1, T2]) Get() (*T1, *T2) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter2[T1, T2]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -142,8 +152,8 @@ func (f *Filter2[T1, T2]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.
@@ -173,6 +183,8 @@ type Filter3[T1 any, T2 any, T3 any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter3`.
 func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -197,7 +209,7 @@ func NewFilter3[T1 any, T2 any, T3 any](w *World) *Filter3[T1, T2, T3] {
 
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -210,6 +222,12 @@ func (f *Filter3[T1, T2, T3]) New(w *World) *Filter3[T1, T2, T3] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter3[T1, T2, T3]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter3[T1, T2, T3]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -278,6 +296,8 @@ func (f *Filter3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter3[T1, T2, T3]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -292,8 +312,8 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.
@@ -323,6 +343,8 @@ type Filter4[T1 any, T2 any, T3 any, T4 any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter4`.
 func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T4] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -350,7 +372,7 @@ func NewFilter4[T1 any, T2 any, T3 any, T4 any](w *World) *Filter4[T1, T2, T3, T
 
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -363,6 +385,12 @@ func (f *Filter4[T1, T2, T3, T4]) New(w *World) *Filter4[T1, T2, T3, T4] {
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter4[T1, T2, T3, T4]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter4[T1, T2, T3, T4]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -432,6 +460,8 @@ func (f *Filter4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -446,8 +476,8 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.
@@ -477,6 +507,8 @@ type Filter5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter5`.
 func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T2, T3, T4, T5] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -507,7 +539,7 @@ func NewFilter5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World) *Filter5[T1, T
 
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -520,6 +552,12 @@ func (f *Filter5[T1, T2, T3, T4, T5]) New(w *World) *Filter5[T1, T2, T3, T4, T5]
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter5[T1, T2, T3, T4, T5]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -590,6 +628,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -604,8 +644,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.
@@ -635,6 +675,8 @@ type Filter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
 // Returns:
 //   - A pointer to the newly created `Filter6`.
 func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filter6[T1, T2, T3, T4, T5, T6] {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	id1 := w.getCompTypeID(reflect.TypeFor[T1]())
 	id2 := w.getCompTypeID(reflect.TypeFor[T2]())
 	id3 := w.getCompTypeID(reflect.TypeFor[T3]())
@@ -668,7 +710,7 @@ func NewFilter6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World) *Filte
 
 	f.updateMatching()
 	f.updateCachedEntities()
-	f.Reset()
+	f.doReset()
 	return f
 }
 
@@ -681,6 +723,12 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) New(w *World) *Filter6[T1, T2, T3, T4,
 // Reset rewinds the filter's iterator to the beginning. It should be called if
 // you need to iterate over the same set of entities multiple times.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	f.doReset()
+}
+
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) doReset() {
 	if f.IsStale() {
 		f.updateMatching()
 		f.updateCachedEntities()
@@ -752,6 +800,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
 // query. This operation is performed in a batch, invalidating all matching
 // entities and recycling their IDs without moving any memory.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
+	f.world.mu.Lock()
+	defer f.world.mu.Unlock()
 	if f.IsStale() {
 		f.updateMatching()
 	}
@@ -766,8 +816,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 		}
 		a.size = 0
 	}
-	f.world.mutationVersion++
-	f.Reset()
+	f.world.mutationVersion.Add(1)
+	f.doReset()
 }
 
 // Entities returns all entities that match the filter.
