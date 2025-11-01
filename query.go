@@ -100,8 +100,8 @@ func (c *queryCache) IsStale() bool {
 func (c *queryCache) Entities() []Entity {
 	if c.world.archetypes.archetypeVersion != c.lastVersion {
 		c.updateMatching()
-	}
-	if c.IsStale() {
+		c.updateCachedEntities()
+	} else if c.cachedEntities == nil || c.world.mutationVersion != c.lastMutationVersion {
 		c.updateCachedEntities()
 	}
 	return c.cachedEntities
