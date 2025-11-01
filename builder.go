@@ -87,6 +87,7 @@ func (b *Builder[T]) NewEntities(count int) {
 		a.entityIDs[startSize+k] = ent
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion++
 }
 
 // NewEntitiesWithValueSet creates a batch of `count` entities and initializes
@@ -121,6 +122,7 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 		*(*T)(ptr) = comp
 		w.entities.nextEntityVer++
 	}
+	w.mutationVersion++
 }
 
 // Get retrieves a pointer to the component of type `T` for the given entity.
@@ -147,8 +149,7 @@ func (b *Builder[T]) Get(e Entity) *T {
 	if (a.mask[i] & (uint64(1) << uint64(o))) == 0 {
 		return nil
 	}
-	ptr := unsafe.Pointer(uintptr(a.compPointers[id]) + uintptr(meta.index)*a.compSizes[id])
-	return (*T)(ptr)
+	return (*T)(unsafe.Add(a.compPointers[id], uintptr(meta.index)*a.compSizes[id]))
 }
 
 // Set adds or updates the component `T` for a given entity with the specified
