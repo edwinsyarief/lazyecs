@@ -57,6 +57,7 @@ func (a *archetype) resizeTo(newCap int, w *World) {
 	copy(newEnts[:a.size], a.entityIDs[:a.size])
 	a.entityIDs = newEnts
 	// resize comps
+	w.components.mu.RLock()
 	for _, cid := range a.compOrder {
 		typ := w.components.compIDToType[cid]
 		newSlice := reflect.MakeSlice(reflect.SliceOf(typ), newCap, newCap)
@@ -68,9 +69,11 @@ func (a *archetype) resizeTo(newCap int, w *World) {
 		}
 		a.compPointers[cid] = newPtr
 	}
+	w.components.mu.RUnlock()
 }
 
 type componentRegistry struct {
+	mu             sync.RWMutex
 	compIDToType   [MaxComponentTypes]reflect.Type
 	compTypeMap    map[reflect.Type]uint8
 	compIDToSize   [MaxComponentTypes]uintptr
@@ -94,7 +97,8 @@ type archetypeRegistry struct {
 // World is the central container for all entities, components, and archetypes.
 // It manages the entire state of the ECS, including entity creation, deletion,
 // and component management. All operations are performed within the context of a
-// World.
+// World. The World is not thread-safe and should not be accessed from
+// multiple goroutines concurrently.
 type World struct {
 	// Resources provides a thread-safe, generic key-value store for global data
 	// that needs to be accessible from anywhere in the application, such as
@@ -225,8 +229,22 @@ func (w *World) RemoveEntities(ents []Entity) {
 
 // ClearEntities removes all entities from the world.
 func (w *World) ClearEntities() {
-	f := NewFilter0(w)
-	f.RemoveEntities()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, a := range w.archetypes.archetypes {
+		if a.size > 0 {
+			for i := 0; i < a.size; i++ {
+				ent := a.entityIDs[i]
+				meta := &w.entities.metas[ent.ID]
+				meta.archetypeIndex = -1
+				meta.index = -1
+				meta.version = 0
+				w.entities.freeIDs = append(w.entities.freeIDs, ent.ID)
+			}
+			a.size = 0
+		}
+	}
+	w.mutationVersion.Add(1)
 }
 
 // IsValid checks if the given entity is currently alive by verifying that its
@@ -266,14 +284,14 @@ func (w *World) Resources() *Resources {
 
 // register or fetch a component type ID for T.
 func (w *World) getCompTypeID(t reflect.Type) uint8 {
-	w.mu.RLock()
+	w.components.mu.RLock()
 	if id, ok := w.components.compTypeMap[t]; ok {
-		w.mu.RUnlock()
+		w.components.mu.RUnlock()
 		return id
 	}
-	w.mu.RUnlock()
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.components.mu.RUnlock()
+	w.components.mu.Lock()
+	defer w.components.mu.Unlock()
 	if id, ok := w.components.compTypeMap[t]; ok {
 		return id
 	}
@@ -311,6 +329,7 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 		entityIDs: make([]Entity, w.entities.capacity),
 		compOrder: make([]uint8, 0, len(specs)),
 	}
+	w.components.mu.RLock()
 	for _, sp := range specs {
 		// allocate []T of length=cap
 		slice := reflect.MakeSlice(reflect.SliceOf(sp.typ), w.entities.capacity, w.entities.capacity)
@@ -318,6 +337,7 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 		a.compSizes[sp.id] = sp.size
 		a.compOrder = append(a.compOrder, sp.id)
 	}
+	w.components.mu.RUnlock()
 	w.archetypes.archetypes = append(w.archetypes.archetypes, a)
 	w.archetypes.maskToArcIndex[mask] = a.index
 	w.archetypes.archetypeVersion.Add(1)
