@@ -280,6 +280,19 @@ func (w *World) IsValid(e Entity) bool {
 	return w.IsValidNoLock(e)
 }
 
+// IsValidNoLock checks if the given entity is currently alive by verifying
+// that its version matches the world's current version for that ID. This
+// prevents "stale" entity references from accessing incorrect data after an
+// entity has been deleted and its ID recycled.
+//
+// This is the lock-free version of IsValid and should only be called when the
+// world's mutex is already held.
+//
+// Parameters:
+//   - e: The Entity to validate.
+//
+// Returns:
+//   - true if the entity is valid, false otherwise.
 func (w *World) IsValidNoLock(e Entity) bool {
 	if int(e.ID) >= len(w.entities.metas) {
 		return false
@@ -428,6 +441,7 @@ func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
 	w.removeFromArchetypeNoLock(a, meta)
 }
 
+// removeFromArchetypeNoLock removes the entity with no-lock from the archetype without freeing the ID or invalidating version.
 func (w *World) removeFromArchetypeNoLock(a *archetype, meta *entityMeta) {
 	idx := meta.index
 	lastIdx := a.size - 1
@@ -455,6 +469,7 @@ func memCopy(dst, src unsafe.Pointer, size uintptr) {
 	copy(dstBytes, srcBytes)
 }
 
+// getCompTypeIDNoLock returns component type's id with no-lock
 func (w *World) getCompTypeIDNoLock(t reflect.Type) uint8 {
 	if id, ok := w.components.compTypeMap[t]; ok {
 		return id
@@ -473,6 +488,8 @@ func (w *World) getCompTypeIDNoLock(t reflect.Type) uint8 {
 	return id
 }
 
+// getOrCreateArchetypeNoLock returns an archetype for the given mask with no-lock;
+// if missing, allocates component storage arrays of length cap.
 func (w *World) getOrCreateArchetypeNoLock(mask bitmask256, specs []compSpec) *archetype {
 	if idx, ok := w.archetypes.maskToArcIndex[mask]; ok {
 		return w.archetypes.archetypes[idx]

@@ -119,7 +119,12 @@ func main() {
     
     // 6. Verify the result (optional)
     resultQuery := teishoku.NewFilter2[Position, Velocity](&world)
-    fmt.Printf("Entity 10's final position: %+v\n", *resultQuery.Entities()[10])
+    allEntities := resultQuery.Entities()
+    if len(allEntities) > 10 {
+        entityToInspect := allEntities[10]
+        finalPos := teishoku.GetComponent[Position](&world, entityToInspect)
+        fmt.Printf("Entity 10's final position: %+v\n", *finalPos)
+    }
 }
 ```
 
@@ -210,80 +215,82 @@ The `World` object and the `Resources` manager are thread-safe. However, the `Ev
 
 ## Benchmark Results
 
-The following tables summarize the performance of `teishoku` across a range of common operations. The results are presented in nanoseconds (ns) per unit (e.g., per entity) and were run on an AMD EPYC 7763 64-Core Processor.
+The following tables summarize the performance of `teishoku` across a range of common operations. The results are presented in nanoseconds (ns) and were run on an AMD EPYC 7763 64-Core Processor. For batch operations, the `ns/op` is presented on a per-entity basis.
 
 Notably, many core operations like creating entities, accessing components, and iterating with filters show **zero memory allocations** (`0 allocs/op`), making `teishoku` ideal for performance-critical applications where garbage collection pressure is a concern.
 
 ### Entity Benchmark
 
+*Notes: ns/op is per-entity*
+
 | Action Name | Entities | ns/op | B/op | allocs/op |
 | :--- | :--- | :--- | :--- | :--- |
-| **Create World** | 1K | 9917 | 49848 | 13 |
-| | 10K | 70488 | 381626 | 13 |
-| | 100K | 629840 | 3617473 | 13 |
-| | 1M | 4369555 | 36025028 | 13 |
-| **Auto Expand** | 1K | 54435 | 143384 | 7 |
-| | 10K | 582947 | 1269786 | 7 |
-| | 100K | 4525902 | 13508661 | 7 |
-| | 1M | 40643101 | 134651935 | 7 |
-| **World: Create Entity** | 1K | 40366 | 0 | 0 |
-| | 10K | 352969 | 0 | 0 |
-| | 100K | 3536612 | 0 | 0 |
-| | 1M | 33623122 | 0 | 0 |
-| **World: Create Entities (Batch)** | 1K | 3009 | 0 | 0 |
-| | 10K | 26321 | 0 | 0 |
-| | 100K | 234125 | 0 | 0 |
-| | 1M | 2462145 | 0 | 0 |
-| **Builder: New Entity** | 1K | 18620 | 0 | 0 |
-| | 10K | 178736 | 2 | 0 |
-| | 100K | 1558767 | 12 | 0 |
-| | 1M | 14534337 | 0 | 0 |
-| **Builder: New Entities (Batch)** | 1K | 2889 | 0 | 0 |
-| | 10K | 27209 | 0 | 0 |
-| | 100K | 283295 | 0 | 0 |
-| | 1M | 2449114 | 0 | 0 |
-| **Builder: New Entities w/ Value Set (Batch)** | 1K | 4724 | 0 | 0 |
-| | 10K | 48071 | 1 | 0 |
-| | 100K | 442229 | 0 | 0 |
-| | 1M | 4117529 | 0 | 0 |
-| **Builder: New Entities w/ Value Set 2 (Batch)** | 1K | 6408 | 0 | 0 |
-| | 10K | 65159 | 1 | 0 |
-| | 100K | 670657 | 12 | 0 |
-| | 1M | 5526794 | 0 | 0 |
-| **Builder: Set Component** | 1K | 57795 | 0 | 0 |
-| | 10K | 566780 | 0 | 0 |
-| | 100K | 5555934 | 10 | 0 |
-| | 1M | 53948158 | 0 | 0 |
-| **Builder: Set Component 2** | 1K | 67170 | 0 | 0 |
-| | 10K | 666647 | 3 | 0 |
-| | 100K | 6392592 | 0 | 0 |
-| | 1M | 63424222 | 0 | 0 |
+| **Create World** | 1K | 9.917 | 49848 | 13 |
+| | 10K | 7.049 | 381626 | 13 |
+| | 100K | 6.298 | 3617473 | 13 |
+| | 1M | 4.370 | 36025028 | 13 |
+| **Auto Expand** | 1K | 54.435 | 143384 | 7 |
+| | 10K | 58.295 | 1269786 | 7 |
+| | 100K | 45.259 | 13508661 | 7 |
+| | 1M | 40.643 | 134651935 | 7 |
+| **World: Create Entity** | 1K | 40.366 | 0 | 0 |
+| | 10K | 35.297 | 0 | 0 |
+| | 100K | 35.366 | 0 | 0 |
+| | 1M | 33.623 | 0 | 0 |
+| **World: Create Entities (Batch)** | 1K | 3.009 | 0 | 0 |
+| | 10K | 2.632 | 0 | 0 |
+| | 100K | 2.341 | 0 | 0 |
+| | 1M | 2.462 | 0 | 0 |
+| **Builder: New Entity** | 1K | 18.620 | 0 | 0 |
+| | 10K | 17.874 | 2 | 0 |
+| | 100K | 15.588 | 12 | 0 |
+| | 1M | 14.534 | 0 | 0 |
+| **Builder: New Entities (Batch)** | 1K | 2.889 | 0 | 0 |
+| | 10K | 2.721 | 0 | 0 |
+| | 100K | 2.833 | 0 | 0 |
+| | 1M | 2.449 | 0 | 0 |
+| **Builder: New Entities w/ Value Set (Batch)** | 1K | 4.724 | 0 | 0 |
+| | 10K | 4.807 | 1 | 0 |
+| | 100K | 4.422 | 0 | 0 |
+| | 1M | 4.118 | 0 | 0 |
+| **Builder: New Entities w/ Value Set 2 (Batch)** | 1K | 6.408 | 0 | 0 |
+| | 10K | 6.516 | 1 | 0 |
+| | 100K | 6.707 | 12 | 0 |
+| | 1M | 5.527 | 0 | 0 |
+| **Builder: Set Component** | 1K | 57.795 | 0 | 0 |
+| | 10K | 56.678 | 0 | 0 |
+| | 100K | 55.559 | 10 | 0 |
+| | 1M | 53.948 | 0 | 0 |
+| **Builder: Set Component 2** | 1K | 67.170 | 0 | 0 |
+| | 10K | 66.665 | 3 | 0 |
+| | 100K | 63.926 | 0 | 0 |
+| | 1M | 63.424 | 0 | 0 |
 | **Builder: Get Component** | 1K | 8.424 | 0 | 0 |
 | | 10K | 8.543 | 0 | 0 |
-| **Filter & Iterate** | 1K | 952.8 | 0 | 0 |
-| | 10K | 9356 | 0 | 0 |
-| | 100K | 93304 | 0 | 0 |
-| | 1M | 935081 | 0 | 0 |
-| **Filter & Iterate (2 components)** | 1K | 954.5 | 0 | 0 |
-| | 10K | 9358 | 0 | 0 |
-| | 100K | 93322 | 0 | 0 |
-| | 1M | 934063 | 0 | 0 |
-| **Filter & Iterate (3 components)** | 1K | 975.1 | 0 | 0 |
-| | 10K | 9387 | 0 | 0 |
-| | 100K | 93513 | 0 | 0 |
-| | 1M | 935502 | 0 | 0 |
-| **Filter & Iterate (4 components)** | 1K | 953.9 | 0 | 0 |
-| | 10K | 9355 | 0 | 0 |
-| | 100K | 93623 | 0 | 0 |
-| | 1M | 934623 | 0 | 0 |
-| **Filter & Iterate (5 components)** | 1K | 952.7 | 0 | 0 |
-| | 10K | 9362 | 0 | 0 |
-| | 100K | 93507 | 0 | 0 |
-| | 1M | 933519 | 0 | 0 |
-| **Filter & Iterate (6 components)** | 1K | 952.7 | 0 | 0 |
-| | 10K | 9362 | 0 | 0 |
-| | 100K | 93507 | 0 | 0 |
-| | 1M | 933519 | 0 | 0 |
+| **Filter & Iterate** | 1K | 0.953 | 0 | 0 |
+| | 10K | 0.936 | 0 | 0 |
+| | 100K | 0.933 | 0 | 0 |
+| | 1M | 0.935 | 0 | 0 |
+| **Filter & Iterate (2 components)** | 1K | 0.955 | 0 | 0 |
+| | 10K | 0.936 | 0 | 0 |
+| | 100K | 0.933 | 0 | 0 |
+| | 1M | 0.934 | 0 | 0 |
+| **Filter & Iterate (3 components)** | 1K | 0.975 | 0 | 0 |
+| | 10K | 0.939 | 0 | 0 |
+| | 100K | 0.935 | 0 | 0 |
+| | 1M | 0.936 | 0 | 0 |
+| **Filter & Iterate (4 components)** | 1K | 0.954 | 0 | 0 |
+| | 10K | 0.936 | 0 | 0 |
+| | 100K | 0.936 | 0 | 0 |
+| | 1M | 0.935 | 0 | 0 |
+| **Filter & Iterate (5 components)** | 1K | 0.953 | 0 | 0 |
+| | 10K | 0.936 | 0 | 0 |
+| | 100K | 0.935 | 0 | 0 |
+| | 1M | 0.934 | 0 | 0 |
+| **Filter & Iterate (6 components)** | 1K | 0.953 | 0 | 0 |
+| | 10K | 0.936 | 0 | 0 |
+| | 100K | 0.935 | 0 | 0 |
+| | 1M | 0.934 | 0 | 0 |
 | **Filter: Get Entities (Cached)** | 1K | 7.512 | 0 | 0 |
 | | 10K | 7.507 | 0 | 0 |
 | | 100K | 7.514 | 0 | 0 |
@@ -292,10 +299,34 @@ Notably, many core operations like creating entities, accessing components, and 
 | | 10K | 2416 | 0 | 0 |
 | | 100K | 34316 | 0 | 0 |
 | | 1M | 384441 | 0 | 0 |
+| **Functions: Set Component (Existing)** | 1K | 96.09 | 0 | 0 |
+| | 10K | 96.52 | 0 | 0 |
+| | 100K | 99.31 | 0 | 0 |
+| | 1M | 100.6 | 0 | 0 |
+| **Functions: Set Component (New)** | 1K | 161.205 | 0 | 0 |
+| | 10K | 169.717 | 0 | 0 |
+| | 100K | 156.848 | 0 | 0 |
+| | 1M | 156.759 | 0 | 0 |
+| **Functions: Remove Component** | 1K | 162.390 | 0 | 0 |
+| | 10K | 169.940 | 0 | 0 |
+| | 100K | 158.516 | 0 | 0 |
+| | 1M | 157.510 | 0 | 0 |
+| **World: Remove Entity** | 1K | 68.376 | 0 | 0 |
+| | 10K | 79.215 | 1 | 0 |
+| | 100K | 80.864 | 1 | 0 |
+| | 1M | 99.023 | 0 | 0 |
+| **World: Remove Entities (Batch)** | 1K | 68.483 | 0 | 0 |
+| | 10K | 81.170 | 1 | 0 |
+| | 100K | 72.851 | 0 | 0 |
+| | 1M | 68.656 | 0 | 0 |
+| **World: Clear Entities** | 1K | 3.601 | 0 | 0 |
+| | 10K | 3.424 | 0 | 0 |
+| | 100K | 4.822 | 0 | 0 |
+| | 1M | 5.119 | 0 | 0 |
 
 ### Event Bus Benchmark
 
-| Action Name | Entities | ns/op | B/op | allocs/op |
+| Action Name | Handlers | ns/op | B/op | allocs/op |
 | :--- | :--- | :--- | :--- | :--- |
 | **Subscribe** | 1K | 0.0000533 | 0 | 0 |
 | | 10K | 0.0002618 | 0 | 0 |
@@ -316,7 +347,7 @@ Notably, many core operations like creating entities, accessing components, and 
 
 ### Resources Benchmark
 
-| Action Name | Entities | ns/op | B/op | allocs/op |
+| Action Name | Resources | ns/op | B/op | allocs/op |
 | :--- | :--- | :--- | :--- | :--- |
 | **Add** | 1K | 0.0001176 | 0 | 0 |
 | | 10K | 0.001122 | 0 | 0 |
@@ -401,7 +432,7 @@ BenchmarkFilter4Iterate/1K-4                   1230201         975.1 ns/op      
 BenchmarkFilter4Iterate/10K-4                   127768          9387 ns/op            0 B/op           0 allocs/op
 BenchmarkFilter4Iterate/100K-4                  12852         93513 ns/op            0 B/op           0 allocs/op
 BenchmarkFilter4Iterate/1M-4                     1282        935502 ns/op            0 B/op           0 allocs/op
-BenchmarkFilter5Iterate/1K-4                   1258552         953.9 ns/op            0 B/op           0 allocs/op
+BenchmarkFilter5Iterate/1K-4                   1258552         953.9 ns/op            0 B/op           0 allocs.
 BenchmarkFilter5Iterate/10K-4                   128028          9355 ns/op            0 B/op           0 allocs/op
 BenchmarkFilter5Iterate/100K-4                  12862         93623 ns/op            0 B/op           0 allocs/op
 BenchmarkFilter5Iterate/1M-4                     1286        934623 ns/op            0 B/op           0 allocs/op
