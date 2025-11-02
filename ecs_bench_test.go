@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// World Creation Benchmarks
+/* // World Creation Benchmarks
 func BenchmarkCreateWorld(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
@@ -507,7 +507,7 @@ func BenchmarkFilter2RemoveEntities(b *testing.B) {
 			b.ReportAllocs()
 		})
 	}
-}
+} */
 
 // Filter Iteration Benchmarks
 func BenchmarkFilterIterate(b *testing.B) {
@@ -523,9 +523,9 @@ func BenchmarkFilterIterate(b *testing.B) {
 			builder.NewEntities(size)
 			filter := NewFilter[Position](w)
 			for b.Loop() {
-				filter.Reset()
-				for filter.Next() {
-					_ = filter.Get()
+				query := filter.Query()
+				for query.Next() {
+					_ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -546,9 +546,9 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 			builder2.NewEntities(size)
 			filter2 := NewFilter2[Position, Velocity](w)
 			for b.Loop() {
-				filter2.Reset()
-				for filter2.Next() {
-					_, _ = filter2.Get()
+				query := filter2.Query()
+				for query.Next() {
+					_, _ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -569,9 +569,9 @@ func BenchmarkFilter3Iterate(b *testing.B) {
 			builder3.NewEntities(size)
 			filter3 := NewFilter3[Position, Velocity, Health](w)
 			for b.Loop() {
-				filter3.Reset()
-				for filter3.Next() {
-					_, _, _ = filter3.Get()
+				query := filter3.Query()
+				for query.Next() {
+					_, _, _ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -592,9 +592,9 @@ func BenchmarkFilter4Iterate(b *testing.B) {
 			builder4.NewEntities(size)
 			filter4 := NewFilter4[Position, Velocity, Health, WithPointer](w)
 			for b.Loop() {
-				filter4.Reset()
-				for filter4.Next() {
-					_, _, _, _ = filter4.Get()
+				query := filter4.Query()
+				for query.Next() {
+					_, _, _, _ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -615,9 +615,9 @@ func BenchmarkFilter5Iterate(b *testing.B) {
 			builder5.NewEntities(size)
 			filter5 := NewFilter5[Position, Velocity, Health, WithPointer, Dummy1](w)
 			for b.Loop() {
-				filter5.Reset()
-				for filter5.Next() {
-					_, _, _, _, _ = filter5.Get()
+				query := filter5.Query()
+				for query.Next() {
+					_, _, _, _, _ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -638,9 +638,9 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 			builder6.NewEntities(size)
 			filter6 := NewFilter6[Position, Velocity, Health, WithPointer, Dummy1, Dummy2](w)
 			for b.Loop() {
-				filter6.Reset()
-				for filter6.Next() {
-					_, _, _, _, _, _ = filter6.Get()
+				query := filter6.Query()
+				for query.Next() {
+					_, _, _, _, _, _ = query.Get()
 				}
 			}
 			b.ReportAllocs()
@@ -648,7 +648,7 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 	}
 }
 
-func BenchmarkFilterGetEntitiesCached(b *testing.B) {
+/* func BenchmarkFilterGetEntitiesCached(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -689,4 +689,4 @@ func BenchmarkFilterGetEntitiesUncached(b *testing.B) {
 			b.ReportAllocs()
 		})
 	}
-}
+} */

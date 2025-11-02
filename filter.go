@@ -170,6 +170,72 @@ func (f *Filter[T]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// Query returns a new iterator snapshot for the filter, optimized for allocation-free iteration.
+// Assume no world mutations during the Query's lifetime.
+type Query[T any] struct {
+	matchingArches []*archetype
+	curBase        unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSize       uintptr
+	curArchSize    int
+	compID         uint8
+}
+
+// Query creates a new Query iterator from the Filter.
+func (f *Filter[T]) Query() Query[T] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query[T]{
+		matchingArches: f.matchingArches, // share, no alloc
+		compID:         f.compID,
+		compSize:       f.compSize,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		q.curBase = a.compPointers[q.compID]
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query[T]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	q.curBase = a.compPointers[q.compID]
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query[T]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns a pointer to the component T for the current entity.
+func (q *Query[T]) Get() *T {
+	return (*T)(unsafe.Add(q.curBase, uintptr(q.curIdx)*q.compSize))
+}
+
 // Filter0 provides a fast, cache-friendly iterator over all entities that have a
 // no components.
 type Filter0 struct {
@@ -312,4 +378,57 @@ func (f *Filter0) RemoveEntities() {
 //   - A slice of matching entities.
 func (f *Filter0) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query0 is an allocation-free iterator snapshot for Filter0.
+type Query0 struct {
+	matchingArches []*archetype
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	curArchSize    int
+}
+
+// Query returns a new Query0 iterator from the Filter0.
+func (f *Filter0) Query() Query0 {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query0{
+		matchingArches: f.matchingArches,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query0) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query0) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
 }

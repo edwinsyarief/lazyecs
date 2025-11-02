@@ -160,6 +160,76 @@ func (f *Filter2[T1, T2]) Entities() []Entity {
 	return f.queryCache.Entities()
 }
 
+// Query2 is an allocation-free iterator snapshot for Filter2.
+type Query2[T1 any, T2 any] struct {
+	matchingArches []*archetype
+	curBases       [2]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [2]uintptr
+	curArchSize    int
+	ids            [2]uint8
+}
+
+// Query returns a new Query2 iterator from the Filter2.
+func (f *Filter2[T1, T2]) Query() Query2[T1, T2] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query2[T1, T2]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		for i := 0; i < 2; i++ {
+			q.curBases[i] = a.compPointers[q.ids[i]]
+		}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query2[T1, T2]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	for i := 0; i < 2; i++ {
+		q.curBases[i] = a.compPointers[q.ids[i]]
+	}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query2[T1, T2]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to T1, T2 for the current entity.
+func (q *Query2[T1, T2]) Get() (*T1, *T2) {
+	return (*T1)(unsafe.Add(q.curBases[0], uintptr(q.curIdx)*q.compSizes[0])),
+		(*T2)(unsafe.Add(q.curBases[1], uintptr(q.curIdx)*q.compSizes[1]))
+}
+
 // Filter3 provides a fast, cache-friendly iterator over all entities that
 // have the 3 components: T1, T2, T3.
 type Filter3[T1 any, T2 any, T3 any] struct {
@@ -317,6 +387,77 @@ func (f *Filter3[T1, T2, T3]) RemoveEntities() {
 // Entities returns all entities that match the filter.
 func (f *Filter3[T1, T2, T3]) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query3 is an allocation-free iterator snapshot for Filter3.
+type Query3[T1 any, T2 any, T3 any] struct {
+	matchingArches []*archetype
+	curBases       [3]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [3]uintptr
+	curArchSize    int
+	ids            [3]uint8
+}
+
+// Query returns a new Query3 iterator from the Filter3.
+func (f *Filter3[T1, T2, T3]) Query() Query3[T1, T2, T3] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query3[T1, T2, T3]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		for i := 0; i < 3; i++ {
+			q.curBases[i] = a.compPointers[q.ids[i]]
+		}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query3[T1, T2, T3]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	for i := 0; i < 3; i++ {
+		q.curBases[i] = a.compPointers[q.ids[i]]
+	}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query3[T1, T2, T3]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to T1, T2, T3 for the current entity.
+func (q *Query3[T1, T2, T3]) Get() (*T1, *T2, *T3) {
+	return (*T1)(unsafe.Add(q.curBases[0], uintptr(q.curIdx)*q.compSizes[0])),
+		(*T2)(unsafe.Add(q.curBases[1], uintptr(q.curIdx)*q.compSizes[1])),
+		(*T3)(unsafe.Add(q.curBases[2], uintptr(q.curIdx)*q.compSizes[2]))
 }
 
 // Filter4 provides a fast, cache-friendly iterator over all entities that
@@ -480,6 +621,78 @@ func (f *Filter4[T1, T2, T3, T4]) RemoveEntities() {
 // Entities returns all entities that match the filter.
 func (f *Filter4[T1, T2, T3, T4]) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query4 is an allocation-free iterator snapshot for Filter4.
+type Query4[T1 any, T2 any, T3 any, T4 any] struct {
+	matchingArches []*archetype
+	curBases       [4]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [4]uintptr
+	curArchSize    int
+	ids            [4]uint8
+}
+
+// Query returns a new Query4 iterator from the Filter4.
+func (f *Filter4[T1, T2, T3, T4]) Query() Query4[T1, T2, T3, T4] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query4[T1, T2, T3, T4]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		for i := 0; i < 4; i++ {
+			q.curBases[i] = a.compPointers[q.ids[i]]
+		}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query4[T1, T2, T3, T4]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	for i := 0; i < 4; i++ {
+		q.curBases[i] = a.compPointers[q.ids[i]]
+	}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query4[T1, T2, T3, T4]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to T1, T2, T3, T4 for the current entity.
+func (q *Query4[T1, T2, T3, T4]) Get() (*T1, *T2, *T3, *T4) {
+	return (*T1)(unsafe.Add(q.curBases[0], uintptr(q.curIdx)*q.compSizes[0])),
+		(*T2)(unsafe.Add(q.curBases[1], uintptr(q.curIdx)*q.compSizes[1])),
+		(*T3)(unsafe.Add(q.curBases[2], uintptr(q.curIdx)*q.compSizes[2])),
+		(*T4)(unsafe.Add(q.curBases[3], uintptr(q.curIdx)*q.compSizes[3]))
 }
 
 // Filter5 provides a fast, cache-friendly iterator over all entities that
@@ -647,6 +860,79 @@ func (f *Filter5[T1, T2, T3, T4, T5]) RemoveEntities() {
 // Entities returns all entities that match the filter.
 func (f *Filter5[T1, T2, T3, T4, T5]) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query5 is an allocation-free iterator snapshot for Filter5.
+type Query5[T1 any, T2 any, T3 any, T4 any, T5 any] struct {
+	matchingArches []*archetype
+	curBases       [5]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [5]uintptr
+	curArchSize    int
+	ids            [5]uint8
+}
+
+// Query returns a new Query5 iterator from the Filter5.
+func (f *Filter5[T1, T2, T3, T4, T5]) Query() Query5[T1, T2, T3, T4, T5] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query5[T1, T2, T3, T4, T5]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		for i := 0; i < 5; i++ {
+			q.curBases[i] = a.compPointers[q.ids[i]]
+		}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query5[T1, T2, T3, T4, T5]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	for i := 0; i < 5; i++ {
+		q.curBases[i] = a.compPointers[q.ids[i]]
+	}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query5[T1, T2, T3, T4, T5]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to T1, T2, T3, T4, T5 for the current entity.
+func (q *Query5[T1, T2, T3, T4, T5]) Get() (*T1, *T2, *T3, *T4, *T5) {
+	return (*T1)(unsafe.Add(q.curBases[0], uintptr(q.curIdx)*q.compSizes[0])),
+		(*T2)(unsafe.Add(q.curBases[1], uintptr(q.curIdx)*q.compSizes[1])),
+		(*T3)(unsafe.Add(q.curBases[2], uintptr(q.curIdx)*q.compSizes[2])),
+		(*T4)(unsafe.Add(q.curBases[3], uintptr(q.curIdx)*q.compSizes[3])),
+		(*T5)(unsafe.Add(q.curBases[4], uintptr(q.curIdx)*q.compSizes[4]))
 }
 
 // Filter6 provides a fast, cache-friendly iterator over all entities that
@@ -818,4 +1104,78 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) RemoveEntities() {
 // Entities returns all entities that match the filter.
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query6 is an allocation-free iterator snapshot for Filter6.
+type Query6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any] struct {
+	matchingArches []*archetype
+	curBases       [6]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [6]uintptr
+	curArchSize    int
+	ids            [6]uint8
+}
+
+// Query returns a new Query6 iterator from the Filter6.
+func (f *Filter6[T1, T2, T3, T4, T5, T6]) Query() Query6[T1, T2, T3, T4, T5, T6] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query6[T1, T2, T3, T4, T5, T6]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		for i := 0; i < 6; i++ {
+			q.curBases[i] = a.compPointers[q.ids[i]]
+		}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query6[T1, T2, T3, T4, T5, T6]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	for i := 0; i < 6; i++ {
+		q.curBases[i] = a.compPointers[q.ids[i]]
+	}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query6[T1, T2, T3, T4, T5, T6]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to T1, T2, T3, T4, T5, T6 for the current entity.
+func (q *Query6[T1, T2, T3, T4, T5, T6]) Get() (*T1, *T2, *T3, *T4, *T5, *T6) {
+	return (*T1)(unsafe.Add(q.curBases[0], uintptr(q.curIdx)*q.compSizes[0])),
+		(*T2)(unsafe.Add(q.curBases[1], uintptr(q.curIdx)*q.compSizes[1])),
+		(*T3)(unsafe.Add(q.curBases[2], uintptr(q.curIdx)*q.compSizes[2])),
+		(*T4)(unsafe.Add(q.curBases[3], uintptr(q.curIdx)*q.compSizes[3])),
+		(*T5)(unsafe.Add(q.curBases[4], uintptr(q.curIdx)*q.compSizes[4])),
+		(*T6)(unsafe.Add(q.curBases[5], uintptr(q.curIdx)*q.compSizes[5]))
 }
