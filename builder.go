@@ -77,7 +77,7 @@ func (b *Builder[T]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -112,7 +112,7 @@ func (b *Builder[T]) NewEntitiesWithValueSet(count int, comp T) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -222,7 +222,7 @@ func (b *Builder[T]) Set(e Entity, comp T) {
 	}
 	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = comp
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)

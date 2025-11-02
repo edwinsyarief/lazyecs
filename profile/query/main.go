@@ -31,8 +31,8 @@ func main() {
 func run(rounds, iters, numEntities int) {
 	for range rounds {
 		w := teishoku.NewWorld(numEntities)
-		query := teishoku.NewFilter2[comp1, comp2](&w)
-		batch := teishoku.NewBuilder2[comp1, comp2](&w)
+		query := teishoku.NewFilter2[comp1, comp2](w)
+		batch := teishoku.NewBuilder2[comp1, comp2](w)
 		batch.NewEntities(numEntities)
 
 		for range iters {

@@ -121,8 +121,8 @@ type World struct {
 //
 // Returns:
 //   - The newly created World.
-func NewWorld(initialCapacity int) World {
-	w := World{
+func NewWorld(initialCapacity int) *World {
+	w := &World{
 		resources: &Resources{},
 		components: componentRegistry{
 			compTypeMap: make(map[reflect.Type]uint8, 16),
@@ -177,7 +177,7 @@ func (w *World) CreateEntities(count int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -210,7 +210,7 @@ func (w *World) RemoveEntity(e Entity) {
 	}
 	meta := &w.entities.metas[e.ID]
 	a := w.archetypes.archetypes[meta.archetypeIndex]
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = -1
 	meta.index = -1
 	meta.version = 0
@@ -233,7 +233,7 @@ func (w *World) RemoveEntities(ents []Entity) {
 		}
 		meta := &w.entities.metas[e.ID]
 		a := w.archetypes.archetypes[meta.archetypeIndex]
-		w.removeFromArchetypeNoLock(a, meta)
+		w.removeFromArchetype(a, meta)
 		meta.archetypeIndex = -1
 		meta.index = -1
 		meta.version = 0
@@ -374,14 +374,7 @@ func (w *World) getOrCreateArchetype(mask bitmask256, specs []compSpec) *archety
 	return a
 }
 
-// expand automatically increases capacity by initialCapacity when full.
 func (w *World) expand() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.expandNoLock()
-}
-
-func (w *World) expandNoLock() {
 	oldCap := w.entities.capacity
 	newCap := oldCap * 2
 	if newCap == 0 {
@@ -415,7 +408,7 @@ func (w *World) createEntity(a *archetype) Entity {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if len(w.entities.freeIDs) == 0 {
-		w.expandNoLock()
+		w.expand()
 	}
 	// pop an ID
 	last := len(w.entities.freeIDs) - 1
@@ -434,15 +427,8 @@ func (w *World) createEntity(a *archetype) Entity {
 	return ent
 }
 
-// removeFromArchetype removes the entity from the archetype without freeing the ID or invalidating version.
+// removeFromArchetype removes the entity with no-lock from the archetype without freeing the ID or invalidating version.
 func (w *World) removeFromArchetype(a *archetype, meta *entityMeta) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.removeFromArchetypeNoLock(a, meta)
-}
-
-// removeFromArchetypeNoLock removes the entity with no-lock from the archetype without freeing the ID or invalidating version.
-func (w *World) removeFromArchetypeNoLock(a *archetype, meta *entityMeta) {
 	idx := meta.index
 	lastIdx := a.size - 1
 	if idx < lastIdx {

@@ -111,7 +111,7 @@ func SetComponent[T any](w *World, e Entity, val T) {
 	dst := unsafe.Pointer(uintptr(targetA.compPointers[id]) + uintptr(newIdx)*targetA.compSizes[id])
 	*(*T)(dst) = val
 	// remove from old
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	// update meta
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
@@ -184,7 +184,7 @@ func RemoveComponent[T any](w *World, e Entity) {
 		memCopy(dst, src, a.compSizes[cid])
 	}
 	// remove from old
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	// update meta
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx

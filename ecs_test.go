@@ -60,7 +60,7 @@ func TestAutoExpand(t *testing.T) {
 	if w.entities.capacity != initialCap || w.entities.initialCapacity != initialCap {
 		t.Errorf("expected initial capacity %d, got %d/%d", initialCap, w.entities.capacity, w.entities.initialCapacity)
 	}
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	// Create initial cap entities
 	for i := 0; i < initialCap; i++ {
 		ent := builder.NewEntity()
@@ -94,7 +94,7 @@ func TestAutoExpand(t *testing.T) {
 	}
 	// Check data integrity after expand
 	for i := 0; i < initialCap+extra; i++ {
-		pos := GetComponent[Position](&w, a.entityIDs[i])
+		pos := GetComponent[Position](w, a.entityIDs[i])
 		if pos == nil {
 			t.Errorf("position nil for entity %d after expand", i)
 		}
@@ -138,7 +138,7 @@ func TestGetOrCreateArchetype(t *testing.T) {
 // Builder Tests
 func TestBuilderNewEntity(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	ent := builder.NewEntity()
 	if !w.IsValid(ent) {
 		t.Error("entity should be valid")
@@ -147,7 +147,7 @@ func TestBuilderNewEntity(t *testing.T) {
 
 func TestBuilderNewEntities(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	count := 5
 	builder.NewEntities(count)
 	if builder.arch.size != count {
@@ -157,7 +157,7 @@ func TestBuilderNewEntities(t *testing.T) {
 
 func TestBuilderNewEntitiesWithValueSet(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	count := 5
 	val := Position{X: 1.0, Y: 2.0}
 	builder.NewEntitiesWithValueSet(count, val)
@@ -174,7 +174,7 @@ func TestBuilderNewEntitiesWithValueSet(t *testing.T) {
 
 func TestBuilderGet(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	ent := builder.NewEntity()
 	val := Position{X: 1.0, Y: 2.0}
 	builder.Set(ent, val)
@@ -186,11 +186,11 @@ func TestBuilderGet(t *testing.T) {
 
 func TestBuilderSet(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	ent := builder.NewEntity()
 	val := Position{X: 1.0, Y: 2.0}
 	builder.Set(ent, val)
-	pos := GetComponent[Position](&w, ent)
+	pos := GetComponent[Position](w, ent)
 	if *pos != val {
 		t.Errorf("expected pos %+v, got %+v", val, *pos)
 	}
@@ -199,9 +199,9 @@ func TestBuilderSet(t *testing.T) {
 // Filter Tests
 func TestFilter(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	builder.NewEntities(5)
-	filter := NewFilter[Position](&w)
+	filter := NewFilter[Position](w)
 	count := 0
 	for filter.Next() {
 		count++
@@ -213,9 +213,9 @@ func TestFilter(t *testing.T) {
 
 func TestFilter2(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder2 := NewBuilder2[Position, Velocity](&w)
+	builder2 := NewBuilder2[Position, Velocity](w)
 	builder2.NewEntities(5)
-	filter2 := NewFilter2[Position, Velocity](&w)
+	filter2 := NewFilter2[Position, Velocity](w)
 	count := 0
 	for filter2.Next() {
 		count++
@@ -227,11 +227,11 @@ func TestFilter2(t *testing.T) {
 
 func TestFilter0(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	builder.NewEntities(5) // Entities with components
 	w.CreateEntities(3)    // Entities without components
 
-	filter0 := NewFilter0(&w)
+	filter0 := NewFilter0(w)
 	count := 0
 	for filter0.Next() {
 		count++
@@ -243,9 +243,9 @@ func TestFilter0(t *testing.T) {
 
 func TestFilterRemoveEntities(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	builder.NewEntities(3)
-	filter := NewFilter[Position](&w)
+	filter := NewFilter[Position](w)
 	filter.RemoveEntities()
 	count := 0
 	for filter.Next() {
@@ -258,9 +258,9 @@ func TestFilterRemoveEntities(t *testing.T) {
 
 func TestFilter2RemoveEntities(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder2 := NewBuilder2[Position, Velocity](&w)
+	builder2 := NewBuilder2[Position, Velocity](w)
 	builder2.NewEntities(2)
-	filter2 := NewFilter2[Position, Velocity](&w)
+	filter2 := NewFilter2[Position, Velocity](w)
 	filter2.RemoveEntities()
 	count := 0
 	for filter2.Next() {
@@ -273,7 +273,7 @@ func TestFilter2RemoveEntities(t *testing.T) {
 
 func TestFilterDataIntegrity(t *testing.T) {
 	w := NewWorld(TestCap)
-	builder := NewBuilder[Position](&w)
+	builder := NewBuilder[Position](w)
 	count := 10
 
 	// Create entities with initial value
@@ -281,7 +281,7 @@ func TestFilterDataIntegrity(t *testing.T) {
 	builder.NewEntitiesWithValueSet(count, initialValue)
 
 	// Verify initial values
-	filter := NewFilter[Position](&w)
+	filter := NewFilter[Position](w)
 	entityCount := 0
 	for filter.Next() {
 		pos := filter.Get()

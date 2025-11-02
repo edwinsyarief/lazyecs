@@ -136,7 +136,7 @@ func SetComponent2[T1 any, T2 any](w *World, e Entity, v1 T1, v2 T2) {
 	ptr2 := unsafe.Pointer(uintptr(targetA.compPointers[id2]) + uintptr(newIdx)*targetA.compSizes[id2])
 	*(*T2)(ptr2) = v2
 
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -215,7 +215,7 @@ func RemoveComponent2[T1 any, T2 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -373,7 +373,7 @@ func SetComponent3[T1 any, T2 any, T3 any](w *World, e Entity, v1 T1, v2 T2, v3 
 	ptr3 := unsafe.Pointer(uintptr(targetA.compPointers[id3]) + uintptr(newIdx)*targetA.compSizes[id3])
 	*(*T3)(ptr3) = v3
 
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -458,7 +458,7 @@ func RemoveComponent3[T1 any, T2 any, T3 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -637,7 +637,7 @@ func SetComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity, v1 T1, v2
 	ptr4 := unsafe.Pointer(uintptr(targetA.compPointers[id4]) + uintptr(newIdx)*targetA.compSizes[id4])
 	*(*T4)(ptr4) = v4
 
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -728,7 +728,7 @@ func RemoveComponent4[T1 any, T2 any, T3 any, T4 any](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -928,7 +928,7 @@ func SetComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity, v
 	ptr5 := unsafe.Pointer(uintptr(targetA.compPointers[id5]) + uintptr(newIdx)*targetA.compSizes[id5])
 	*(*T5)(ptr5) = v5
 
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -1025,7 +1025,7 @@ func RemoveComponent5[T1 any, T2 any, T3 any, T4 any, T5 any](w *World, e Entity
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -1246,7 +1246,7 @@ func SetComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, e E
 	ptr6 := unsafe.Pointer(uintptr(targetA.compPointers[id6]) + uintptr(newIdx)*targetA.compSizes[id6])
 	*(*T6)(ptr6) = v6
 
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -1349,7 +1349,7 @@ func RemoveComponent6[T1 any, T2 any, T3 any, T4 any, T5 any, T6 any](w *World, 
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)

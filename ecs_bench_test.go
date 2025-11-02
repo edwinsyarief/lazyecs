@@ -33,7 +33,7 @@ func BenchmarkAutoExpand(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(initSize)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				b.StartTimer()
 				for j := range targetEntities {
 					_ = j
@@ -99,7 +99,7 @@ func BenchmarkBuilderNewEntity(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				b.StartTimer()
 				for j := range size {
 					_ = j
@@ -122,7 +122,7 @@ func BenchmarkBuilderNewEntities(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				b.StartTimer()
 				builder.NewEntities(size)
 			}
@@ -143,7 +143,7 @@ func BenchmarkBuilderNewEntitiesWithValueSet(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				b.StartTimer()
 				builder.NewEntitiesWithValueSet(size, val)
 			}
@@ -165,7 +165,7 @@ func BenchmarkBuilderNewEntitiesWithValueSet2(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
+				builder2 := NewBuilder2[Position, Velocity](w)
 				b.StartTimer()
 				builder2.NewEntitiesWithValueSet(size, pos, vel)
 			}
@@ -189,7 +189,7 @@ func BenchmarkBuilderSetComponent(b *testing.B) {
 				for j := range size {
 					ents[j] = w.CreateEntity()
 				}
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				b.StartTimer()
 				for j := range size {
 					builder.Set(ents[j], Position{})
@@ -215,7 +215,7 @@ func BenchmarkBuilderSetComponent2(b *testing.B) {
 				for j := range size {
 					ents[j] = w.CreateEntity()
 				}
-				builder := NewBuilder2[Position, Velocity](&w)
+				builder := NewBuilder2[Position, Velocity](w)
 				b.StartTimer()
 				for j := range size {
 					builder.Set(ents[j], Position{}, Velocity{})
@@ -236,7 +236,7 @@ func BenchmarkBuilderGetComponent(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
+			builder := NewBuilder[Position](w)
 			builder.NewEntities(size)
 			ents := builder.arch.entityIDs[:size]
 			for b.Loop() {
@@ -258,7 +258,7 @@ func BenchmarkBuilderGetComponent2(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder2[Position, Velocity](&w)
+			builder := NewBuilder2[Position, Velocity](w)
 			builder.NewEntities(size)
 			ents := builder.arch.entityIDs[:size]
 			for b.Loop() {
@@ -280,12 +280,12 @@ func BenchmarkFunctionsGetComponent(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
+			builder := NewBuilder[Position](w)
 			builder.NewEntities(size)
 			ents := builder.arch.entityIDs[:size]
 			for b.Loop() {
 				for j := range size {
-					GetComponent[Position](&w, ents[j%size])
+					GetComponent[Position](w, ents[j%size])
 				}
 			}
 			b.ReportAllocs()
@@ -302,12 +302,12 @@ func BenchmarkFunctionsGetComponent2(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder2[Position, Velocity](&w)
+			builder := NewBuilder2[Position, Velocity](w)
 			builder.NewEntities(size)
 			ents := builder.arch.entityIDs[:size]
 			for b.Loop() {
 				for j := range size {
-					GetComponent2[Position, Velocity](&w, ents[j%size])
+					GetComponent2[Position, Velocity](w, ents[j%size])
 				}
 			}
 			b.ReportAllocs()
@@ -324,13 +324,13 @@ func BenchmarkFunctionsSetComponentExisting(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
+			builder := NewBuilder[Position](w)
 			builder.NewEntities(size)
 			ents := builder.arch.entityIDs[:size]
 			val := Position{1, 2}
 			for b.Loop() {
 				for j := range size {
-					SetComponent(&w, ents[j%size], val)
+					SetComponent(w, ents[j%size], val)
 				}
 			}
 			b.ReportAllocs()
@@ -350,15 +350,15 @@ func BenchmarkFunctionsSetComponentNew(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
-				dummyBuilder := NewBuilder2[Position, Velocity](&w)
+				builder := NewBuilder[Position](w)
+				dummyBuilder := NewBuilder2[Position, Velocity](w)
 				dummy := dummyBuilder.NewEntity()
 				w.RemoveEntity(dummy)
 				builder.NewEntities(size)
 				ents := builder.arch.entityIDs[:size]
 				b.StartTimer()
 				for j := range size {
-					SetComponent(&w, ents[j], val)
+					SetComponent(w, ents[j], val)
 				}
 			}
 			b.ReportAllocs()
@@ -378,15 +378,15 @@ func BenchmarkFunctionsRemoveComponent(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
-				dummyBuilder := NewBuilder[Position](&w)
+				builder2 := NewBuilder2[Position, Velocity](w)
+				dummyBuilder := NewBuilder[Position](w)
 				dummy := dummyBuilder.NewEntity()
 				w.RemoveEntity(dummy)
 				builder2.NewEntities(size)
 				ents := builder2.arch.entityIDs[:size]
 				b.StartTimer()
 				for j := range size {
-					RemoveComponent[Velocity](&w, ents[j])
+					RemoveComponent[Velocity](w, ents[j])
 				}
 			}
 			b.ReportAllocs()
@@ -405,7 +405,7 @@ func BenchmarkWorldRemoveEntity(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				builder.NewEntities(size)
 				ents := make([]Entity, size)
 				copy(ents, builder.arch.entityIDs[:size])
@@ -430,7 +430,7 @@ func BenchmarkWorldRemoveEntities(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				builder.NewEntities(size)
 				ents := make([]Entity, size)
 				copy(ents, builder.arch.entityIDs[:size])
@@ -455,7 +455,7 @@ func BenchmarkWorldClearEntities(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				builder.NewEntities(size)
 				b.StartTimer()
 				w.ClearEntities()
@@ -476,9 +476,9 @@ func BenchmarkFilterRemoveEntities(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder := NewBuilder[Position](&w)
+				builder := NewBuilder[Position](w)
 				builder.NewEntities(size)
-				filter := NewFilter[Position](&w)
+				filter := NewFilter[Position](w)
 				b.StartTimer()
 				filter.RemoveEntities()
 			}
@@ -498,9 +498,9 @@ func BenchmarkFilter2RemoveEntities(b *testing.B) {
 			for b.Loop() {
 				b.StopTimer()
 				w := NewWorld(size)
-				builder2 := NewBuilder2[Position, Velocity](&w)
+				builder2 := NewBuilder2[Position, Velocity](w)
 				builder2.NewEntities(size)
-				filter2 := NewFilter2[Position, Velocity](&w)
+				filter2 := NewFilter2[Position, Velocity](w)
 				b.StartTimer()
 				filter2.RemoveEntities()
 			}
@@ -519,9 +519,9 @@ func BenchmarkFilterIterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
+			builder := NewBuilder[Position](w)
 			builder.NewEntities(size)
-			filter := NewFilter[Position](&w)
+			filter := NewFilter[Position](w)
 			for b.Loop() {
 				filter.Reset()
 				for filter.Next() {
@@ -542,9 +542,9 @@ func BenchmarkFilter2Iterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder2 := NewBuilder2[Position, Velocity](&w)
+			builder2 := NewBuilder2[Position, Velocity](w)
 			builder2.NewEntities(size)
-			filter2 := NewFilter2[Position, Velocity](&w)
+			filter2 := NewFilter2[Position, Velocity](w)
 			for b.Loop() {
 				filter2.Reset()
 				for filter2.Next() {
@@ -565,9 +565,9 @@ func BenchmarkFilter3Iterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder3 := NewBuilder3[Position, Velocity, Health](&w)
+			builder3 := NewBuilder3[Position, Velocity, Health](w)
 			builder3.NewEntities(size)
-			filter3 := NewFilter3[Position, Velocity, Health](&w)
+			filter3 := NewFilter3[Position, Velocity, Health](w)
 			for b.Loop() {
 				filter3.Reset()
 				for filter3.Next() {
@@ -588,9 +588,9 @@ func BenchmarkFilter4Iterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder4 := NewBuilder4[Position, Velocity, Health, WithPointer](&w)
+			builder4 := NewBuilder4[Position, Velocity, Health, WithPointer](w)
 			builder4.NewEntities(size)
-			filter4 := NewFilter4[Position, Velocity, Health, WithPointer](&w)
+			filter4 := NewFilter4[Position, Velocity, Health, WithPointer](w)
 			for b.Loop() {
 				filter4.Reset()
 				for filter4.Next() {
@@ -611,9 +611,9 @@ func BenchmarkFilter5Iterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder5 := NewBuilder5[Position, Velocity, Health, WithPointer, Dummy1](&w)
+			builder5 := NewBuilder5[Position, Velocity, Health, WithPointer, Dummy1](w)
 			builder5.NewEntities(size)
-			filter5 := NewFilter5[Position, Velocity, Health, WithPointer, Dummy1](&w)
+			filter5 := NewFilter5[Position, Velocity, Health, WithPointer, Dummy1](w)
 			for b.Loop() {
 				filter5.Reset()
 				for filter5.Next() {
@@ -634,9 +634,9 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder6 := NewBuilder6[Position, Velocity, Health, WithPointer, Dummy1, Dummy2](&w)
+			builder6 := NewBuilder6[Position, Velocity, Health, WithPointer, Dummy1, Dummy2](w)
 			builder6.NewEntities(size)
-			filter6 := NewFilter6[Position, Velocity, Health, WithPointer, Dummy1, Dummy2](&w)
+			filter6 := NewFilter6[Position, Velocity, Health, WithPointer, Dummy1, Dummy2](w)
 			for b.Loop() {
 				filter6.Reset()
 				for filter6.Next() {
@@ -657,9 +657,9 @@ func BenchmarkFilterGetEntitiesCached(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
+			builder := NewBuilder[Position](w)
 			builder.NewEntities(size)
-			filter := NewFilter[Position](&w)
+			filter := NewFilter[Position](w)
 			for b.Loop() {
 				filter.Entities()
 			}
@@ -677,8 +677,8 @@ func BenchmarkFilterGetEntitiesUncached(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			w := NewWorld(size)
-			builder := NewBuilder[Position](&w)
-			filter := NewFilter[Position](&w)
+			builder := NewBuilder[Position](w)
+			filter := NewFilter[Position](w)
 			for b.Loop() {
 				b.StopTimer()
 				w.ClearEntities()

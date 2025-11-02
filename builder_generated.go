@@ -81,7 +81,7 @@ func (b *Builder2[T1, T2]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -116,7 +116,7 @@ func (b *Builder2[T1, T2]) NewEntitiesWithValueSet(count int, comp1 T1, comp2 T2
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -234,7 +234,7 @@ func (b *Builder2[T1, T2]) Set(e Entity, v1 T1, v2 T2) {
 	}
 	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
 	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -334,7 +334,7 @@ func (b *Builder3[T1, T2, T3]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -370,7 +370,7 @@ func (b *Builder3[T1, T2, T3]) NewEntitiesWithValueSet(count int, comp1 T1, comp
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -503,7 +503,7 @@ func (b *Builder3[T1, T2, T3]) Set(e Entity, v1 T1, v2 T2, v3 T3) {
 	*(*T1)(unsafe.Pointer(uintptr(targetA.compPointers[b.id1]) + uintptr(newIdx)*targetA.compSizes[b.id1])) = v1
 	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
 	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -609,7 +609,7 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -646,7 +646,7 @@ func (b *Builder4[T1, T2, T3, T4]) NewEntitiesWithValueSet(count int, comp1 T1, 
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -794,7 +794,7 @@ func (b *Builder4[T1, T2, T3, T4]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4) {
 	*(*T2)(unsafe.Pointer(uintptr(targetA.compPointers[b.id2]) + uintptr(newIdx)*targetA.compSizes[b.id2])) = v2
 	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
 	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -906,7 +906,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -944,7 +944,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) NewEntitiesWithValueSet(count int, comp1 
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -1107,7 +1107,7 @@ func (b *Builder5[T1, T2, T3, T4, T5]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4 T4,
 	*(*T3)(unsafe.Pointer(uintptr(targetA.compPointers[b.id3]) + uintptr(newIdx)*targetA.compSizes[b.id3])) = v3
 	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
 	*(*T5)(unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])) = v5
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -1225,7 +1225,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -1264,7 +1264,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) NewEntitiesWithValueSet(count int, co
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -1442,7 +1442,7 @@ func (b *Builder6[T1, T2, T3, T4, T5, T6]) Set(e Entity, v1 T1, v2 T2, v3 T3, v4
 	*(*T4)(unsafe.Pointer(uintptr(targetA.compPointers[b.id4]) + uintptr(newIdx)*targetA.compSizes[b.id4])) = v4
 	*(*T5)(unsafe.Pointer(uintptr(targetA.compPointers[b.id5]) + uintptr(newIdx)*targetA.compSizes[b.id5])) = v5
 	*(*T6)(unsafe.Pointer(uintptr(targetA.compPointers[b.id6]) + uintptr(newIdx)*targetA.compSizes[b.id6])) = v6
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
