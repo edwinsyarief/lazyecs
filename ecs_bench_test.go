@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-/* // World Creation Benchmarks
+// World Creation Benchmarks
 func BenchmarkCreateWorld(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
@@ -507,7 +507,7 @@ func BenchmarkFilter2RemoveEntities(b *testing.B) {
 			b.ReportAllocs()
 		})
 	}
-} */
+}
 
 // Filter Iteration Benchmarks
 func BenchmarkFilterIterate(b *testing.B) {
@@ -648,7 +648,7 @@ func BenchmarkFilter6Iterate(b *testing.B) {
 	}
 }
 
-/* func BenchmarkFilterGetEntitiesCached(b *testing.B) {
+func BenchmarkFilterGetEntitiesCached(b *testing.B) {
 	sizes := []int{1000, 10000, 100000, 1000000}
 	for _, size := range sizes {
 		name := fmt.Sprintf("%dK", size/1000)
@@ -689,4 +689,4 @@ func BenchmarkFilterGetEntitiesUncached(b *testing.B) {
 			b.ReportAllocs()
 		})
 	}
-} */
+}
