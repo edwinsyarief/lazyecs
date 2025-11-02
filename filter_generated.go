@@ -69,9 +69,8 @@ func (f *Filter2[T1, T2]) Reset() {
 }
 
 func (f *Filter2[T1, T2]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -228,9 +227,8 @@ func (f *Filter3[T1, T2, T3]) Reset() {
 }
 
 func (f *Filter3[T1, T2, T3]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -391,9 +389,8 @@ func (f *Filter4[T1, T2, T3, T4]) Reset() {
 }
 
 func (f *Filter4[T1, T2, T3, T4]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -558,9 +555,8 @@ func (f *Filter5[T1, T2, T3, T4, T5]) Reset() {
 }
 
 func (f *Filter5[T1, T2, T3, T4, T5]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -729,9 +725,8 @@ func (f *Filter6[T1, T2, T3, T4, T5, T6]) Reset() {
 }
 
 func (f *Filter6[T1, T2, T3, T4, T5, T6]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1

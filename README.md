@@ -1,8 +1,9 @@
 # Teishoku ECS
 
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/teishoku/test.yml)
 ![Go Version](https://img.shields.io/badge/Go-1.25.1-blue?logo=go&style=flat&logoColor=white)
 ![Go Reference](https://pkg.go.dev/badge/github.com/edwinsyarief/teishoku.svg)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/edwinsyarief/teishoku/test.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/edwinsyarief/teishoku)](https://goreportcard.com/report/github.com/edwinsyarief/teishoku)
 
 `Teishoku` is a high-performance, archetype-based, and easy-to-use Entity Component System (ECS) library for Go.
 

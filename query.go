@@ -73,6 +73,14 @@ func (c *queryCache) updateCachedEntities() {
 	c.lastMutationVersion = c.world.mutationVersion.Load()
 }
 
+func (c *queryCache) isArchetypeStale() bool {
+	return c.world.archetypes.archetypeVersion.Load() != c.lastVersion
+}
+
+func (c *queryCache) isMutationStale() bool {
+	return c.world.mutationVersion.Load() != c.lastMutationVersion
+}
+
 // IsStale checks if the cache is out of sync with the world's state by
 // comparing the cache's last known version numbers with the world's current
 // versions. A cache is considered stale if either the archetype structure has
@@ -82,7 +90,7 @@ func (c *queryCache) updateCachedEntities() {
 // Returns:
 //   - true if the cache is stale and needs to be updated, false otherwise.
 func (c *queryCache) IsStale() bool {
-	return c.world.archetypes.archetypeVersion.Load() != c.lastVersion || c.world.mutationVersion.Load() != c.lastMutationVersion
+	return c.isArchetypeStale() || c.isMutationStale()
 }
 
 // Entities returns a slice of all entities that match the cached query. If the
@@ -95,8 +103,11 @@ func (c *queryCache) IsStale() bool {
 func (c *queryCache) Entities() []Entity {
 	c.world.mu.RLock()
 	defer c.world.mu.RUnlock()
-	if c.IsStale() {
+	update := c.isArchetypeStale()
+	if update {
 		c.updateMatching()
+	}
+	if update || c.isMutationStale() {
 		c.updateCachedEntities()
 	}
 	return c.cachedEntities

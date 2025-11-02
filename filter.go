@@ -65,9 +65,8 @@ func (f *Filter[T]) Reset() {
 }
 
 func (f *Filter[T]) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
@@ -221,9 +220,8 @@ func (f *Filter0) Reset() {
 }
 
 func (f *Filter0) doReset() {
-	if f.IsStale() {
+	if f.isArchetypeStale() {
 		f.updateMatching()
-		f.updateCachedEntities()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
