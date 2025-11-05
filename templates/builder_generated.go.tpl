@@ -72,7 +72,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -97,8 +97,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntities(count int) {
 // Parameters:
 //   - count: The number of entities to create.
 {{range .Components}}//   - comp{{.Index}}: The initial value for the component {{.TypeName}}.
-{{end}}
-func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.BuilderVars}}) {
+{{end}}func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.BuilderVars}}) {
 	if count == 0 {
 		return
 	}
@@ -107,7 +106,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) NewEntitiesWithValueSet(count int, {{.Bui
 	defer w.mu.Unlock()
 	a := b.arch
 	for len(w.entities.freeIDs) < count {
-		w.expandNoLock()
+		w.expand()
 	}
 	startSize := a.size
 	a.size += count
@@ -167,8 +166,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Get(e Entity) ({{.ReturnTypes}}) {
 // Parameters:
 //   - e: The entity to modify.
 {{range .Components}}//   - v{{.Index}}: The value for {{.TypeName}}.
-{{end}}
-func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
+{{end}}func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	w := b.world
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -219,7 +217,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 	}
 	{{range .Components}}*(*{{.TypeName}})(unsafe.Pointer(uintptr(targetA.compPointers[b.id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[b.id{{.Index}}])) = v{{.Index}}
 	{{end}}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -231,8 +229,7 @@ func (b *Builder{{.N}}[{{.TypeVars}}]) Set(e Entity, {{.SetVars}}) {
 // Parameters:
 //   - entities: A slice of entities to modify.
 {{range .Components}}//   - v{{.Index}}: The component value to set for type {{.TypeName}}.
-{{end}}
-func (b *Builder{{.N}}[{{.TypeVars}}]) SetBatch(entities []Entity, {{.SetVars}}) {
+{{end}}func (b *Builder{{.N}}[{{.TypeVars}}]) SetBatch(entities []Entity, {{.SetVars}}) {
 	for _, e := range entities {
 		b.Set(e, {{.SetVarNames}})
 	}

@@ -47,8 +47,7 @@ func GetComponent{{.N}}[{{.Types}}](w *World, e Entity) ({{.ReturnTypes}}) {
 //   - w: The World where the entity resides.
 //   - e: The Entity to modify.
 {{range .Components}}//   - v{{.Index}}: The component data of type {{.TypeName}} to set.
-{{end}}
-func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
+{{end}}func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.IsValidNoLock(e) {
@@ -113,7 +112,7 @@ func SetComponent{{.N}}[{{.Types}}](w *World, e Entity, {{.Vars}}) {
 	{{range .Components}}ptr{{.Index}} := unsafe.Pointer(uintptr(targetA.compPointers[id{{.Index}}]) + uintptr(newIdx)*targetA.compSizes[id{{.Index}}])
 	*(*{{.TypeName}})(ptr{{.Index}}) = {{.VarName}}
 	{{end}}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)
@@ -187,7 +186,7 @@ func RemoveComponent{{.N}}[{{.Types}}](w *World, e Entity) {
 		dst := unsafe.Pointer(uintptr(targetA.compPointers[cid]) + uintptr(newIdx)*targetA.compSizes[cid])
 		memCopy(dst, src, a.compSizes[cid])
 	}
-	w.removeFromArchetypeNoLock(a, meta)
+	w.removeFromArchetype(a, meta)
 	meta.archetypeIndex = targetA.index
 	meta.index = newIdx
 	w.mutationVersion.Add(1)

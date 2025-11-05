@@ -67,9 +67,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) doReset() {
 	f.curIdx = -1
 	if len(f.matchingArches) > 0 {
 		a := f.matchingArches[0]
-		for i := 0; i < {{.N}}; i++ {
-			f.curBases[i] = a.compPointers[f.ids[i]]
-		}
+		{{range $i, $e := .Components}}f.curBases[{{$i}}] = a.compPointers[f.ids[{{$i}}]]
+		{{end}}
 		f.curEntityIDs = a.entityIDs
 		f.curArchSize = a.size
 	} else {
@@ -93,9 +92,8 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
 		return false
 	}
 	a := f.matchingArches[f.curMatchIdx]
-	for i := 0; i < {{.N}}; i++ {
-		f.curBases[i] = a.compPointers[f.ids[i]]
-	}
+	{{range $i, $e := .Components}}f.curBases[{{$i}}] = a.compPointers[f.ids[{{$i}}]]
+	{{end}}
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
@@ -149,4 +147,72 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) RemoveEntities() {
 // Entities returns all entities that match the filter.
 func (f *Filter{{.N}}[{{.TypeVars}}]) Entities() []Entity {
 	return f.queryCache.Entities()
+}
+
+// Query{{.N}} is an allocation-free iterator snapshot for Filter{{.N}}.
+type Query{{.N}}[{{.Types}}] struct {
+	matchingArches []*archetype
+	curBases       [{{.N}}]unsafe.Pointer
+	curEntityIDs   []Entity
+	curMatchIdx    int
+	curIdx         int
+	compSizes      [{{.N}}]uintptr
+	curArchSize    int
+	ids            [{{.N}}]uint8
+}
+
+// Query returns a new Query{{.N}} iterator from the Filter{{.N}}.
+func (f *Filter{{.N}}[{{.TypeVars}}]) Query() Query{{.N}}[{{.TypeVars}}] {
+	f.world.mu.RLock()
+	defer f.world.mu.RUnlock()
+	if f.isArchetypeStale() {
+		f.updateMatching()
+	}
+	q := Query{{.N}}[{{.TypeVars}}]{
+		matchingArches: f.matchingArches,
+		ids:            f.ids,
+		compSizes:      f.compSizes,
+		curMatchIdx:    0,
+		curIdx:         -1,
+	}
+	if len(q.matchingArches) > 0 {
+		a := q.matchingArches[0]
+		{{range $i, $e := .Components}}f.curBases[{{$i}}] = a.compPointers[f.ids[{{$i}}]]
+		{{end}}
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
+	} else {
+		q.curArchSize = 0
+	}
+	return q
+}
+
+// Next advances the query to the next matching entity.
+func (q *Query{{.N}}[{{.TypeVars}}]) Next() bool {
+	q.curIdx++
+	if q.curIdx < q.curArchSize {
+		return true
+	}
+	q.curMatchIdx++
+	if q.curMatchIdx >= len(q.matchingArches) {
+		return false
+	}
+	a := q.matchingArches[q.curMatchIdx]
+	{{range $i, $e := .Components}}q.curBases[{{$i}}] = a.compPointers[q.ids[{{$i}}]]
+	{{end}}
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
+	q.curIdx = 0
+	return true
+}
+
+// Entity returns the current entity in the query.
+func (q *Query{{.N}}[{{.TypeVars}}]) Entity() Entity {
+	return q.curEntityIDs[q.curIdx]
+}
+
+// Get returns pointers to {{.TypeVars}} for the current entity.
+func (q *Query{{.N}}[{{.TypeVars}}]) Get() ({{.ReturnTypes}}) {
+	return {{range $i, $e := .Components}}{{if $i}},
+		{{end}}(*{{$e.TypeName}})(unsafe.Add(q.curBases[{{$i}}], uintptr(q.curIdx)*q.compSizes[{{$i}}])){{end}}
 }
