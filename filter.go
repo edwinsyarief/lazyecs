@@ -42,7 +42,7 @@ func NewFilter[T any](w *World) *Filter[T] {
 		curIdx:      -1,
 	}
 	f.compSize = w.components.compIDToSize[id]
-	f.updateMatching([]uint8{id})
+	f.updateMatching()
 	f.updateCachedEntities()
 	f.doReset()
 	return f
@@ -66,15 +66,15 @@ func (f *Filter[T]) Reset() {
 
 func (f *Filter[T]) doReset() {
 	if f.isArchetypeStale() {
-		f.updateMatching([]uint8{f.compID})
+		f.updateMatching()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
 	if len(f.matchingArches) > 0 {
 		a := f.matchingArches[0]
-		f.curBase = a.pointers[0]
-		f.curEntityIDs = a.arch.entityIDs
-		f.curArchSize = a.arch.size
+		f.curBase = a.compPointers[f.compID]
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -103,9 +103,9 @@ func (f *Filter[T]) Next() bool {
 		return false
 	}
 	a := f.matchingArches[f.curMatchIdx]
-	f.curBase = a.pointers[0]
-	f.curEntityIDs = a.arch.entityIDs
-	f.curArchSize = a.arch.size
+	f.curBase = a.compPointers[f.compID]
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
 	f.curIdx = 0
 	return true
 }
@@ -138,18 +138,18 @@ func (f *Filter[T]) RemoveEntities() {
 	f.world.mu.Lock()
 	defer f.world.mu.Unlock()
 	if f.IsStale() {
-		f.updateMatching([]uint8{f.compID})
+		f.updateMatching()
 	}
-	for _, fa := range f.matchingArches {
-		for i := 0; i < fa.arch.size; i++ {
-			ent := fa.arch.entityIDs[i]
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
 			meta.index = -1
 			meta.version = 0
 			f.world.entities.freeIDs = append(f.world.entities.freeIDs, ent.ID)
 		}
-		fa.arch.size = 0
+		a.size = 0
 	}
 	f.world.mutationVersion.Add(1)
 	f.doReset()
@@ -167,13 +167,13 @@ func (f *Filter[T]) RemoveEntities() {
 // Returns:
 //   - A slice of matching entities.
 func (f *Filter[T]) Entities() []Entity {
-	return f.queryCache.Entities([]uint8{f.compID})
+	return f.queryCache.Entities()
 }
 
 // Query returns a new iterator snapshot for the filter, optimized for allocation-free iteration.
 // Assume no world mutations during the Query's lifetime.
 type Query[T any] struct {
-	matchingArches []*filterArch
+	matchingArches []*archetype
 	curBase        unsafe.Pointer
 	curEntityIDs   []Entity
 	curMatchIdx    int
@@ -188,7 +188,7 @@ func (f *Filter[T]) Query() Query[T] {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
 	if f.isArchetypeStale() {
-		f.updateMatching([]uint8{f.compID})
+		f.updateMatching()
 	}
 	q := Query[T]{
 		matchingArches: f.matchingArches, // share, no alloc
@@ -199,9 +199,9 @@ func (f *Filter[T]) Query() Query[T] {
 	}
 	if len(q.matchingArches) > 0 {
 		a := q.matchingArches[0]
-		q.curBase = a.pointers[0]
-		q.curEntityIDs = a.arch.entityIDs
-		q.curArchSize = a.arch.size
+		q.curBase = a.compPointers[q.compID]
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
 	} else {
 		q.curArchSize = 0
 	}
@@ -219,9 +219,9 @@ func (q *Query[T]) Next() bool {
 		return false
 	}
 	a := q.matchingArches[q.curMatchIdx]
-	q.curBase = a.pointers[0]
-	q.curEntityIDs = a.arch.entityIDs
-	q.curArchSize = a.arch.size
+	q.curBase = a.compPointers[q.compID]
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
 	q.curIdx = 0
 	return true
 }
@@ -263,7 +263,7 @@ func NewFilter0(w *World) *Filter0 {
 		curMatchIdx: 0,
 		curIdx:      -1,
 	}
-	f.updateMatching(nil)
+	f.updateMatching()
 	f.updateCachedEntities()
 	f.doReset()
 	return f
@@ -287,14 +287,14 @@ func (f *Filter0) Reset() {
 
 func (f *Filter0) doReset() {
 	if f.isArchetypeStale() {
-		f.updateMatching(nil)
+		f.updateMatching()
 	}
 	f.curMatchIdx = 0
 	f.curIdx = -1
 	if len(f.matchingArches) > 0 {
 		a := f.matchingArches[0]
-		f.curEntityIDs = a.arch.entityIDs
-		f.curArchSize = a.arch.size
+		f.curEntityIDs = a.entityIDs
+		f.curArchSize = a.size
 	} else {
 		f.curArchSize = 0
 	}
@@ -323,8 +323,8 @@ func (f *Filter0) Next() bool {
 		return false
 	}
 	a := f.matchingArches[f.curMatchIdx]
-	f.curEntityIDs = a.arch.entityIDs
-	f.curArchSize = a.arch.size
+	f.curEntityIDs = a.entityIDs
+	f.curArchSize = a.size
 	f.curIdx = 0
 	return true
 }
@@ -348,18 +348,18 @@ func (f *Filter0) RemoveEntities() {
 	f.world.mu.Lock()
 	defer f.world.mu.Unlock()
 	if f.IsStale() {
-		f.updateMatching(nil)
+		f.updateMatching()
 	}
-	for _, fa := range f.matchingArches {
-		for i := 0; i < fa.arch.size; i++ {
-			ent := fa.arch.entityIDs[i]
+	for _, a := range f.matchingArches {
+		for i := 0; i < a.size; i++ {
+			ent := a.entityIDs[i]
 			meta := &f.world.entities.metas[ent.ID]
 			meta.archetypeIndex = -1
 			meta.index = -1
 			meta.version = 0
 			f.world.entities.freeIDs = append(f.world.entities.freeIDs, ent.ID)
 		}
-		fa.arch.size = 0
+		a.size = 0
 	}
 	f.world.mutationVersion.Add(1)
 	f.doReset()
@@ -377,12 +377,12 @@ func (f *Filter0) RemoveEntities() {
 // Returns:
 //   - A slice of matching entities.
 func (f *Filter0) Entities() []Entity {
-	return f.queryCache.Entities(nil)
+	return f.queryCache.Entities()
 }
 
 // Query0 is an allocation-free iterator snapshot for Filter0.
 type Query0 struct {
-	matchingArches []*filterArch
+	matchingArches []*archetype
 	curEntityIDs   []Entity
 	curMatchIdx    int
 	curIdx         int
@@ -394,7 +394,7 @@ func (f *Filter0) Query() Query0 {
 	f.world.mu.RLock()
 	defer f.world.mu.RUnlock()
 	if f.isArchetypeStale() {
-		f.updateMatching(nil)
+		f.updateMatching()
 	}
 	q := Query0{
 		matchingArches: f.matchingArches,
@@ -403,8 +403,8 @@ func (f *Filter0) Query() Query0 {
 	}
 	if len(q.matchingArches) > 0 {
 		a := q.matchingArches[0]
-		q.curEntityIDs = a.arch.entityIDs
-		q.curArchSize = a.arch.size
+		q.curEntityIDs = a.entityIDs
+		q.curArchSize = a.size
 	} else {
 		q.curArchSize = 0
 	}
@@ -422,8 +422,8 @@ func (q *Query0) Next() bool {
 		return false
 	}
 	a := q.matchingArches[q.curMatchIdx]
-	q.curEntityIDs = a.arch.entityIDs
-	q.curArchSize = a.arch.size
+	q.curEntityIDs = a.entityIDs
+	q.curArchSize = a.size
 	q.curIdx = 0
 	return true
 }

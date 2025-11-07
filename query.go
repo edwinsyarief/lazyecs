@@ -1,14 +1,5 @@
 package teishoku
 
-import "unsafe"
-
-// filterArch is a slimmed-down version of an archetype, holding only the data
-// relevant for a filter's iteration.
-type filterArch struct {
-	arch     *archetype
-	pointers []unsafe.Pointer
-}
-
 // queryCache provides a reusable mechanism for caching the results of a filter
 // query. It stores a list of matching archetypes and entities, and tracks the
 // world's version numbers to detect when the cache needs to be updated. This
@@ -16,7 +7,7 @@ type filterArch struct {
 // performance for frequently used filters.
 type queryCache struct {
 	world               *World
-	matchingArches      []*filterArch
+	matchingArches      []*archetype
 	cachedEntities      []Entity
 	mask                bitmask256
 	lastVersion         uint32 // world.archetypes.archetypeVersion when matchingArches was last updated
@@ -37,7 +28,7 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 	return queryCache{
 		world:          w,
 		mask:           m,
-		matchingArches: make([]*filterArch, 0, 4),
+		matchingArches: make([]*archetype, 0, 4),
 		cachedEntities: make([]Entity, 0, w.entities.capacity),
 	}
 }
@@ -45,21 +36,14 @@ func newQueryCache(w *World, m bitmask256) queryCache {
 // updateMatching rebuilds the filter's list of archetypes that match its
 // component mask. This is called automatically when the filter detects that
 // the world's archetype layout has changed.
-func (c *queryCache) updateMatching(ids []uint8) {
+func (c *queryCache) updateMatching() {
 	c.matchingArches = c.matchingArches[:0]
 	isZeroMask := c.mask == bitmask256{}
 
 	for _, a := range c.world.archetypes.archetypes {
 		if a.size > 0 {
 			if (isZeroMask && a.mask == c.mask) || (!isZeroMask && a.mask.contains(c.mask)) {
-				pointers := make([]unsafe.Pointer, len(ids))
-				for i, id := range ids {
-					pointers[i] = a.compPointers[id]
-				}
-				c.matchingArches = append(c.matchingArches, &filterArch{
-					arch:     a,
-					pointers: pointers,
-				})
+				c.matchingArches = append(c.matchingArches, a)
 			}
 		}
 	}
@@ -73,8 +57,8 @@ func (c *queryCache) updateMatching(ids []uint8) {
 // mutation version to match the world's current version.
 func (c *queryCache) updateCachedEntities() {
 	total := 0
-	for _, fa := range c.matchingArches {
-		total += fa.arch.size
+	for _, a := range c.matchingArches {
+		total += a.size
 	}
 	if cap(c.cachedEntities) < total {
 		c.cachedEntities = make([]Entity, total)
@@ -82,9 +66,9 @@ func (c *queryCache) updateCachedEntities() {
 		c.cachedEntities = c.cachedEntities[:total]
 	}
 	idx := 0
-	for _, fa := range c.matchingArches {
-		copy(c.cachedEntities[idx:idx+fa.arch.size], fa.arch.entityIDs[:fa.arch.size])
-		idx += fa.arch.size
+	for _, a := range c.matchingArches {
+		copy(c.cachedEntities[idx:idx+a.size], a.entityIDs[:a.size])
+		idx += a.size
 	}
 	c.lastMutationVersion = c.world.mutationVersion.Load()
 }
@@ -116,12 +100,12 @@ func (c *queryCache) IsStale() bool {
 //
 // Returns:
 //   - A slice of `Entity` objects that match the query.
-func (c *queryCache) Entities(ids []uint8) []Entity {
+func (c *queryCache) Entities() []Entity {
 	c.world.mu.RLock()
 	defer c.world.mu.RUnlock()
 	update := c.isArchetypeStale()
 	if update {
-		c.updateMatching(ids)
+		c.updateMatching()
 	}
 	if update || c.isMutationStale() {
 		c.updateCachedEntities()
