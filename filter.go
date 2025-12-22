@@ -98,6 +98,10 @@ func (f *Filter[T]) Next() bool {
 	if f.curIdx < f.curArchSize {
 		return true
 	}
+	return f.nextArchetype()
+}
+
+func (f *Filter[T]) nextArchetype() bool {
 	f.curMatchIdx++
 	if f.curMatchIdx >= len(f.matchingArches) {
 		return false
@@ -214,6 +218,10 @@ func (q *Query[T]) Next() bool {
 	if q.curIdx < q.curArchSize {
 		return true
 	}
+	return q.nextArchetype()
+}
+
+func (q *Query[T]) nextArchetype() bool {
 	q.curMatchIdx++
 	if q.curMatchIdx >= len(q.matchingArches) {
 		return false
@@ -318,6 +326,10 @@ func (f *Filter0) Next() bool {
 	if f.curIdx < f.curArchSize {
 		return true
 	}
+	return f.nextArchetype()
+}
+
+func (f *Filter0) nextArchetype() bool {
 	f.curMatchIdx++
 	if f.curMatchIdx >= len(f.matchingArches) {
 		return false
@@ -417,6 +429,10 @@ func (q *Query0) Next() bool {
 	if q.curIdx < q.curArchSize {
 		return true
 	}
+	return q.nextArchetype()
+}
+
+func (q *Query0) nextArchetype() bool {
 	q.curMatchIdx++
 	if q.curMatchIdx >= len(q.matchingArches) {
 		return false

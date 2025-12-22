@@ -87,13 +87,19 @@ func (f *Filter{{.N}}[{{.TypeVars}}]) Next() bool {
 	if f.curIdx < f.curArchSize {
 		return true
 	}
+	return f.nextArchetype()
+}
+
+func (f *Filter{{.N}}[{{.TypeVars}}]) nextArchetype() bool {
 	f.curMatchIdx++
 	if f.curMatchIdx >= len(f.matchingArches) {
 		return false
 	}
 	a := f.matchingArches[f.curMatchIdx]
-	{{range $i, $e := .Components}}f.curBases[{{$i}}] = a.compPointers[f.ids[{{$i}}]]
-	{{end}}
+	{{- range $i, $c := .Components}}
+	f.curBases[{{$i}}] = a.compPointers[f.ids[{{$i}}]]
+	{{- end}}
+	
 	f.curEntityIDs = a.entityIDs
 	f.curArchSize = a.size
 	f.curIdx = 0
@@ -193,13 +199,21 @@ func (q *Query{{.N}}[{{.TypeVars}}]) Next() bool {
 	if q.curIdx < q.curArchSize {
 		return true
 	}
+	return q.nextArchetype()
+}
+
+// nextArchetype advances to the next archetype in the query.
+// This is separated from Next to allow Next to be inlined.
+func (q *Query{{.N}}[{{.TypeVars}}]) nextArchetype() bool {
 	q.curMatchIdx++
 	if q.curMatchIdx >= len(q.matchingArches) {
 		return false
 	}
 	a := q.matchingArches[q.curMatchIdx]
-	{{range $i, $e := .Components}}q.curBases[{{$i}}] = a.compPointers[q.ids[{{$i}}]]
-	{{end}}
+	{{- range $i, $c := .Components}}
+	q.curBases[{{$i}}] = a.compPointers[q.ids[{{$i}}]]
+	{{- end}}
+	
 	q.curEntityIDs = a.entityIDs
 	q.curArchSize = a.size
 	q.curIdx = 0
